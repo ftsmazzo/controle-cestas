@@ -62,16 +62,27 @@ Aba **Por serviço** no dashboard:
 
 ### Formatos de planilha aceitos
 
-**Longo** (recomendado):
+**Pivot institucional** (principal — igual à sua planilha):
+
+| Equipamento | Jan | Fev | Mar | … | Dez |
+|-------------|-----|-----|-----|---|-----|
+| CRAS | 1200 | 1100 | … | | |
+| CREAS | 280 | … | | | |
+| SAICA | 40 | 40 | … | | |
+
+Defina o **ano** na tela (ex.: 2025) quando as colunas forem só Jan, Fev…  
+Subdivisões **CRAS 1**, **CRAS 2**, **CREAS 1**… = uma linha por equipamento.
+
+**Longo**:
 
 | Mês | Serviço | Total | Fixo |
 |-----|---------|-------|------|
 | Jun/2025 | CRAS Centro | 320 | Sim |
 
-**Largo** (uma coluna por serviço):
+**Largo** (coluna Mês + um serviço por coluna):
 
-| Mês | CRAS Centro | CREAS | Centro Pop |
-|-----|-------------|-------|------------|
+| Mês | CRAS | CREAS | SAICA |
+|-----|------|-------|-------|
 
 ## API
 

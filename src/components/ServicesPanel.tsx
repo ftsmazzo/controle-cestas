@@ -26,11 +26,19 @@ function parseQty(s: string): number {
   return Number.isNaN(v) ? 0 : v;
 }
 
+const FORMAT_LABELS = {
+  pivot: 'Equipamento × meses (Jan–Dez)',
+  long: 'Mês + Serviço + Total',
+  wide: 'Mês + colunas por serviço',
+} as const;
+
 export default function ServicesPanel() {
   const [data, setData] = useState<ServicesPayload | null>(null);
   const [results, setResults] = useState<MonthAllocationResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importYear, setImportYear] = useState(String(new Date().getFullYear()));
+  const [importInfo, setImportInfo] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -69,15 +77,19 @@ export default function ServicesPanel() {
     setLoading(true);
     setError(null);
     try {
-      const { history, services } = parseServiceWorkbook(await file.arrayBuffer());
-      const months = suggestNextMonths(history, 4);
-      const imported = await importServices(history, services);
+      const year = parseInt(importYear, 10) || new Date().getFullYear();
+      const parsed = parseServiceWorkbook(await file.arrayBuffer(), { year });
+      const months = suggestNextMonths(parsed.history, 4);
+      const imported = await importServices(parsed.history, parsed.services);
       const withPlans: ServicesPayload = {
         ...imported,
         plans: months.map((mes) => ({ mes, totalDisponivel: 0 })),
       };
       await persist(withPlans);
       setResults(null);
+      setImportInfo(
+        `Importado: ${FORMAT_LABELS[parsed.format]} · ano ${parsed.year} · aba "${parsed.sheetName}" · ${parsed.services.length} equipamentos`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro na planilha.');
     } finally {
@@ -89,7 +101,8 @@ export default function ServicesPanel() {
     setLoading(true);
     setError(null);
     try {
-      const { history, services } = demoServiceData();
+      const demo = demoServiceData();
+      const { history, services } = demo;
       const months = suggestNextMonths(history, 4);
       const payload: ServicesPayload = {
         services,
@@ -103,6 +116,9 @@ export default function ServicesPanel() {
       await importServices(history, services);
       await persist(payload);
       setResults(allocatePlans(payload.plans, payload.services, payload.history));
+      setImportInfo(
+        `Exemplo: ${FORMAT_LABELS[demo.format]} · ${services.length} equipamentos (SAICA sugerido como fixo)`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro.');
     } finally {
@@ -168,11 +184,23 @@ export default function ServicesPanel() {
       <section className="panel">
         <h2>Distribuição por serviço</h2>
         <p className="hint">
-          Importe o histórico com consumo <strong>por serviço</strong> (formato: colunas{' '}
-          <em>Mês</em>, <em>Serviço</em>, <em>Total</em> — ou uma coluna por serviço).
-          Informe quantas cestas terá em cada um dos próximos meses; o sistema reserva{' '}
-          <strong>serviços fixos</strong> e divide o restante conforme o histórico.
+          Planilha no formato <strong>Equipamento + Jan…Dez</strong> (como a sua): cada linha é um
+          equipamento — <em>CRAS 1</em>, <em>CRAS 2</em>, <em>CREAS 1</em> etc. entram como linhas
+          separadas automaticamente. Células vazias (ex.: CRAS sem Set/Nov) são ignoradas na média.
         </p>
+
+        <div className="import-year-row">
+          <label>
+            Ano da planilha (colunas só com mês)
+            <input
+              type="text"
+              inputMode="numeric"
+              value={importYear}
+              onChange={(e) => setImportYear(e.target.value)}
+              placeholder="2025"
+            />
+          </label>
+        </div>
 
         <div className="upload-row">
           <label className="file-btn">
@@ -206,6 +234,7 @@ export default function ServicesPanel() {
           ) : null}
         </div>
         {error && <p className="error">{error}</p>}
+        {importInfo && <p className="meta">{importInfo}</p>}
       </section>
 
       {data && data.services.length > 0 && (
