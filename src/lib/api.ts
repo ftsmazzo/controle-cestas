@@ -1,4 +1,5 @@
 import type { DashboardState, RawMonthRow } from '@shared/types';
+import { apiFetch } from './http';
 
 async function parseError(res: Response): Promise<string> {
   try {
@@ -36,7 +37,7 @@ export async function saveImport(
   rows: RawMonthRow[],
   saldoAtual: number | null,
 ): Promise<{ state: DashboardState; saldoAtual: number | null }> {
-  const res = await fetch('/api/imports', {
+  const res = await apiFetch('/api/imports', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fileName, rows, saldoAtual }),
@@ -49,7 +50,7 @@ export async function updateSaldo(
   state: DashboardState,
   saldoAtual: number | null,
 ): Promise<void> {
-  const res = await fetch('/api/dashboard', {
+  const res = await apiFetch('/api/dashboard', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ state, saldoAtual }),
@@ -58,7 +59,7 @@ export async function updateSaldo(
 }
 
 export async function clearDashboard(): Promise<void> {
-  const res = await fetch('/api/dashboard', { method: 'DELETE' });
+  const res = await apiFetch('/api/dashboard', { method: 'DELETE' });
   if (!res.ok) throw new Error(await parseError(res));
 }
 
@@ -67,7 +68,7 @@ export async function syncDashboardFromServices(): Promise<{
   state: DashboardState;
   saldoAtual: number | null;
 }> {
-  const res = await fetch('/api/dashboard/sync-from-services', {
+  const res = await apiFetch('/api/dashboard/sync-from-services', {
     method: 'POST',
   });
   if (!res.ok) throw new Error(await parseError(res));

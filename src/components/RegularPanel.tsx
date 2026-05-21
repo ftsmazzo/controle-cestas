@@ -21,9 +21,10 @@ function parseQty(s: string): number {
 interface Props {
   data: ServicesPayload;
   onUpdate: (next: ServicesPayload) => void;
+  readOnly?: boolean;
 }
 
-export default function RegularPanel({ data, onUpdate }: Props) {
+export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
   const cfg = data.regular;
 
   const historicoRows = useMemo(() => {
@@ -60,11 +61,13 @@ export default function RegularPanel({ data, onUpdate }: Props) {
   }, [dashboard, cfg.totalContratoAnual]);
 
   const persist = async (next: ServicesPayload) => {
+    if (readOnly) return;
     const saved = await saveServices(next);
     onUpdate(saved);
   };
 
   const preencherDoHistorico = () => {
+    if (readOnly) return;
     const agg = aggregateHistoryByMonth(data.history);
     const byMes = new Map(agg.map((r) => [r.mes, r.total]));
     const plans = cfg.plans.map((p) => ({
@@ -82,6 +85,7 @@ export default function RegularPanel({ data, onUpdate }: Props) {
         <p className="hint">
           Levantamento do <strong>total mensal</strong> para registro/contrato. Use totais
           informados abaixo ou importe da soma dos equipamentos. Inclui previsão e risco.
+          {readOnly && ' Em modo consulta, valores exibidos não podem ser alterados.'}
         </p>
 
         <div className="config-grid">
@@ -91,6 +95,7 @@ export default function RegularPanel({ data, onUpdate }: Props) {
               type="text"
               inputMode="numeric"
               value={cfg.cestasContratoMensal}
+              disabled={readOnly}
               onChange={(e) =>
                 onUpdate({
                   ...data,
@@ -108,6 +113,7 @@ export default function RegularPanel({ data, onUpdate }: Props) {
               type="text"
               inputMode="numeric"
               value={cfg.totalContratoAnual}
+              disabled={readOnly}
               onChange={(e) =>
                 onUpdate({
                   ...data,
@@ -126,6 +132,7 @@ export default function RegularPanel({ data, onUpdate }: Props) {
               inputMode="numeric"
               placeholder="Opcional"
               value={cfg.saldoAtual ?? ''}
+              disabled={readOnly}
               onChange={(e) => {
                 const v = e.target.value.trim();
                 onUpdate({
@@ -138,16 +145,23 @@ export default function RegularPanel({ data, onUpdate }: Props) {
               }}
             />
           </label>
-          <button type="button" className="secondary" onClick={preencherDoHistorico}>
-            Preencher meses com soma dos equipamentos
-          </button>
           <button
             type="button"
-            className="primary-btn"
-            onClick={() => void persist(data)}
+            className="secondary"
+            disabled={readOnly}
+            onClick={preencherDoHistorico}
           >
-            Salvar processo regular
+            Preencher meses com soma dos equipamentos
           </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => void persist(data)}
+            >
+              Salvar processo regular
+            </button>
+          )}
         </div>
 
         <div className="plans-grid plans-grid-12">
@@ -159,6 +173,7 @@ export default function RegularPanel({ data, onUpdate }: Props) {
                 inputMode="numeric"
                 placeholder="Total mês"
                 value={p.totalDisponivel > 0 ? String(p.totalDisponivel) : ''}
+                disabled={readOnly}
                 onChange={(e) => {
                   const plans = cfg.plans.map((x) =>
                     x.mes === p.mes

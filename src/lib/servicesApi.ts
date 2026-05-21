@@ -3,6 +3,7 @@ import type {
   ServicesMeta,
   ServicesPayload,
 } from '@shared/serviceTypes';
+import { apiFetch } from './http';
 
 async function parseError(res: Response): Promise<string> {
   try {
@@ -22,7 +23,7 @@ export async function fetchServices(): Promise<ServicesPayload> {
 export async function saveServices(
   payload: Partial<ServicesPayload> & Pick<ServicesPayload, 'services' | 'history'>,
 ): Promise<ServicesPayload> {
-  const res = await fetch('/api/services', {
+  const res = await apiFetch('/api/services', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -36,7 +37,7 @@ export async function importServices(
   services: ServicesPayload['services'],
   options?: { merge?: boolean; meta?: ServicesMeta },
 ): Promise<ServicesPayload> {
-  const res = await fetch('/api/services/import', {
+  const res = await apiFetch('/api/services/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -64,6 +65,6 @@ export async function calculateAllocation(
 }
 
 export async function clearServices(): Promise<void> {
-  const res = await fetch('/api/services', { method: 'DELETE' });
+  const res = await apiFetch('/api/services', { method: 'DELETE' });
   if (!res.ok) throw new Error(await parseError(res));
 }

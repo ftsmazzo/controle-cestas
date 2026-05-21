@@ -25,6 +25,7 @@ import DecisionDashboard from './components/DecisionDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import ProcessHub from './components/ProcessHub';
 import SimulationPanel from './components/SimulationPanel';
+import { useAppMode } from './context/AppModeContext';
 import './App.css';
 
 type Tab = 'geral' | 'processos';
@@ -45,6 +46,7 @@ function formatSaldoInput(value: number | null): string {
 }
 
 export default function App() {
+  const { readOnly, adminPath, isAdminRoute } = useAppMode();
   const [dashboard, setDashboard] = useState<DashboardState | null>(null);
   const [saldoAtual, setSaldoAtual] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -190,10 +192,38 @@ export default function App() {
               Histórico por equipamento · Totais e KPIs automáticos
             </p>
           </div>
-          <span className={`api-badge ${apiOk ? 'api-ok' : 'api-fail'}`}>
-            {apiOk ? 'PostgreSQL conectado' : 'API offline'}
-          </span>
+          <div className="header-badges">
+            <span
+              className={`mode-badge ${readOnly ? 'mode-consulta' : 'mode-admin'}`}
+            >
+              {readOnly ? 'Consulta (somente leitura)' : 'Administração'}
+            </span>
+            <span className={`api-badge ${apiOk ? 'api-ok' : 'api-fail'}`}>
+              {apiOk ? 'PostgreSQL conectado' : 'API offline'}
+            </span>
+            {readOnly ? (
+              <a className="admin-link" href={adminPath}>
+                Área administrativa →
+              </a>
+            ) : (
+              <a className="admin-link" href="/">
+                Voltar à consulta pública →
+              </a>
+            )}
+          </div>
         </header>
+
+        {readOnly && (
+          <p className="mode-banner">
+            Este endereço exibe dados e simulações sem alterar a base. Para importar planilhas,
+            sincronizar ou limpar dados, use{' '}
+            <a href={adminPath}>
+              {adminPath}
+              {isAdminRoute ? '' : ''}
+            </a>
+            .
+          </p>
+        )}
 
         <nav className="tabs" aria-label="Navegação principal">
           <button
@@ -234,98 +264,118 @@ export default function App() {
         <>
       <section className="panel upload-panel">
         <h2>Visão geral — totais mensais</h2>
-        <p className="hint">
-          <strong>Fonte recomendada:</strong> importe a planilha por equipamento em{' '}
-          <button
-            type="button"
-            className="link-btn"
-            onClick={() => {
-              setProcessSubTab('equipamentos');
-              setTab('processos');
-            }}
-          >
-            Processos → Equipamentos
-          </button>
-          . Os totais e KPIs são calculados automaticamente (uma única fonte de verdade).
-        </p>
-        <div className="upload-row">
-          <button
-            type="button"
-            className="primary-btn"
-            disabled={loading || !apiOk}
-            onClick={async () => {
-              setLoading(true);
-              setError(null);
-              try {
-                const { state, saldoAtual: saldo } = await syncDashboardFromServices();
-                setDashboard(state);
-                setSaldoAtual(formatSaldoInput(saldo));
-              } catch (e) {
-                setError(
-                  e instanceof Error
-                    ? e.message
-                    : 'Importe equipamentos em Processos antes.',
-                );
-              } finally {
-                setLoading(false);
-              }
-            }}
-          >
-            {loading ? 'Sincronizando…' : 'Atualizar a partir dos equipamentos'}
-          </button>
-        </div>
-        <details className="alt-import">
-          <summary>Importação alternativa (só totais por mês — não recomendado)</summary>
-          <p className="hint">
-            Use apenas se não tiver a planilha por equipamento. Prefira sempre a base por serviço.
-          </p>
-          <div className="upload-row">
-            <label className="file-btn">
-              {loading ? 'Processando…' : 'Planilha Mês + Total'}
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                disabled={loading || !apiOk}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void handleFile(f);
-                }}
-              />
-            </label>
-            <button
-              type="button"
-              className="secondary"
-              disabled={loading || !apiOk}
-              onClick={() => void handleDemo()}
-            >
-              Exemplo
-            </button>
+        {readOnly ? (
+          <>
+            <p className="hint">
+              Dados carregados do servidor. Você pode consultar KPIs, gráficos e usar{' '}
+              <strong>Processos → Distribuir mês</strong> para simular a divisão por equipamento
+              (não grava no banco).
+            </p>
             {dashboard && (
+              <p className="saldo-readonly">
+                Saldo atual (cestas):{' '}
+                <strong>{saldoNum !== null ? num(saldoNum) : 'não informado'}</strong>
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="hint">
+              <strong>Fonte recomendada:</strong> importe a planilha por equipamento em{' '}
               <button
                 type="button"
-                className="secondary"
-                disabled={loading || !apiOk}
-                onClick={() => void handleClear()}
+                className="link-btn"
+                onClick={() => {
+                  setProcessSubTab('equipamentos');
+                  setTab('processos');
+                }}
               >
-                Limpar
+                Processos → Importar histórico
               </button>
-            )}
-          </div>
-        </details>
-        <div className="saldo-row">
-          <label>
-            Saldo atual (cestas) — para autonomia e risco
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="Ex.: 6000"
-              value={saldoAtual}
-              disabled={!apiOk}
-              onChange={(e) => setSaldoAtual(e.target.value)}
-              onBlur={() => dashboard && void persistSaldo(dashboard)}
-            />
-          </label>
-        </div>
+              . Os totais e KPIs são calculados automaticamente (uma única fonte de verdade).
+            </p>
+            <div className="upload-row">
+              <button
+                type="button"
+                className="primary-btn"
+                disabled={loading || !apiOk}
+                onClick={async () => {
+                  setLoading(true);
+                  setError(null);
+                  try {
+                    const { state, saldoAtual: saldo } =
+                      await syncDashboardFromServices();
+                    setDashboard(state);
+                    setSaldoAtual(formatSaldoInput(saldo));
+                  } catch (e) {
+                    setError(
+                      e instanceof Error
+                        ? e.message
+                        : 'Importe equipamentos em Processos antes.',
+                    );
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                {loading ? 'Sincronizando…' : 'Atualizar a partir dos equipamentos'}
+              </button>
+            </div>
+            <details className="alt-import">
+              <summary>Importação alternativa (só totais por mês — não recomendado)</summary>
+              <p className="hint">
+                Use apenas se não tiver a planilha por equipamento. Prefira sempre a base por
+                serviço.
+              </p>
+              <div className="upload-row">
+                <label className="file-btn">
+                  {loading ? 'Processando…' : 'Planilha Mês + Total'}
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    disabled={loading || !apiOk}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleFile(f);
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={loading || !apiOk}
+                  onClick={() => void handleDemo()}
+                >
+                  Exemplo
+                </button>
+                {dashboard && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={loading || !apiOk}
+                    onClick={() => void handleClear()}
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </details>
+            <div className="saldo-row">
+              <label>
+                Saldo atual (cestas) — para autonomia e risco
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Ex.: 6000"
+                  value={saldoAtual}
+                  disabled={!apiOk}
+                  onChange={(e) => setSaldoAtual(e.target.value)}
+                  onBlur={() => dashboard && void persistSaldo(dashboard)}
+                />
+              </label>
+            </div>
+          </>
+        )}
         {error && <p className="error">{error}</p>}
         {dashboard && (
           <p className="meta">
@@ -342,26 +392,35 @@ export default function App() {
       {!dashboard ? (
         <section className="panel empty">
           <h3>Sem dados mensais na Visão geral</h3>
-          <ol className="steps-list">
-            <li>
-              Clique em <strong>Processos (emerg. + regular)</strong> no topo da página.
-            </li>
-            <li>
-              Depois em <strong>Equipamentos</strong> (menu logo abaixo).
-            </li>
-            <li>
-              <strong>Importar planilha</strong> (equipamento × meses). Pode ser uma aba por ano
-              (2022, 2023…) no Excel.
-            </li>
-            <li>
-              Volte aqui e use <strong>Atualizar a partir dos equipamentos</strong>, ou aguarde a
-              sincronização automática após o import.
-            </li>
-          </ol>
-          <p className="hint">
-            A planilha pivot (CRAS + JANEIRO…DEZEMBRO) <strong>não</strong> funciona em
-            “Importação alternativa” abaixo — use sempre Equipamentos.
-          </p>
+          {readOnly ? (
+            <p className="hint">
+              Ainda não há totais mensais publicados. Quem administra o sistema deve importar a
+              planilha em <a href={adminPath}>{adminPath}</a> → Processos → Importar histórico.
+            </p>
+          ) : (
+            <>
+              <ol className="steps-list">
+                <li>
+                  Clique em <strong>Processos (emerg. + regular)</strong> no topo da página.
+                </li>
+                <li>
+                  Depois em <strong>Importar histórico</strong> (menu logo abaixo).
+                </li>
+                <li>
+                  <strong>Importar planilha</strong> (equipamento × meses). Pode ser uma aba por ano
+                  (2022, 2023…) no Excel.
+                </li>
+                <li>
+                  Volte aqui e use <strong>Atualizar a partir dos equipamentos</strong>, ou aguarde
+                  a sincronização automática após o import.
+                </li>
+              </ol>
+              <p className="hint">
+                A planilha pivot (CRAS + JANEIRO…DEZEMBRO) <strong>não</strong> funciona em
+                “Importação alternativa” — use sempre Importar histórico.
+              </p>
+            </>
+          )}
         </section>
       ) : (
         <>

@@ -24,6 +24,9 @@ import {
   getServicesData,
   saveServicesData,
 } from './servicesDb.js';
+import { requireAdminWrite } from './adminAuth.js';
+
+const ADMIN_PATH = (process.env.ADMIN_PATH || '/admin').replace(/\/$/, '') || '/admin';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(
@@ -53,6 +56,19 @@ async function start() {
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: '10mb' }));
+
+  app.get('/api/config', (_req, res) => {
+    res.json({
+      adminPath: ADMIN_PATH,
+      requiresAdminKey: Boolean(process.env.ADMIN_API_KEY?.trim()),
+      readOnlyHint:
+        'A rota pública exibe dados sem permitir importar ou alterar a base.',
+    });
+  });
+
+  app.get('/api/admin/check', requireAdminWrite, (_req, res) => {
+    res.json({ ok: true });
+  });
 
   app.get('/api/health', async (_req, res) => {
     try {
@@ -84,7 +100,7 @@ async function start() {
     }
   });
 
-  app.put('/api/dashboard', async (req, res) => {
+  app.put('/api/dashboard', requireAdminWrite, async (req, res) => {
     try {
       const { state, saldoAtual } = req.body as {
         state: DashboardState;
@@ -105,7 +121,7 @@ async function start() {
     }
   });
 
-  app.post('/api/dashboard/sync-from-services', async (_req, res) => {
+  app.post('/api/dashboard/sync-from-services', requireAdminWrite, async (_req, res) => {
     try {
       const servicesData = await getServicesData();
       if (!servicesData.history.length) {
@@ -131,7 +147,7 @@ async function start() {
     }
   });
 
-  app.post('/api/imports', async (req, res) => {
+  app.post('/api/imports', requireAdminWrite, async (req, res) => {
     try {
       const { fileName, rows, saldoAtual } = req.body as {
         fileName: string;
@@ -155,7 +171,7 @@ async function start() {
     }
   });
 
-  app.delete('/api/dashboard', async (_req, res) => {
+  app.delete('/api/dashboard', requireAdminWrite, async (_req, res) => {
     try {
       await clearDashboard();
       res.json({ ok: true });
@@ -182,7 +198,7 @@ async function start() {
     }
   });
 
-  app.put('/api/services', async (req, res) => {
+  app.put('/api/services', requireAdminWrite, async (req, res) => {
     try {
       const body = req.body as Partial<ServicesPayload> &
         Pick<ServicesPayload, 'services' | 'history'>;
@@ -197,7 +213,7 @@ async function start() {
     }
   });
 
-  app.post('/api/services/import', async (req, res) => {
+  app.post('/api/services/import', requireAdminWrite, async (req, res) => {
     try {
       const body = req.body as Partial<ServicesPayload> &
         Pick<ServicesPayload, 'services' | 'history'> & { merge?: boolean };
@@ -259,7 +275,7 @@ async function start() {
     }
   });
 
-  app.delete('/api/services', async (_req, res) => {
+  app.delete('/api/services', requireAdminWrite, async (_req, res) => {
     try {
       await clearServicesData();
       res.json({ ok: true });

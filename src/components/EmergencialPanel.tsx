@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { suggestNextMonths } from '@shared/allocation';
+import { allocatePlans, suggestNextMonths } from '@shared/allocation';
 import { analyzeEmergencial } from '@shared/processAnalysis';
 import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
 import { calculateAllocation, saveServices } from '../lib/servicesApi';
@@ -19,9 +19,10 @@ function parseQty(s: string): number {
 interface Props {
   data: ServicesPayload;
   onUpdate: (next: ServicesPayload) => void;
+  readOnly?: boolean;
 }
 
-export default function EmergencialPanel({ data, onUpdate }: Props) {
+export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
   const [results, setResults] = useState<MonthAllocationResult[] | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -32,6 +33,7 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
   );
 
   const applyPadrao1200 = () => {
+    if (readOnly) return;
     const months =
       cfg.plans.length >= 4
         ? cfg.plans.map((p) => p.mes)
@@ -50,6 +52,10 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
   const runCalc = async () => {
     setLoading(true);
     try {
+      if (readOnly) {
+        setResults(allocatePlans(cfg.plans, data.services, data.history));
+        return;
+      }
       const payload = { ...data, plans: cfg.plans };
       const saved = await saveServices(payload);
       onUpdate(saved);
@@ -71,6 +77,7 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
         <p className="hint">
           Operação de curto prazo (ex.: <strong>1.200 cestas/mês × 4 meses</strong>). O sistema
           divide por equipamento com base no histórico, respeitando <strong>fixos</strong>.
+          {readOnly && ' Em modo consulta, alterações não são salvas no servidor.'}
         </p>
 
         <div className="config-grid">
@@ -80,6 +87,7 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
               type="text"
               inputMode="numeric"
               value={cfg.cestasPorMes}
+              disabled={readOnly}
               onChange={(e) =>
                 onUpdate({
                   ...data,
@@ -97,6 +105,7 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
               type="text"
               inputMode="numeric"
               value={cfg.duracaoMeses}
+              disabled={readOnly}
               onChange={(e) => {
                 const n = parseInt(e.target.value, 10) || 4;
                 const months = suggestNextMonths(data.history, n);
@@ -118,7 +127,12 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
               }}
             />
           </label>
-          <button type="button" className="secondary" onClick={applyPadrao1200}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={readOnly}
+            onClick={applyPadrao1200}
+          >
             Aplicar {num(cfg.cestasPorMes)} em todos os meses
           </button>
         </div>
@@ -131,7 +145,9 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
                 type="text"
                 inputMode="numeric"
                 value={p.totalDisponivel > 0 ? String(p.totalDisponivel) : ''}
+                disabled={readOnly}
                 onChange={(e) => {
+                  if (readOnly) return;
                   const plans = cfg.plans.map((x) =>
                     x.mes === p.mes
                       ? { ...x, totalDisponivel: parseQty(e.target.value) }
