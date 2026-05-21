@@ -1,10 +1,10 @@
 import {
   computeForecast,
   computeKpis,
-  contractScenarios,
   mediaMovelUltimos3Validos,
   processSeries,
 } from './calculations.js';
+import { contractScenarios } from './simulation.js';
 import type { DashboardState, RawMonthRow } from './types.js';
 
 export function buildDashboard(

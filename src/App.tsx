@@ -22,6 +22,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import SimulationPanel from './components/SimulationPanel';
 import './App.css';
 
 function pct(n: number | null): string {
@@ -377,29 +378,7 @@ export default function App() {
             </div>
           </section>
 
-          <section className="panel">
-            <h2>Simulação contrato 18.000 cestas</h2>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Consumo mensal</th>
-                    <th>Duração estimada</th>
-                    <th>Leitura de risco</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboard.cenariosContrato.map((c) => (
-                    <tr key={c.consumoMensal}>
-                      <td>{num(c.consumoMensal)}/mês</td>
-                      <td>{c.duracaoMeses.toFixed(1)} meses</td>
-                      <td>{c.leitura}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <SimulationPanel dashboard={dashboard} />
 
           <section className="panel apresentacao">
             <h2>Texto para apresentação</h2>

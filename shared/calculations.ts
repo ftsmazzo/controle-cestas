@@ -221,18 +221,7 @@ export function mediaMovelUltimos3Validos(rows: ProcessedMonthRow[]): number | n
   return last.reduce((a, b) => a + b, 0) / last.length;
 }
 
-export function contractScenarios(totalContrato = 18000): ContractScenario[] {
-  const niveis = [1500, 1700, 1800, 2000];
-  return niveis.map((consumoMensal) => {
-    const duracaoMeses = totalContrato / consumoMensal;
-    let leitura: string;
-    if (consumoMensal <= 1500) leitura = 'Cobre o planejado, sem folga.';
-    else if (consumoMensal <= 1700) leitura = 'Risco moderado: contrato acaba antes de 12 meses.';
-    else if (consumoMensal <= 1800) leitura = 'Risco alto se o patamar se mantiver.';
-    else leitura = 'Risco crítico de insuficiência contratual.';
-    return { consumoMensal, duracaoMeses, leitura };
-  });
-}
+export { contractScenarios } from './simulation.js';
 
 export const APRESENTACAO_TEXTO =
   'A análise considera o histórico mensal de consumo, excluindo da modelagem os meses com distorção operacional, como ruptura de estoque e mês parcial. A previsão utiliza tendência histórica, média móvel e controle de anomalias para estimar o comportamento provável da demanda. O volume contratado de 18.000 cestas atende ao cenário de 1.500 cestas/mês, porém apresenta margem reduzida diante de picos recentes e tendência de crescimento, recomendando acompanhamento mensal da autonomia de estoque e gatilhos preventivos de recomposição.';
