@@ -18,6 +18,7 @@ export async function getServicesData(): Promise<ServicesPayload> {
     emergencial: raw.emergencial,
     regular: raw.regular,
     updatedAt: raw.updatedAt,
+    meta: raw.meta,
   });
 }
 

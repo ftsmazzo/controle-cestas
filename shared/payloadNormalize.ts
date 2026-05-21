@@ -15,11 +15,12 @@ export function normalizeServicesPayload(
   }
 
   return {
-    services: raw.services,
+    services: raw.services ?? [],
     history,
     plans,
     emergencial,
     regular,
     updatedAt: raw.updatedAt ?? new Date().toISOString(),
+    meta: raw.meta,
   };
 }

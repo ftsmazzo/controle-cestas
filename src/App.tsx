@@ -22,6 +22,7 @@ import {
   YAxis,
 } from 'recharts';
 import DecisionDashboard from './components/DecisionDashboard';
+import ErrorBoundary from './components/ErrorBoundary';
 import ProcessHub from './components/ProcessHub';
 import SimulationPanel from './components/SimulationPanel';
 import './App.css';
@@ -213,20 +214,22 @@ export default function App() {
       </div>
 
       {tab === 'processos' ? (
-        <ProcessHub
-          initialSubTab={processSubTab ?? undefined}
-          onInitialSubTabApplied={() => setProcessSubTab(null)}
-          onDashboardSynced={async () => {
-            try {
-              const { state, saldoAtual: saldo } = await fetchDashboard();
-              setDashboard(state);
-              setSaldoAtual(formatSaldoInput(saldo));
-              setTab('geral');
-            } catch {
-              /* recarrega na próxima visita à aba */
-            }
-          }}
-        />
+        <ErrorBoundary title="Erro na aba Processos">
+          <ProcessHub
+            initialSubTab={processSubTab ?? undefined}
+            onInitialSubTabApplied={() => setProcessSubTab(null)}
+            onDashboardSynced={async () => {
+              try {
+                const { state, saldoAtual: saldo } = await fetchDashboard();
+                setDashboard(state);
+                setSaldoAtual(formatSaldoInput(saldo));
+                setTab('geral');
+              } catch {
+                /* recarrega na próxima visita à aba */
+              }
+            }}
+          />
+        </ErrorBoundary>
       ) : (
         <>
       <section className="panel upload-panel">

@@ -10,8 +10,13 @@ function num(n: number, dec = 0): string {
 }
 
 export default function ProcessOverview({ data }: { data: ServicesPayload | null }) {
+  const rowsGeral = useMemo(() => {
+    if (!data?.history.length) return undefined;
+    return buildDashboard(aggregateHistoryByMonth(data.history), 'Resumo').rows;
+  }, [data]);
+
   const analise = useMemo(() => {
-    if (!data?.history.length) return null;
+    if (!data?.history.length || !data.emergencial || !data.regular) return null;
     return {
       emergencial: analyzeEmergencial(data.emergencial, data.services, data.history),
       regular: analyzeRegular(data.regular, data.history),
@@ -29,15 +34,16 @@ export default function ProcessOverview({ data }: { data: ServicesPayload | null
     );
   }
 
-  if (!analise) return null;
+  if (!analise) {
+    return (
+      <section className="panel">
+        <p className="hint">Carregando panorama dos processos…</p>
+      </section>
+    );
+  }
 
   const em = analise.emergencial;
   const reg = analise.regular;
-
-  const rowsGeral = useMemo(() => {
-    if (!data?.history.length) return undefined;
-    return buildDashboard(aggregateHistoryByMonth(data.history), 'Resumo').rows;
-  }, [data]);
 
   return (
     <section className="panel process-overview">
