@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDashboard } from '../shared/buildDashboard.js';
@@ -18,7 +19,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(
   process.env.PORT ?? (process.env.NODE_ENV === 'production' ? 80 : 3000),
 );
-const distPath = join(__dirname, '../dist');
+// dist-server/server/index.js → frontend em /app/dist
+const distPath = join(__dirname, '../../dist');
 
 async function start() {
   if (!process.env.DATABASE_URL) {
@@ -30,6 +32,13 @@ async function start() {
   console.log('[startup] Executando migrations…');
   await runMigrations(pool);
   console.log('[startup] Migrations concluídas.');
+
+  const indexHtml = join(distPath, 'index.html');
+  if (!existsSync(indexHtml)) {
+    console.error(`[startup] Frontend não encontrado: ${indexHtml}`);
+    process.exit(1);
+  }
+  console.log(`[startup] Frontend: ${distPath}`);
 
   const app = express();
   app.use(cors());
