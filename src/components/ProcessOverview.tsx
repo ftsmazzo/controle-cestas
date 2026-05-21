@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
-import { analyzeEmergencial, analyzeRegular } from '@shared/processAnalysis';
+import { aggregateHistoryByMonth, analyzeEmergencial, analyzeRegular } from '@shared/processAnalysis';
+import { buildDashboard } from '@shared/buildDashboard';
 import type { ServicesPayload } from '@shared/serviceTypes';
+import MethodologyBanner from './MethodologyBanner';
 import './ProcessPanels.css';
 
 function num(n: number, dec = 0): string {
@@ -32,8 +34,14 @@ export default function ProcessOverview({ data }: { data: ServicesPayload | null
   const em = analise.emergencial;
   const reg = analise.regular;
 
+  const rowsGeral = useMemo(() => {
+    if (!data?.history.length) return undefined;
+    return buildDashboard(aggregateHistoryByMonth(data.history), 'Resumo').rows;
+  }, [data]);
+
   return (
     <section className="panel process-overview">
+      {rowsGeral && <MethodologyBanner rows={rowsGeral} compact />}
       <h2>Dois processos em paralelo</h2>
       <div className="process-cards">
         <article className="process-card emergencial-card">

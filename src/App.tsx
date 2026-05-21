@@ -15,13 +15,12 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import DecisionDashboard from './components/DecisionDashboard';
 import ProcessHub from './components/ProcessHub';
 import SimulationPanel from './components/SimulationPanel';
 import './App.css';
@@ -149,16 +148,6 @@ export default function App() {
       setLoading(false);
     }
   };
-
-  const chartData = useMemo(() => {
-    if (!dashboard) return [];
-    return dashboard.rows.map((r) => ({
-      mes: r.mes,
-      observado: r.total,
-      ajustado: r.totalAjustado ?? undefined,
-      mediaMovel: r.mediaMovel3m ?? undefined,
-    }));
-  }, [dashboard]);
 
   const forecastChart = useMemo(() => {
     if (!dashboard) return [];
@@ -288,72 +277,27 @@ export default function App() {
         </section>
       ) : (
         <>
-          <section className="kpi-grid">
-            <article className="kpi-card">
-              <span className="kpi-label">Consumo total observado</span>
-              <strong>{num(dashboard.kpis.consumoTotalObservado)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span className="kpi-label">Consumo válido (modelo)</span>
-              <strong>{num(dashboard.kpis.consumoTotalValido)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span className="kpi-label">Média mensal válida</span>
-              <strong>{num(dashboard.kpis.mediaMensalValida)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span className="kpi-label">Pico de consumo</span>
-              <strong>{num(dashboard.kpis.picoConsumo)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span className="kpi-label">Menor consumo válido</span>
-              <strong>{num(dashboard.kpis.menorConsumoValido)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span className="kpi-label">Desvio padrão</span>
-              <strong>{num(dashboard.kpis.desvioPadrao, 1)}</strong>
-            </article>
-            <article className="kpi-card">
-              <span className="kpi-label">Média móvel (3 meses válidos)</span>
-              <strong>{num(dashboard.mediaMovelUltimos3, 0)}</strong>
-            </article>
-            <article className={`kpi-card ${riskClass}`}>
-              <span className="kpi-label">Autonomia (meses)</span>
-              <strong>{num(dashboard.kpis.autonomiaMeses, 1)}</strong>
-              <span className="risk-badge">{dashboard.kpis.riscoRuptura}</span>
-            </article>
+          <section className={`kpi-card risk-strip ${riskClass}`}>
+            <span className="kpi-label">Autonomia de estoque</span>
+            <strong>{num(dashboard.kpis.autonomiaMeses, 1)} meses</strong>
+            <span className="risk-badge">{dashboard.kpis.riscoRuptura}</span>
           </section>
 
-          <section className="charts-row">
-            <div className="panel chart-panel">
-              <h2>Série mensal</h2>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="observado" name="Observado" stroke="#2563eb" strokeWidth={2} dot />
-                  <Line type="monotone" dataKey="ajustado" name="Ajustado modelo" stroke="#16a34a" strokeWidth={2} dot />
-                  <Line type="monotone" dataKey="mediaMovel" name="Média móvel 3m" stroke="#ca8a04" strokeDasharray="4 4" dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="panel chart-panel">
-              <h2>Tendência / forecast (+3 meses)</h2>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={forecastChart}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="historico" name="Histórico" fill="#2563eb" />
-                  <Bar dataKey="projecao" name="Projeção linear" fill="#9333ea" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <DecisionDashboard dashboard={dashboard} />
+
+          <section className="panel chart-panel">
+            <h2>Projeção (+3 meses) — somente meses válidos</h2>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={forecastChart}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="historico" name="Histórico válido" fill="#2563eb" />
+                <Bar dataKey="projecao" name="Projeção" fill="#9333ea" />
+              </BarChart>
+            </ResponsiveContainer>
           </section>
 
           <section className="panel">
@@ -378,13 +322,17 @@ export default function App() {
                     <tr
                       key={r.mes}
                       className={
-                        r.flagAnomalia === 'Excluir modelo'
-                          ? 'row-excluir'
-                          : r.flagAnomalia === 'Anomalia'
-                            ? 'row-anomalia'
-                            : r.flagAnomalia === 'Atenção'
-                              ? 'row-atencao'
-                              : ''
+                        r.status === 'Ruptura de estoque'
+                          ? 'row-ruptura'
+                          : r.status === 'Parcial'
+                            ? 'row-parcial'
+                            : r.flagAnomalia === 'Excluir modelo'
+                              ? 'row-excluir'
+                              : r.flagAnomalia === 'Anomalia'
+                                ? 'row-anomalia'
+                                : r.flagAnomalia === 'Atenção'
+                                  ? 'row-atencao'
+                                  : ''
                       }
                     >
                       <td>{r.mes}</td>
@@ -411,8 +359,9 @@ export default function App() {
             <details>
               <summary>Critérios metodológicos (resumo)</summary>
               <ul>
-                <li>Somente meses <strong>Completos</strong> entram na média, desvio, tendência e forecast.</li>
-                <li><strong>Ruptura</strong> e <strong>Parcial</strong> ficam fora do modelo preditivo.</li>
+                <li><strong>Abr/2026:</strong> parada no fornecimento — não é queda de demanda.</li>
+                <li><strong>Mai/2026:</strong> mês parcial, retorno gradual e racionamento.</li>
+                <li>Somente meses <strong>Completos</strong> entram na média, tendência e forecast.</li>
                 <li>Risco: Verde &gt; 4 meses · Amarelo 2–4 · Vermelho &lt; 2 meses de autonomia.</li>
                 <li>Anomalia: desvio &gt; 1σ (Atenção) ou &gt; 2σ (Anomalia) vs. meses válidos.</li>
               </ul>

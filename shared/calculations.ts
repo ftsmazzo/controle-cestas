@@ -1,3 +1,4 @@
+import { getDefaultObservacao } from './methodology.js';
 import { formatMesPt, getYearMonth, parseMonthKey } from './monthUtils.js';
 import type {
   AnomalyFlag,
@@ -82,13 +83,7 @@ export function processSeries(raw: RawMonthRow[]): ProcessedMonthRow[] {
 
   const withStatus = sorted.map((r) => {
     const status = inferStatus(r.mes, r.observacao, r.status);
-    const observacao =
-      r.observacao ||
-      (status === 'Ruptura de estoque'
-        ? 'Ruptura de estoque'
-        : status === 'Parcial'
-          ? 'Mês parcial/incompleto'
-          : '');
+    const observacao = getDefaultObservacao(r.mes, status, r.observacao);
     return {
       mes: r.mes,
       total: r.total,
@@ -224,4 +219,4 @@ export function mediaMovelUltimos3Validos(rows: ProcessedMonthRow[]): number | n
 export { contractScenarios } from './simulation.js';
 
 export const APRESENTACAO_TEXTO =
-  'A análise considera o histórico mensal de consumo, excluindo da modelagem os meses com distorção operacional, como ruptura de estoque e mês parcial. A previsão utiliza tendência histórica, média móvel e controle de anomalias para estimar o comportamento provável da demanda. O volume contratado de 18.000 cestas atende ao cenário de 1.500 cestas/mês, porém apresenta margem reduzida diante de picos recentes e tendência de crescimento, recomendando acompanhamento mensal da autonomia de estoque e gatilhos preventivos de recomposição.';
+  'A análise considera o histórico mensal de consumo, excluindo da modelagem Abr/2026 (parada no fornecimento — ruptura de estoque) e Mai/2026 (mês parcial, retorno gradual e racionamento), para que esses valores não sejam interpretados como queda real da demanda. A previsão utiliza apenas meses completos, tendência histórica, média móvel e controle de anomalias. O volume contratado de 18.000 cestas (1.500/mês) deve ser avaliado à luz da utilização média, picos e projeção, com acompanhamento mensal da autonomia de estoque.';

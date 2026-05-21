@@ -267,6 +267,23 @@ th {
   color: var(--muted);
 }
 
+.row-ruptura {
+  background: #fef2f2;
+}
+
+.row-parcial {
+  background: #fffbeb;
+}
+
+.risk-strip {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  max-width: 100%;
+}
+
 .row-atencao {
   background: #fffbeb;
 }

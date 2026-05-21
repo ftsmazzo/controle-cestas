@@ -1,0 +1,73 @@
+.methodology-banner {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.methodology-banner.compact {
+  padding: 0.75rem 1rem;
+}
+
+.methodology-banner h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #92400e;
+}
+
+.methodology-banner > p {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #78350f;
+}
+
+.meses-distorcao {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.meses-distorcao li {
+  padding: 0.5rem 0.65rem;
+  margin-bottom: 0.35rem;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+  border-left: 4px solid #f59e0b;
+  font-size: 0.88rem;
+}
+
+.mes-desc {
+  display: block;
+  font-size: 0.82rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+  font-weight: normal;
+}
+
+.legenda-modelo {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+}
+
+.dot-valido {
+  background: #16a34a;
+}
+
+.dot-excluido {
+  background: #f87171;
+}

@@ -5,6 +5,7 @@ import { contractScenarios } from '@shared/simulation';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { saveServices } from '../lib/servicesApi';
 import SimulationPanel from './SimulationPanel';
+import MethodologyBanner from './MethodologyBanner';
 import './ProcessPanels.css';
 
 function num(n: number | null, dec = 0): string {
@@ -75,6 +76,7 @@ export default function RegularPanel({ data, onUpdate }: Props) {
 
   return (
     <div className="process-panel">
+      {simDashboard && <MethodologyBanner rows={simDashboard.rows} compact />}
       <section className="panel">
         <h2>Processo regular (12 meses)</h2>
         <p className="hint">

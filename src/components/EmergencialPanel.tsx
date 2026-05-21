@@ -3,6 +3,7 @@ import { suggestNextMonths } from '@shared/allocation';
 import { analyzeEmergencial } from '@shared/processAnalysis';
 import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
 import { calculateAllocation, saveServices } from '../lib/servicesApi';
+import MethodologyBanner from './MethodologyBanner';
 import './ProcessPanels.css';
 
 function num(n: number): string {
@@ -63,6 +64,7 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
 
   return (
     <div className="process-panel">
+      <MethodologyBanner compact />
       <section className="panel">
         <h2>Processo emergencial</h2>
         <p className="hint">

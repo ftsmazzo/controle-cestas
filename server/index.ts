@@ -3,7 +3,7 @@ import cors from 'cors';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildDashboard } from '../shared/buildDashboard.js';
+import { buildDashboard, hydrateDashboardState } from '../shared/buildDashboard.js';
 import type { DashboardState, RawMonthRow } from '../shared/types.js';
 import { allocatePlans } from '../shared/allocation.js';
 import { normalizeServicesPayload } from '../shared/payloadNormalize.js';
@@ -68,6 +68,14 @@ async function start() {
   app.get('/api/dashboard', async (_req, res) => {
     try {
       const data = await getDashboard();
+      if (data.state) {
+        const hydrated = hydrateDashboardState(data.state, data.saldoAtual);
+        if (hydrated !== data.state) {
+          await saveDashboard(hydrated, data.saldoAtual);
+        }
+        res.json({ state: hydrated, saldoAtual: data.saldoAtual });
+        return;
+      }
       res.json(data);
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });

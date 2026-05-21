@@ -46,9 +46,14 @@ export interface ContractScenario {
   leitura: string;
 }
 
+import type { InsightsKpis } from './insights.js';
+
+export type { InsightsKpis };
+
 export interface DashboardState {
   rows: ProcessedMonthRow[];
   kpis: Kpis;
+  insights: InsightsKpis;
   forecast: ForecastPoint[];
   tendenciaProximos: ForecastPoint[];
   mediaMovelUltimos3: number | null;
