@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { inferStatus } from '@shared/calculations';
+import { formatMesPt } from '@shared/monthUtils';
 import type { RawMonthRow } from '@shared/types';
 
 const MES_KEYS = ['mês', 'mes', 'competencia', 'competência', 'periodo', 'período'];
@@ -31,8 +32,8 @@ function parseStatus(val: unknown): RawMonthRow['status'] | undefined {
   const s = String(val ?? '').trim();
   if (!s) return undefined;
   if (/ruptura/i.test(s)) return 'Ruptura de estoque';
-  if (/parcial/i.test(s)) return 'Parcial';
-  if (/completo/i.test(s)) return 'Completo';
+  if (/parcial|incompleto|incomplete/i.test(s)) return 'Parcial';
+  if (/completo|complete/i.test(s)) return 'Completo';
   return undefined;
 }
 
@@ -87,7 +88,8 @@ export function parseWorkbook(buffer: ArrayBuffer): RawMonthRow[] {
   for (let r = headerRowIdx + 1; r < matrix.length; r++) {
     const line = matrix[r];
     if (!line || line.length === 0) continue;
-    const mes = formatMes(line[iMes]);
+    const mesRaw = formatMes(line[iMes]);
+    const mes = formatMesPt(mesRaw);
     const total = parseNumber(line[iTotal]);
     if (!mes || total === null) continue;
     const observacao = iObs >= 0 ? String(line[iObs] ?? '').trim() : '';
@@ -95,7 +97,7 @@ export function parseWorkbook(buffer: ArrayBuffer): RawMonthRow[] {
     rows.push({
       mes,
       total,
-      status: status ?? inferStatus(mes, observacao),
+      status: inferStatus(mes, observacao, status),
       observacao,
     });
   }

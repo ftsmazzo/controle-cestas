@@ -1,3 +1,4 @@
+import { formatMesPt, getYearMonth, parseMonthKey } from './monthUtils.js';
 import type {
   AnomalyFlag,
   ContractScenario,
@@ -8,6 +9,8 @@ import type {
   RawMonthRow,
   RiskLevel,
 } from './types.js';
+
+export { formatMesPt, parseMonthKey } from './monthUtils.js';
 
 function populationStdDev(values: number[]): number {
   if (values.length === 0) return 0;
@@ -44,32 +47,53 @@ export function inferStatus(
   observacao?: string,
   explicit?: MonthStatus,
 ): MonthStatus {
-  if (explicit) return explicit;
-  const m = mes.toLowerCase();
   const obs = (observacao ?? '').toLowerCase();
-  if (m.includes('abr/2026') || m.includes('04/2026') || obs.includes('ruptura')) {
-    return 'Ruptura de estoque';
-  }
-  if (m.includes('mai/2026') || m.includes('05/2026') || obs.includes('parcial')) {
+  if (obs.includes('ruptura')) return 'Ruptura de estoque';
+  if (
+    obs.includes('parcial') ||
+    obs.includes('incompleto') ||
+    obs.includes('incomplete')
+  ) {
     return 'Parcial';
   }
+
+  const ym = getYearMonth(mes);
+  if (ym) {
+    if (ym.year === 2026 && ym.month === 4) return 'Ruptura de estoque';
+    if (ym.year === 2026 && ym.month === 5) return 'Parcial';
+  }
+
+  if (explicit) return explicit;
   return 'Completo';
 }
 
 export function processSeries(raw: RawMonthRow[]): ProcessedMonthRow[] {
-  const sorted = [...raw].sort((a, b) => {
+  const normalized = raw.map((r) => ({
+    ...r,
+    mes: formatMesPt(r.mes),
+  }));
+
+  const sorted = [...normalized].sort((a, b) => {
     const da = parseMonthKey(a.mes);
     const db = parseMonthKey(b.mes);
-    return da - db;
+    if (da !== db) return da - db;
+    return a.mes.localeCompare(b.mes, 'pt-BR');
   });
 
   const withStatus = sorted.map((r) => {
     const status = inferStatus(r.mes, r.observacao, r.status);
+    const observacao =
+      r.observacao ||
+      (status === 'Ruptura de estoque'
+        ? 'Ruptura de estoque'
+        : status === 'Parcial'
+          ? 'Mês parcial/incompleto'
+          : '');
     return {
       mes: r.mes,
       total: r.total,
       status,
-      observacao: r.observacao ?? '',
+      observacao,
     };
   });
 
@@ -123,27 +147,6 @@ export function processSeries(raw: RawMonthRow[]): ProcessedMonthRow[] {
       usoNoModelo: r.status === 'Completo' ? 'Sim' : 'Não',
     };
   });
-}
-
-export function parseMonthKey(mes: string): number {
-  const s = mes.trim().toLowerCase();
-  const months: Record<string, number> = {
-    jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
-    jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
-  };
-  const match = s.match(/(\w{3})\s*\/\s*(\d{2,4})/);
-  if (match) {
-    const m = months[match[1].slice(0, 3)] ?? 1;
-    let y = parseInt(match[2], 10);
-    if (y < 100) y += 2000;
-    return y * 100 + m;
-  }
-  const d = Date.parse(mes);
-  if (!Number.isNaN(d)) {
-    const dt = new Date(d);
-    return dt.getFullYear() * 100 + (dt.getMonth() + 1);
-  }
-  return 0;
 }
 
 export function computeKpis(
