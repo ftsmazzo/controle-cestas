@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
-import type { RawMonthRow } from './types';
-import { inferStatus } from './calculations';
+import { inferStatus } from '@shared/calculations';
+import type { RawMonthRow } from '@shared/types';
 
 const MES_KEYS = ['mês', 'mes', 'competencia', 'competência', 'periodo', 'período'];
 const TOTAL_KEYS = ['total', 'consumo', 'quantidade', 'qtd', 'cestas'];

@@ -7,7 +7,7 @@ import type {
   ProcessedMonthRow,
   RawMonthRow,
   RiskLevel,
-} from './types';
+} from './types.js';
 
 function populationStdDev(values: number[]): number {
   if (values.length === 0) return 0;

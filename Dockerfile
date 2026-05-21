@@ -5,8 +5,16 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=80
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist-server ./dist-server
+COPY --from=build /app/server/migrations ./dist-server/server/migrations
+
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "dist-server/server/index.js"]

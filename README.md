@@ -1,54 +1,73 @@
-# Dashboard de Consumo de Cestas Básicas
+# Controle de Cestas Básicas
 
-Sistema web que replica a metodologia da nota técnica (abr/2025–mai/2026): importação de planilhas Excel, tratamento de meses completos/ruptura/parcial, KPIs, anomalias, forecast linear e simulação do contrato de 18.000 cestas.
+Dashboard web com metodologia da nota técnica (abr/2025–mai/2026), API Node, **PostgreSQL** e migrations automáticas na implantação (sem rodar SQL manual no terminal).
 
-## Como usar
+Repositório: [github.com/ftsmazzo/controle-cestas](https://github.com/ftsmazzo/controle-cestas)
 
-```bash
-npm install
-npm run dev
+## Desenvolvimento local
+
+1. Copie `.env.example` para `.env` e ajuste `DATABASE_URL`.
+2. `npm install`
+3. `npm run dev` — frontend em `:5173` (proxy `/api` → `:3000`) e API com `tsx`.
+
+## Deploy no EasyPanel
+
+### 1. PostgreSQL
+
+Crie o banco (ex.: `controle_cestas`) no serviço Postgres do EasyPanel. Anote host interno, usuário, senha e porta.
+
+### 2. App (Dockerfile)
+
+| Campo | Valor |
+|-------|--------|
+| Repositório | `https://github.com/ftsmazzo/controle-cestas` |
+| Build | **Dockerfile** |
+| Porta do container | **80** |
+
+### 3. Variáveis de ambiente (obrigatórias)
+
+| Variável | Obrigatória | Exemplo | Descrição |
+|----------|-------------|---------|-----------|
+| `DATABASE_URL` | **Sim** | `postgresql://user:pass@postgres:5432/controle_cestas` | Conexão PostgreSQL. No EasyPanel use o **hostname interno** do serviço Postgres. |
+| `PORT` | Recomendado | `80` | Porta HTTP do Node (já definida no Dockerfile). |
+| `NODE_ENV` | Recomendado | `production` | Ambiente de produção. |
+| `PGSSLMODE` | Não | `require` | Só se o Postgres exigir SSL. |
+
+**Montagem da `DATABASE_URL` no EasyPanel:**
+
+```
+postgresql://USUARIO:SENHA@HOST_INTERNO_POSTGRES:5432/NOME_DO_BANCO
 ```
 
-Abra o endereço exibido no terminal (geralmente `http://localhost:5173`).
+Substitua `HOST_INTERNO_POSTGRES` pelo nome do serviço Postgres na mesma stack (ex.: `postgres`, `controle-cestas-db`).
 
-1. **Importar** o arquivo `Levantamento Cestas Básicas (abril25 a mai26).xlsx` (ou equivalente).
-2. Informar **saldo atual** para calcular autonomia e faixa de risco (Verde/Amarelo/Vermelho).
-3. Conferir tabela derivada, gráficos e cenários do contrato.
+### 4. Migrations
 
-## Formato esperado da planilha
+Executadas **automaticamente** cada vez que o container sobe (`server/migrate.ts` no startup). Não é necessário SSH nem terminal para criar tabelas.
 
-| Coluna (cabeçalho) | Obrigatório | Exemplos de nome |
-|--------------------|-------------|------------------|
-| Mês                | Sim         | Mês, Competência |
-| Total              | Sim         | Total, Consumo   |
-| Status             | Não         | Completo, Ruptura de estoque, Parcial |
-| Observação         | Não         | Justificativa operacional |
+### 5. Teste após deploy
 
-A aba pode chamar-se `base`, `dados`, `histórico` ou ser a primeira aba do arquivo.
+- `https://SEU-DOMINIO/api/health` → `{"ok":true,"database":"connected"}`
+- Abra o site, importe planilha ou “Carregar exemplo”
+- Badge **PostgreSQL conectado** no canto superior
 
-## Fórmulas implementadas
+## API
 
-Equivalentes às fórmulas Excel da nota técnica:
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/health` | Saúde + conexão DB |
+| GET | `/api/dashboard` | Estado atual + saldo |
+| PUT | `/api/dashboard` | Atualiza dashboard/saldo |
+| POST | `/api/imports` | Importa linhas mensais (JSON) |
+| DELETE | `/api/dashboard` | Limpa dados |
+| GET | `/api/imports` | Histórico de uploads |
 
-- Variação M/M, média móvel 3 meses, total ajustado, uso no modelo
-- Flag de anomalia (3 níveis: Normal, Atenção, Anomalia, Excluir modelo)
-- KPIs: soma observada/válida, média, pico, mínimo válido, DESVPAD.P
-- Autonomia = Saldo / média válida; risco por faixas (>4, 2–4, <2 meses)
-- PREVISÃO.LINEAR / TENDÊNCIA para +3 meses (somente meses completos)
-- Simulação 18.000 cestas para consumos 1.500–2.000/mês
+## Planilha Excel
 
-Os dados ficam salvos no **localStorage** do navegador entre sessões.
+Colunas: **Mês**, **Total** (obrigatórios); **Status**, **Observação** (opcionais).
 
-## Deploy no EasyPanel (Docker)
+## Estrutura
 
-1. Crie um **App** apontando para este repositório: [ftsmazzo/controle-cestas](https://github.com/ftsmazzo/controle-cestas)
-2. Método de build: **Dockerfile** (porta **80**)
-3. PostgreSQL: use quando houver API/backend; o frontend atual persiste no navegador (`localStorage`)
-
-Variáveis de ambiente futuras (API): `DATABASE_URL`, etc.
-
-## Próximos passos (opcional)
-
-- API Node + PostgreSQL para histórico persistente
-- Leitura do PDF complementar (OCR ou extração tabular)
-- Exportação da base processada para Excel
+- `shared/` — cálculos e tipos (frontend + API)
+- `server/` — Express, PostgreSQL, migrations
+- `src/` — React dashboard
