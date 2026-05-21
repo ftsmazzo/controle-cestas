@@ -15,7 +15,9 @@ export async function fetchServices(): Promise<ServicesPayload> {
   return res.json() as Promise<ServicesPayload>;
 }
 
-export async function saveServices(payload: ServicesPayload): Promise<ServicesPayload> {
+export async function saveServices(
+  payload: Partial<ServicesPayload> & Pick<ServicesPayload, 'services' | 'history'>,
+): Promise<ServicesPayload> {
   const res = await fetch('/api/services', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

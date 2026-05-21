@@ -52,9 +52,18 @@ export interface MonthAllocationResult {
   alerta: string | null;
 }
 
+import type {
+  ProcessoEmergencialConfig,
+  ProcessoRegularConfig,
+} from './processTypes.js';
+
 export interface ServicesPayload {
   services: ServiceDef[];
   history: ServiceMonthRecord[];
+  /** @deprecated use emergencial.plans — mantido para compatibilidade */
   plans: MonthlyPlan[];
+  emergencial: ProcessoEmergencialConfig;
+  regular: ProcessoRegularConfig;
   updatedAt: string;
 }
+

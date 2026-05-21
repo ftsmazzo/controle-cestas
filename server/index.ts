@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { buildDashboard } from '../shared/buildDashboard.js';
 import type { DashboardState, RawMonthRow } from '../shared/types.js';
 import { allocatePlans } from '../shared/allocation.js';
+import { normalizeServicesPayload } from '../shared/payloadNormalize.js';
 import type { ServicesPayload } from '../shared/serviceTypes.js';
 import {
   clearDashboard,
@@ -147,19 +148,14 @@ async function start() {
 
   app.put('/api/services', async (req, res) => {
     try {
-      const body = req.body as ServicesPayload;
+      const body = req.body as Partial<ServicesPayload> &
+        Pick<ServicesPayload, 'services' | 'history'>;
       if (!Array.isArray(body.services) || !Array.isArray(body.history)) {
         res.status(400).json({ error: 'payload inválido' });
         return;
       }
-      const payload: ServicesPayload = {
-        services: body.services,
-        history: body.history,
-        plans: body.plans ?? [],
-        updatedAt: new Date().toISOString(),
-      };
-      await saveServicesData(payload);
-      res.json(payload);
+      const saved = await saveServicesData(body);
+      res.json(saved);
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
     }
@@ -167,20 +163,21 @@ async function start() {
 
   app.post('/api/services/import', async (req, res) => {
     try {
-      const { history, services, plans } = req.body as ServicesPayload;
-      if (!Array.isArray(history) || !Array.isArray(services)) {
+      const body = req.body as Partial<ServicesPayload> &
+        Pick<ServicesPayload, 'services' | 'history'>;
+      if (!Array.isArray(body.history) || !Array.isArray(body.services)) {
         res.status(400).json({ error: 'history e services obrigatórios' });
         return;
       }
       const existing = await getServicesData();
-      const payload: ServicesPayload = {
-        services,
-        history,
-        plans: plans?.length ? plans : existing.plans,
-        updatedAt: new Date().toISOString(),
-      };
-      await saveServicesData(payload);
-      res.json(payload);
+      const saved = await saveServicesData({
+        services: body.services,
+        history: body.history,
+        emergencial: body.emergencial ?? existing.emergencial,
+        regular: body.regular ?? existing.regular,
+        plans: body.plans,
+      });
+      res.json(saved);
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
     }
@@ -188,20 +185,30 @@ async function start() {
 
   app.post('/api/services/allocate', async (req, res) => {
     try {
-      const body = req.body as ServicesPayload;
-      const data =
-        body.services?.length > 0
+      const body = req.body as Partial<ServicesPayload>;
+      const raw =
+        body.services?.length && body.history?.length
           ? body
           : await getServicesData();
+      const data = normalizeServicesPayload({
+        services: raw.services ?? [],
+        history: raw.history ?? [],
+        emergencial: raw.emergencial,
+        regular: raw.regular,
+        plans: raw.plans,
+      });
+      const plans = data.emergencial.plans?.length
+        ? data.emergencial.plans
+        : data.plans;
       if (!data.services.length || !data.history.length) {
         res.status(400).json({ error: 'Importe o histórico por serviço antes.' });
         return;
       }
-      if (!data.plans?.length) {
-        res.status(400).json({ error: 'Informe as metas dos próximos meses.' });
+      if (!plans.length) {
+        res.status(400).json({ error: 'Informe as metas do processo emergencial.' });
         return;
       }
-      const results = allocatePlans(data.plans, data.services, data.history);
+      const results = allocatePlans(plans, data.services, data.history);
       res.json({ results });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });

@@ -22,11 +22,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import ServicesPanel from './components/ServicesPanel';
+import ProcessHub from './components/ProcessHub';
 import SimulationPanel from './components/SimulationPanel';
 import './App.css';
 
-type Tab = 'geral' | 'servicos';
+type Tab = 'geral' | 'processos';
 
 function pct(n: number | null): string {
   if (n === null || Number.isNaN(n)) return '—';
@@ -210,15 +210,15 @@ export default function App() {
         </button>
         <button
           type="button"
-          className={tab === 'servicos' ? 'tab active' : 'tab'}
-          onClick={() => setTab('servicos')}
+          className={tab === 'processos' ? 'tab active' : 'tab'}
+          onClick={() => setTab('processos')}
         >
-          Por serviço
+          Processos (emerg. + regular)
         </button>
       </nav>
 
-      {tab === 'servicos' ? (
-        <ServicesPanel />
+      {tab === 'processos' ? (
+        <ProcessHub />
       ) : (
         <>
       <section className="panel upload-panel">

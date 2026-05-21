@@ -34,10 +34,14 @@ function newId(): string {
 
 interface Props {
   dashboard: DashboardState;
+  defaultTotalContrato?: number;
 }
 
-export default function SimulationPanel({ dashboard }: Props) {
-  const [totalContrato, setTotalContrato] = useState('18000');
+export default function SimulationPanel({
+  dashboard,
+  defaultTotalContrato = 18000,
+}: Props) {
+  const [totalContrato, setTotalContrato] = useState(String(defaultTotalContrato));
   const [consumoInput, setConsumoInput] = useState('');
   const [cenarioLabel, setCenarioLabel] = useState('');
   const [presets, setPresets] = useState<ScenarioPreset[]>(() =>
