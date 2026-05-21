@@ -81,3 +81,12 @@ export function getYearMonth(mes: string): { year: number; month: number } | nul
   if (key === 0) return null;
   return { year: Math.floor(key / 100), month: key % 100 };
 }
+
+/** Ex.: 202508 → Ago/2025 */
+export function formatMonthKeyPt(key: number): string {
+  if (key <= 0) return '';
+  const year = Math.floor(key / 100);
+  const month = key % 100;
+  const label = NUM_TO_PT_LABEL[month];
+  return label ? `${label}/${year}` : String(key);
+}

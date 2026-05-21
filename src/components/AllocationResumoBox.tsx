@@ -36,7 +36,13 @@ export default function AllocationResumoBox({ resultado }: Props) {
         <div className="resumo-step">
           <span className="resumo-label">3. Reparte entre os demais</span>
           <strong>{num(resumo.repartidoFlexiveis)} cestas</strong>
-          <small>Proporcional à média histórica de cada um (flexíveis).</small>
+          <small>
+            Proporcional à média de cada flexível
+            {resultado.mediaJanelaMeses != null
+              ? ` (últimos ${resultado.mediaJanelaMeses} meses)`
+              : ' (todo histórico)'}
+            .
+          </small>
         </div>
         <div className="resumo-arrow">=</div>
         <div className="resumo-step resumo-step-total">
@@ -48,8 +54,14 @@ export default function AllocationResumoBox({ resultado }: Props) {
       <div className="resumo-referencia">
         <h5>Soma das médias históricas (só comparação — não é projeção)</h5>
         <p>
-          Se cada equipamento recebesse <strong>exatamente</strong> sua média mensal do histórico
-          importado, a soma seria <strong>{num(resumo.somaMediasHistoricas)} cestas</strong>.
+          Se cada equipamento recebesse <strong>exatamente</strong> sua média (
+          {resultado.mediaJanelaMeses != null
+            ? `últimos ${resultado.mediaJanelaMeses} meses`
+            : 'todo o histórico'}
+          {resultado.mesesJanelaUsados.length > 0 && (
+            <> — {resultado.mesesJanelaUsados.join(', ')}</>
+          )}
+          ), a soma seria <strong>{num(resumo.somaMediasHistoricas)} cestas</strong>.
           Isso <strong>não</strong> é uma meta, previsão nem valor que o sistema tenta entregar.
         </p>
         {resumo.diferencaVsHabitual > 0 && (

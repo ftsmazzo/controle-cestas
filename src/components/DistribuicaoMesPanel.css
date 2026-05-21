@@ -24,6 +24,11 @@
   min-width: 140px;
 }
 
+.janela-meses {
+  margin: 0.5rem 0 0;
+  line-height: 1.5;
+}
+
 .distribuicao-form select,
 .distribuicao-form input {
   padding: 0.5rem 0.65rem;

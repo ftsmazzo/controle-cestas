@@ -1,4 +1,4 @@
-import { parseMonthKey } from './monthUtils.js';
+import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
 import type {
   MonthAllocationResult,
   MonthlyPlan,
@@ -10,6 +10,37 @@ import type {
 
 function round(n: number): number {
   return Math.round(n);
+}
+
+export interface AllocateOptions {
+  /** Se definido, usa só os últimos N meses do histórico para calcular médias */
+  mediaWindowMonths?: number | null;
+  /** Excluir o mês da distribuição da janela (ex.: não usar Jun/2026 na média de Jun/2026) */
+  excluirMesDistribuicao?: boolean;
+}
+
+/** Últimos N meses distintos presentes no histórico (ordem cronológica crescente nos labels) */
+export function filterHistoryLastMonths(
+  history: ServiceMonthRecord[],
+  monthCount: number,
+  options?: { excluirMes?: string },
+): { filtered: ServiceMonthRecord[]; monthKeys: number[] } {
+  const keys = new Set<number>();
+  for (const h of history) {
+    const k = parseMonthKey(h.mes);
+    if (k > 0) keys.add(k);
+  }
+  let sorted = [...keys].sort((a, b) => b - a);
+  if (options?.excluirMes) {
+    const cut = parseMonthKey(options.excluirMes);
+    if (cut > 0) sorted = sorted.filter((k) => k < cut);
+  }
+  const picked = sorted.slice(0, monthCount).sort((a, b) => a - b);
+  const allowed = new Set(picked);
+  return {
+    filtered: history.filter((h) => allowed.has(parseMonthKey(h.mes))),
+    monthKeys: picked,
+  };
 }
 
 /** Média de consumo por serviço (somente meses com dado > 0) */
@@ -62,8 +93,30 @@ export function allocateMonth(
   plan: MonthlyPlan,
   services: ServiceDef[],
   history: ServiceMonthRecord[],
+  options?: AllocateOptions,
 ): MonthAllocationResult {
-  const stats = computeServiceStats(history, services.map((s) => s.id));
+  const windowN = options?.mediaWindowMonths;
+  let histForMedia = history;
+  let mesesJanelaUsados: string[] = [];
+  let mediaJanelaMeses: number | null = null;
+
+  if (windowN != null && windowN > 0) {
+    mediaJanelaMeses = windowN;
+    const { filtered, monthKeys } = filterHistoryLastMonths(history, windowN, {
+      excluirMes: options?.excluirMesDistribuicao !== false ? plan.mes : undefined,
+    });
+    histForMedia = filtered;
+    mesesJanelaUsados = monthKeys.map(formatMonthKeyPt);
+  } else {
+    const keys = new Set<number>();
+    for (const h of history) {
+      const k = parseMonthKey(h.mes);
+      if (k > 0) keys.add(k);
+    }
+    mesesJanelaUsados = [...keys].sort((a, b) => a - b).map(formatMonthKeyPt);
+  }
+
+  const stats = computeServiceStats(histForMedia, services.map((s) => s.id));
   const statsMap = new Map(stats.map((s) => [s.servicoId, s]));
 
   const linhasDraft: {
@@ -156,7 +209,10 @@ export function allocateMonth(
           ? `Fixo — cota ${l.svc.cotaFixa}`
           : `Fixo — média histórica ${l.media}`;
     } else if (pesoFlex > 0) {
-      observacao = `${l.pct.toFixed(1)}% do histórico (proporcional)`;
+      observacao =
+        mediaJanelaMeses != null
+          ? `${l.pct.toFixed(1)}% (média últimos ${mediaJanelaMeses}m)`
+          : `${l.pct.toFixed(1)}% do histórico (proporcional)`;
     } else {
       observacao = 'Divisão igual (sem histórico)';
     }
@@ -185,6 +241,8 @@ export function allocateMonth(
     totalAlocado,
     sobra: totalDisponivel - totalAlocado,
     alerta,
+    mediaJanelaMeses,
+    mesesJanelaUsados,
   };
 }
 
@@ -192,10 +250,11 @@ export function allocatePlans(
   plans: MonthlyPlan[],
   services: ServiceDef[],
   history: ServiceMonthRecord[],
+  options?: AllocateOptions,
 ): MonthAllocationResult[] {
   return [...plans]
     .sort((a, b) => parseMonthKey(a.mes) - parseMonthKey(b.mes))
-    .map((p) => allocateMonth(p, services, history));
+    .map((p) => allocateMonth(p, services, history, options));
 }
 
 /** Próximos N meses a partir do último mês do histórico (labels PT) */

@@ -50,6 +50,10 @@ export interface MonthAllocationResult {
   totalAlocado: number;
   sobra: number;
   alerta: string | null;
+  /** null = todo o histórico importado */
+  mediaJanelaMeses: number | null;
+  /** Meses usados no cálculo da média (ex.: Set/2025 … Abr/2026) */
+  mesesJanelaUsados: string[];
 }
 
 import type {

@@ -25,6 +25,7 @@ export default function DistribuicaoMesPanel({ data }: Props) {
 
   const [mes, setMes] = useState('');
   const [totalStr, setTotalStr] = useState('');
+  const [janelaMeses, setJanelaMeses] = useState<string>('8');
   const [resultado, setResultado] = useState<MonthAllocationResult | null>(null);
 
   const mesAtivo = mes.trim() || mesesSugeridos[0] || '';
@@ -33,11 +34,16 @@ export default function DistribuicaoMesPanel({ data }: Props) {
   const calcular = () => {
     if (!mesAtivo) return;
     if (total <= 0) return;
+    const janela = janelaMeses === 'all' ? null : parseInt(janelaMeses, 10) || null;
     setResultado(
       allocateMonth(
         { mes: mesAtivo, totalDisponivel: total },
         data.services,
         data.history,
+        {
+          mediaWindowMonths: janela,
+          excluirMesDistribuicao: true,
+        },
       ),
     );
   };
@@ -47,7 +53,8 @@ export default function DistribuicaoMesPanel({ data }: Props) {
       <h2>Distribuir cestas do mês (principal)</h2>
       <p className="hint">
         Informe o <strong>total de cestas do mês</strong>. O sistema divide entre os equipamentos
-        pela <strong>média histórica</strong> de cada um. Equipamentos marcados como{' '}
+        pela <strong>média histórica</strong> de cada um (você escolhe a janela abaixo).
+        Equipamentos marcados como{' '}
         <strong>fixos</strong> (abaixo) recebem a cota ou a média antes; o restante é repartido
         proporcionalmente.
       </p>
@@ -64,6 +71,19 @@ export default function DistribuicaoMesPanel({ data }: Props) {
                 {m}
               </option>
             ))}
+          </select>
+        </label>
+        <label>
+          Média baseada em
+          <select
+            value={janelaMeses}
+            onChange={(e) => setJanelaMeses(e.target.value)}
+          >
+            <option value="8">Últimos 8 meses</option>
+            <option value="6">Últimos 6 meses</option>
+            <option value="12">Últimos 12 meses</option>
+            <option value="3">Últimos 3 meses</option>
+            <option value="all">Todo o histórico importado</option>
           </select>
         </label>
         <label>
@@ -95,13 +115,27 @@ export default function DistribuicaoMesPanel({ data }: Props) {
               <span className="sobra"> (sobra {num(resultado.sobra)})</span>
             )}
           </h3>
+          {resultado.mesesJanelaUsados.length > 0 && (
+            <p className="meta janela-meses">
+              Meses usados na média:{' '}
+              <strong>{resultado.mesesJanelaUsados.join(' · ')}</strong>
+              {resultado.mediaJanelaMeses != null && (
+                <> (últimos {resultado.mediaJanelaMeses}, antes do mês distribuído)</>
+              )}
+            </p>
+          )}
           <AllocationResumoBox resultado={resultado} />
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Equipamento</th>
-                  <th>Média hist.</th>
+                  <th>
+                    Média
+                    {resultado.mediaJanelaMeses
+                      ? ` (${resultado.mediaJanelaMeses}m)`
+                      : ' (tudo)'}
+                  </th>
                   <th>% histórico</th>
                   <th>Alocar (cestas)</th>
                   <th>Obs.</th>
