@@ -6,6 +6,7 @@ import type { ServiceDef, ServicesPayload } from '@shared/serviceTypes';
 import { syncDashboardFromServices } from '../lib/api';
 import { clearServices, importServices, saveServices } from '../lib/servicesApi';
 import { demoServiceData, parseServiceWorkbook } from '../lib/serviceExcelParser';
+import DistribuicaoMesPanel from './DistribuicaoMesPanel';
 import './ServicesPanel.css';
 
 function num(n: number): string {
@@ -211,10 +212,18 @@ export default function EquipamentosPanel({
         ) : null}
       </section>
 
+      {data && data.services.length > 0 && data.history.length > 0 && (
+        <DistribuicaoMesPanel data={data} />
+      )}
+
       {data && data.services.length > 0 && (
         <>
           <section className="panel">
             <h3>Equipamentos — fixos e cotas</h3>
+            <p className="hint">
+              Marque <strong>Fixo</strong> ou informe <strong>Cota fixa</strong> (ex.: SAICA 40/mês)
+              antes de calcular a distribuição acima.
+            </p>
             <div className="table-wrap">
               <table>
                 <thead>

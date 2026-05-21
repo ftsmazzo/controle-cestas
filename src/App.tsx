@@ -53,7 +53,7 @@ export default function App() {
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>('geral');
   const [processSubTab, setProcessSubTab] = useState<
-    'equipamentos' | null
+    'equipamentos' | 'distribuir' | null
   >(null);
 
   const saldoNum = useMemo(() => {

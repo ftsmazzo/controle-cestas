@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { fetchServices, saveServices } from '../lib/servicesApi';
+import DistribuicaoMesPanel from './DistribuicaoMesPanel';
 import EmergencialPanel from './EmergencialPanel';
 import EquipamentosPanel from './EquipamentosPanel';
 import ProcessOverview from './ProcessOverview';
 import RegularPanel from './RegularPanel';
 import './ProcessPanels.css';
 
-type SubTab = 'visao' | 'emergencial' | 'regular' | 'equipamentos';
+type SubTab = 'distribuir' | 'visao' | 'emergencial' | 'regular' | 'equipamentos';
 
 interface Props {
   onDashboardSynced?: () => void;
@@ -22,7 +23,7 @@ export default function ProcessHub({
   onInitialSubTabApplied,
 }: Props) {
   const [data, setData] = useState<ServicesPayload | null>(null);
-  const [subTab, setSubTab] = useState<SubTab>(initialSubTab ?? 'visao');
+  const [subTab, setSubTab] = useState<SubTab>(initialSubTab ?? 'distribuir');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,10 +55,11 @@ export default function ProcessHub({
       <nav className="process-subtabs">
         {(
           [
+            ['distribuir', 'Distribuir mês'],
+            ['equipamentos', 'Importar histórico'],
             ['visao', 'Panorama'],
             ['emergencial', 'Emergencial (4 meses)'],
             ['regular', 'Regular (12 meses)'],
-            ['equipamentos', 'Equipamentos'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -72,6 +74,19 @@ export default function ProcessHub({
       </nav>
 
       {error && <p className="error">{error}</p>}
+
+      {subTab === 'distribuir' && !data?.history.length && (
+        <section className="panel empty">
+          <p>
+            Primeiro importe o histórico na aba <strong>Importar histórico</strong>. Depois volte
+            aqui para informar o total do mês e ver a divisão por equipamento.
+          </p>
+        </section>
+      )}
+
+      {subTab === 'distribuir' && data?.history.length && data.services.length > 0 && (
+        <DistribuicaoMesPanel data={data} />
+      )}
 
       {subTab === 'visao' && <ProcessOverview data={data} />}
 
