@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { allocateMonth, suggestNextMonths } from '@shared/allocation';
 import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
+import AllocationResumoBox from './AllocationResumoBox';
 import './DistribuicaoMesPanel.css';
 
 function num(n: number): string {
@@ -94,11 +95,7 @@ export default function DistribuicaoMesPanel({ data }: Props) {
               <span className="sobra"> (sobra {num(resultado.sobra)})</span>
             )}
           </h3>
-          <p className="meta">
-            Demanda de referência (soma das médias):{' '}
-            <strong>{num(resultado.totalDemandaReferencia)}</strong>
-          </p>
-          {resultado.alerta && <p className="error">{resultado.alerta}</p>}
+          <AllocationResumoBox resultado={resultado} />
           <div className="table-wrap">
             <table>
               <thead>
@@ -144,18 +141,18 @@ export default function DistribuicaoMesPanel({ data }: Props) {
       <details className="distribuicao-ajuda">
         <summary>Como funciona a conta</summary>
         <ol>
-          <li>Calcula a média mensal de cada equipamento no histórico importado.</li>
           <li>
-            Reserva primeiro os <strong>fixos</strong> (cota fixa digitada, ou média se marcado
-            fixo).
+            <strong>Soma das médias</strong> (ex.: 1.825) = só a soma do que cada equipamento
+            consumia em média no passado. <em>Não</em> é projeção nem valor a entregar.
           </li>
           <li>
-            O que sobrar divide entre os demais na proporção da média (ex.: CRAS com média maior
-            recebe mais).
+            <strong>Total do mês</strong> (ex.: 1.150) = o que você tem hoje; é isso que será
+            dividido.
           </li>
+          <li>Primeiro saem os fixos; o restante reparte entre os flexíveis pela média.</li>
           <li>
-            Para vários meses (ex. emergencial 4×1.200), use também a aba{' '}
-            <strong>Emergencial</strong>.
+            Gráficos em <strong>Visão geral</strong> (“Projeção +3 meses”) usam outra regra:
+            tendência dos meses <strong>completos</strong> — não esta divisão por equipamento.
           </li>
         </ol>
       </details>

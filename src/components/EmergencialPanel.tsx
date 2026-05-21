@@ -3,6 +3,7 @@ import { suggestNextMonths } from '@shared/allocation';
 import { analyzeEmergencial } from '@shared/processAnalysis';
 import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
 import { calculateAllocation, saveServices } from '../lib/servicesApi';
+import AllocationResumoBox from './AllocationResumoBox';
 import MethodologyBanner from './MethodologyBanner';
 import './ProcessPanels.css';
 
@@ -159,9 +160,9 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
             <thead>
               <tr>
                 <th>Mês</th>
-                <th>Disponível</th>
-                <th>Demanda ref.</th>
-                <th>Gap</th>
+                <th>Total informado</th>
+                <th>Soma médias*</th>
+                <th>Diferença</th>
                 <th>Risco</th>
               </tr>
             </thead>
@@ -178,6 +179,10 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
             </tbody>
           </table>
         </div>
+        <p className="hint" style={{ marginTop: '0.5rem' }}>
+          * Soma médias = soma do consumo médio de cada equipamento no histórico; não é o valor a
+          distribuir. Gap = soma médias − total informado (quando positivo).
+        </p>
         {analise.alertas.map((a, i) => (
           <p key={i} className={`alerta-box alerta-nivel-${a.nivel}`}>
             <strong>{a.titulo}</strong> — {a.descricao}
@@ -192,8 +197,8 @@ export default function EmergencialPanel({ data, onUpdate }: Props) {
             <div key={month.mes} className="month-block">
               <h4>
                 {month.mes} — {num(month.totalDisponivel)} cestas
-                {month.alerta && <span className="alerta-inline"> ⚠ {month.alerta}</span>}
               </h4>
+              <AllocationResumoBox resultado={month} />
               <div className="table-wrap">
                 <table>
                   <thead>

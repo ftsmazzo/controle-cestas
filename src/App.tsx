@@ -374,7 +374,12 @@ export default function App() {
           <DecisionDashboard dashboard={dashboard} />
 
           <section className="panel chart-panel">
-            <h2>Projeção (+3 meses) — somente meses válidos</h2>
+            <h2>Tendência futura (+3 meses) — não é a divisão por equipamento</h2>
+            <p className="hint">
+              Projeção linear do <strong>total mensal</strong> com base em meses completos (exclui
+              Abr/2026 ruptura e Mai/2026 parcial). Diferente da soma das médias por equipamento na
+              aba Distribuir mês.
+            </p>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={forecastChart}>
                 <CartesianGrid strokeDasharray="3 3" />

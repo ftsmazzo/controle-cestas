@@ -66,8 +66,8 @@ export function analyzeEmergencial(
     if (m.gap > 0) {
       alertas.push({
         nivel: riscoPorGap(m.gap, m.disponivel),
-        titulo: `${m.mes}: demanda acima do emergencial`,
-        descricao: `Referência histórica ${m.demandaReferencia} cestas vs ${m.disponivel} disponíveis (faltam ${m.gap}). Ajuste cotas fixas ou negocie volume.`,
+        titulo: `${m.mes}: soma das médias acima do total informado`,
+        descricao: `Se cada equipamento recebesse sua média histórica, seriam ${m.demandaReferencia} cestas; você informou ${m.disponivel} (diferença ${m.gap}). A divisão usa só ${m.disponivel}; este aviso é comparativo.`,
       });
     }
   }

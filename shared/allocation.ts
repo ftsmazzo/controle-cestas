@@ -174,7 +174,7 @@ export function allocateMonth(
   });
 
   if (totalDemandaReferencia > totalDisponivel && !alerta) {
-    alerta = `Demanda de referência (médias: ${totalDemandaReferencia}) é maior que o disponível (${totalDisponivel}). Distribuição respeita fixos e reparte o restante.`;
+    alerta = `INFORMATIVO: soma das médias (${totalDemandaReferencia}) > total informado (${totalDisponivel}). A divisão usa só o total informado.`;
   }
 
   return {
