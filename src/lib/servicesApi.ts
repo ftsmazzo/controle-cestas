@@ -1,4 +1,8 @@
-import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
+import type {
+  MonthAllocationResult,
+  ServicesMeta,
+  ServicesPayload,
+} from '@shared/serviceTypes';
 
 async function parseError(res: Response): Promise<string> {
   try {
@@ -30,11 +34,17 @@ export async function saveServices(
 export async function importServices(
   history: ServicesPayload['history'],
   services: ServicesPayload['services'],
+  options?: { merge?: boolean; meta?: ServicesMeta },
 ): Promise<ServicesPayload> {
   const res = await fetch('/api/services/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ history, services }),
+    body: JSON.stringify({
+      history,
+      services,
+      merge: options?.merge ?? true,
+      meta: options?.meta,
+    }),
   });
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<ServicesPayload>;

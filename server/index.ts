@@ -4,8 +4,10 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDashboard, hydrateDashboardState } from '../shared/buildDashboard.js';
+import { rawRowsFromServiceHistory } from '../shared/syncFromServices.js';
 import type { DashboardState, RawMonthRow } from '../shared/types.js';
 import { allocatePlans } from '../shared/allocation.js';
+import { mergeServiceDefs, mergeServiceHistory } from '../shared/mergeServices.js';
 import { normalizeServicesPayload } from '../shared/payloadNormalize.js';
 import type { ServicesPayload } from '../shared/serviceTypes.js';
 import {
@@ -103,6 +105,32 @@ async function start() {
     }
   });
 
+  app.post('/api/dashboard/sync-from-services', async (_req, res) => {
+    try {
+      const servicesData = await getServicesData();
+      if (!servicesData.history.length) {
+        res.status(400).json({
+          error: 'Importe a planilha por equipamento antes de sincronizar.',
+        });
+        return;
+      }
+      const current = await getDashboard();
+      const saldo = current.saldoAtual;
+      const rows = rawRowsFromServiceHistory(servicesData.history);
+      const fileName =
+        servicesData.meta?.sourceFile ?? 'Equipamentos (fonte única)';
+      const state = buildDashboard(
+        rows,
+        fileName,
+        saldo,
+      );
+      await saveDashboard(state, saldo);
+      res.json({ state, saldoAtual: saldo });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
+    }
+  });
+
   app.post('/api/imports', async (req, res) => {
     try {
       const { fileName, rows, saldoAtual } = req.body as {
@@ -172,18 +200,26 @@ async function start() {
   app.post('/api/services/import', async (req, res) => {
     try {
       const body = req.body as Partial<ServicesPayload> &
-        Pick<ServicesPayload, 'services' | 'history'>;
+        Pick<ServicesPayload, 'services' | 'history'> & { merge?: boolean };
       if (!Array.isArray(body.history) || !Array.isArray(body.services)) {
         res.status(400).json({ error: 'history e services obrigatórios' });
         return;
       }
       const existing = await getServicesData();
+      const merge = body.merge !== false;
+      const history = merge
+        ? mergeServiceHistory(existing.history, body.history)
+        : body.history;
+      const services = merge
+        ? mergeServiceDefs(existing.services, body.services)
+        : body.services;
       const saved = await saveServicesData({
-        services: body.services,
-        history: body.history,
+        services,
+        history,
         emergencial: body.emergencial ?? existing.emergencial,
         regular: body.regular ?? existing.regular,
         plans: body.plans,
+        meta: body.meta ?? existing.meta,
       });
       res.json(saved);
     } catch (e) {

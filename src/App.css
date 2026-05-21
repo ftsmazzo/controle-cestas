@@ -275,6 +275,26 @@ th {
   background: #fffbeb;
 }
 
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.alt-import {
+  margin-top: 1rem;
+}
+
+.alt-import summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .risk-strip {
   display: flex;
   align-items: center;

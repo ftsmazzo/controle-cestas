@@ -6,6 +6,7 @@ import {
   clearDashboard,
   fetchDashboard,
   saveImport,
+  syncDashboardFromServices,
   updateSaldo,
 } from './lib/api';
 import { parseDemoData, parseWorkbook } from './lib/excelParser';
@@ -207,47 +208,96 @@ export default function App() {
       </nav>
 
       {tab === 'processos' ? (
-        <ProcessHub />
+        <ProcessHub
+          onDashboardSynced={async () => {
+            try {
+              const { state, saldoAtual: saldo } = await fetchDashboard();
+              setDashboard(state);
+              setSaldoAtual(formatSaldoInput(saldo));
+            } catch {
+              /* recarrega na próxima visita à aba */
+            }
+          }}
+        />
       ) : (
         <>
       <section className="panel upload-panel">
-        <h2>Importar histórico</h2>
+        <h2>Visão geral — totais mensais</h2>
         <p className="hint">
-          Envie a planilha <strong>Levantamento Cestas Básicas</strong> (.xlsx). Os
-          dados são gravados no <strong>PostgreSQL</strong> (histórico persistente).
-        </p>
-        <div className="upload-row">
-          <label className="file-btn">
-            {loading ? 'Processando…' : 'Selecionar planilha Excel'}
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              disabled={loading || !apiOk}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleFile(f);
-              }}
-            />
-          </label>
+          <strong>Fonte recomendada:</strong> importe a planilha por equipamento em{' '}
           <button
             type="button"
-            className="secondary"
-            disabled={loading || !apiOk}
-            onClick={() => void handleDemo()}
+            className="link-btn"
+            onClick={() => setTab('processos')}
           >
-            Carregar exemplo
+            Processos → Equipamentos
           </button>
-          {dashboard && (
+          . Os totais e KPIs são calculados automaticamente (uma única fonte de verdade).
+        </p>
+        <div className="upload-row">
+          <button
+            type="button"
+            className="primary-btn"
+            disabled={loading || !apiOk}
+            onClick={async () => {
+              setLoading(true);
+              setError(null);
+              try {
+                const { state, saldoAtual: saldo } = await syncDashboardFromServices();
+                setDashboard(state);
+                setSaldoAtual(formatSaldoInput(saldo));
+              } catch (e) {
+                setError(
+                  e instanceof Error
+                    ? e.message
+                    : 'Importe equipamentos em Processos antes.',
+                );
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            {loading ? 'Sincronizando…' : 'Atualizar a partir dos equipamentos'}
+          </button>
+        </div>
+        <details className="alt-import">
+          <summary>Importação alternativa (só totais por mês — não recomendado)</summary>
+          <p className="hint">
+            Use apenas se não tiver a planilha por equipamento. Prefira sempre a base por serviço.
+          </p>
+          <div className="upload-row">
+            <label className="file-btn">
+              {loading ? 'Processando…' : 'Planilha Mês + Total'}
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                disabled={loading || !apiOk}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleFile(f);
+                }}
+              />
+            </label>
             <button
               type="button"
               className="secondary"
               disabled={loading || !apiOk}
-              onClick={() => void handleClear()}
+              onClick={() => void handleDemo()}
             >
-              Limpar histórico
+              Exemplo
             </button>
-          )}
-        </div>
+            {dashboard && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={loading || !apiOk}
+                onClick={() => void handleClear()}
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </details>
         <div className="saldo-row">
           <label>
             Saldo atual (cestas) — para autonomia e risco
@@ -265,15 +315,22 @@ export default function App() {
         {error && <p className="error">{error}</p>}
         {dashboard && (
           <p className="meta">
-            Arquivo: {dashboard.fileName} · Atualizado:{' '}
-            {new Date(dashboard.uploadedAt).toLocaleString('pt-BR')}
+            Fonte: {dashboard.fileName}
+            {dashboard.fileName.includes('Equipamento') ||
+            dashboard.fileName.includes('fonte')
+              ? ' · derivado dos equipamentos'
+              : ''}{' '}
+            · Atualizado: {new Date(dashboard.uploadedAt).toLocaleString('pt-BR')}
           </p>
         )}
       </section>
 
       {!dashboard ? (
         <section className="panel empty">
-          <p>Importe uma planilha ou use o exemplo para ver KPIs, gráficos e projeções.</p>
+          <p>
+            Importe a planilha em <strong>Processos → Equipamentos</strong> ou use o botão acima
+            para sincronizar os totais.
+          </p>
         </section>
       ) : (
         <>

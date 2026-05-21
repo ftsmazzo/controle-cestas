@@ -61,3 +61,18 @@ export async function clearDashboard(): Promise<void> {
   const res = await fetch('/api/dashboard', { method: 'DELETE' });
   if (!res.ok) throw new Error(await parseError(res));
 }
+
+/** Recalcula KPIs/gráficos da Visão geral a partir do histórico por equipamento. */
+export async function syncDashboardFromServices(): Promise<{
+  state: DashboardState;
+  saldoAtual: number | null;
+}> {
+  const res = await fetch('/api/dashboard/sync-from-services', {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<{
+    state: DashboardState;
+    saldoAtual: number | null;
+  }>;
+}

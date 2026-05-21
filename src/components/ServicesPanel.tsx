@@ -80,7 +80,9 @@ export default function ServicesPanel() {
       const year = parseInt(importYear, 10) || new Date().getFullYear();
       const parsed = parseServiceWorkbook(await file.arrayBuffer(), { year });
       const months = suggestNextMonths(parsed.history, 4);
-      const imported = await importServices(parsed.history, parsed.services);
+      const imported = await importServices(parsed.history, parsed.services, {
+        merge: true,
+      });
       const withPlans: ServicesPayload = {
         ...imported,
         plans: months.map((mes) => ({ mes, totalDisponivel: 0 })),

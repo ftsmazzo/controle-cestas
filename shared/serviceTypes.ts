@@ -57,6 +57,13 @@ import type {
   ProcessoRegularConfig,
 } from './processTypes.js';
 
+export interface ServicesMeta {
+  /** Nome do arquivo importado por equipamento */
+  sourceFile?: string;
+  /** Anos presentes no histórico (ex.: 2022–2026) */
+  yearsDetected?: number[];
+}
+
 export interface ServicesPayload {
   services: ServiceDef[];
   history: ServiceMonthRecord[];
@@ -65,5 +72,6 @@ export interface ServicesPayload {
   emergencial: ProcessoEmergencialConfig;
   regular: ProcessoRegularConfig;
   updatedAt: string;
+  meta?: ServicesMeta;
 }
 

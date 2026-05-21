@@ -48,6 +48,8 @@ export interface ParseServiceResult {
   services: ServiceDef[];
   format: ServiceSheetFormat;
   year: number;
+  /** Anos detectados (planilha com blocos 2022, 2023, …) */
+  years: number[];
   sheetName: string;
 }
 
@@ -66,7 +68,9 @@ function findColumnIndex(headers: string[], keys: string[]): number {
 function parseNumber(val: unknown): number | null {
   if (typeof val === 'number' && !Number.isNaN(val)) return val;
   if (val == null || val === '') return null;
-  const s = String(val).replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  const raw = String(val).trim();
+  if (/pendente|aguardando|n\/a|na\b|—|-/i.test(raw)) return null;
+  const s = raw.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
   const n = parseFloat(s);
   return Number.isNaN(n) ? null : n;
 }
@@ -107,13 +111,121 @@ function isEquipamentoColumn(header: string): boolean {
 }
 
 function isMetaColumn(header: string): boolean {
+  const h = normalizeHeader(header);
   return (
-    findColumnIndex([header], MES_KEYS) >= 0 ||
-    FIXO_KEYS.some((k) => header.includes(k)) ||
-    ['total geral', 'soma', 'total', 'obs', 'media', 'média'].some((k) =>
-      header.includes(k),
-    )
+    findColumnIndex([h], MES_KEYS) >= 0 ||
+    FIXO_KEYS.some((k) => h.includes(k)) ||
+    [
+      'total geral',
+      'total ano',
+      'soma',
+      'obs',
+      'media',
+      'média',
+      'media mensal',
+      'média mensal',
+      'primeiro semestre',
+      'segundo semestre',
+      '1º semestre',
+      '2º semestre',
+    ].some((k) => h.includes(k)) ||
+    /^total\b/.test(h)
   );
+}
+
+function isServiceTotalRow(nome: string): boolean {
+  return /^total\b|^soma\b|^geral\b|^subtotal\b/i.test(nome.trim());
+}
+
+function inferYearNearRow(matrix: unknown[][], rowIdx: number): number | null {
+  for (let r = rowIdx; r >= Math.max(0, rowIdx - 12); r--) {
+    for (const cell of matrix[r] ?? []) {
+      const s = String(cell ?? '').trim();
+      if (!s) continue;
+      const onlyYear = s.match(/^(20\d{2})$/);
+      if (onlyYear) return parseInt(onlyYear[1], 10);
+      const embedded = s.match(/\b(20\d{2})\b/);
+      if (embedded) return parseInt(embedded[1], 10);
+    }
+  }
+  return null;
+}
+
+interface PivotHeaderScan {
+  headerRowIdx: number;
+  equipCol: number;
+  monthCols: { idx: number; mes: string; header: string }[];
+  year: number;
+}
+
+function scanPivotHeader(
+  matrix: unknown[][],
+  rowIdx: number,
+  defaultYear: number,
+): PivotHeaderScan | null {
+  const rawHeaders = matrix[rowIdx] ?? [];
+  const headers = rawHeaders.map(normalizeHeader);
+  const months: { idx: number; mes: string; header: string }[] = [];
+
+  const year = inferYearNearRow(matrix, rowIdx) ?? defaultYear;
+
+  headers.forEach((h, idx) => {
+    if (idx === 0) return;
+    if (isMetaColumn(h)) return;
+    if (isMonthOnlyHeader(h)) {
+      const mes = mesLabelFromMonthHeader(h, year);
+      if (mes) months.push({ idx, mes, header: h });
+    }
+  });
+
+  if (months.length < 3) return null;
+
+  const col0 = headers[0] ?? '';
+  let equipCol = 0;
+  if (!isEquipamentoColumn(col0) && col0 !== '' && col0 !== 'equipamento') {
+    const eqIdx = findColumnIndex(headers, SERVICO_KEYS);
+    equipCol = eqIdx >= 0 ? eqIdx : 0;
+  }
+
+  return { headerRowIdx: rowIdx, equipCol, monthCols: months, year };
+}
+
+function findAllPivotBlocks(
+  matrix: unknown[][],
+  defaultYear: number,
+): PivotHeaderScan[] {
+  const blocks: PivotHeaderScan[] = [];
+  for (let i = 0; i < matrix.length; i++) {
+    const scan = scanPivotHeader(matrix, i, defaultYear);
+    if (!scan) continue;
+    if (blocks.some((b) => b.headerRowIdx === scan.headerRowIdx)) continue;
+    blocks.push(scan);
+  }
+  return blocks;
+}
+
+/** 5 tabelas empilhadas sem ano no título → 2022, 2023, 2024… */
+function resolveBlockYears(
+  matrix: unknown[][],
+  blocks: PivotHeaderScan[],
+  startYear: number,
+): void {
+  let year = startYear;
+  for (let i = 0; i < blocks.length; i++) {
+    const near = inferYearNearRow(matrix, blocks[i].headerRowIdx);
+    if (near != null && (i === 0 || near > blocks[i - 1].year)) {
+      year = near;
+    } else if (i === 0) {
+      year = startYear;
+    } else {
+      year = blocks[i - 1].year + 1;
+    }
+    blocks[i].year = year;
+    blocks[i].monthCols = blocks[i].monthCols.map((col) => ({
+      ...col,
+      mes: mesLabelFromMonthHeader(col.header, year),
+    }));
+  }
 }
 
 export function inferYearFromSheet(
@@ -155,53 +267,20 @@ function buildServices(
  * | Equipamento | Jan | Fev | Mar | … | Dez |
  * CRAS 1, CRAS 2, CREAS 1… são linhas separadas automaticamente.
  */
-function parsePivotFormat(
+function parsePivotBlock(
   matrix: unknown[][],
-  year: number,
-): { history: ServiceMonthRecord[]; services: ServiceDef[] } | null {
-  let headerRowIdx = -1;
-  let equipCol = 0;
-  let monthCols: { idx: number; mes: string }[] = [];
-
-  for (let i = 0; i < Math.min(20, matrix.length); i++) {
-    const rawHeaders = matrix[i] ?? [];
-    const headers = rawHeaders.map(normalizeHeader);
-    const months: { idx: number; mes: string }[] = [];
-
-    headers.forEach((h, idx) => {
-      if (idx === 0) return;
-      if (isMonthOnlyHeader(h)) {
-        const mes = mesLabelFromMonthHeader(h, year);
-        if (mes) months.push({ idx, mes });
-      }
-    });
-
-    if (months.length < 3) continue;
-
-    const col0 = headers[0] ?? '';
-    if (isEquipamentoColumn(col0) || col0 === '' || col0 === 'equipamento') {
-      equipCol = 0;
-    } else {
-      const eqIdx = findColumnIndex(headers, SERVICO_KEYS);
-      equipCol = eqIdx >= 0 ? eqIdx : 0;
-    }
-
-    headerRowIdx = i;
-    monthCols = months;
-    break;
-  }
-
-  if (headerRowIdx < 0 || monthCols.length < 3) return null;
-
+  block: PivotHeaderScan,
+  endRow: number,
+): ServiceMonthRecord[] {
   const history: ServiceMonthRecord[] = [];
-  const serviceFixo = new Map<string, boolean>();
+  const { headerRowIdx, equipCol, monthCols } = block;
 
-  for (let r = headerRowIdx + 1; r < matrix.length; r++) {
+  for (let r = headerRowIdx + 1; r < endRow; r++) {
     const line = matrix[r];
     if (!line?.length) continue;
 
     const nome = String(line[equipCol] ?? '').trim();
-    if (!nome || /^total|soma|geral|subtotal/i.test(nome)) continue;
+    if (!nome || isServiceTotalRow(nome)) continue;
 
     const id = slugId(nome);
 
@@ -218,12 +297,76 @@ function parsePivotFormat(
     }
   }
 
-  if (history.length === 0) return null;
+  return history;
+}
+
+function parsePivotFormat(
+  matrix: unknown[][],
+  year: number,
+  startYear?: number,
+): { history: ServiceMonthRecord[]; services: ServiceDef[]; years: number[] } | null {
+  const blocks = findAllPivotBlocks(matrix, year);
+  if (blocks.length === 0) return null;
+
+  const endYear = new Date().getFullYear();
+  const autoStart =
+    blocks.length > 1 ? endYear - blocks.length + 1 : year;
+  const anchor = startYear ?? autoStart;
+  resolveBlockYears(matrix, blocks, anchor);
+
+  const allHistory: ServiceMonthRecord[] = [];
+
+  for (let b = 0; b < blocks.length; b++) {
+    const endRow =
+      b + 1 < blocks.length ? blocks[b + 1].headerRowIdx : matrix.length;
+    allHistory.push(...parsePivotBlock(matrix, blocks[b], endRow));
+  }
+
+  if (allHistory.length === 0) return null;
+
+  const years = [...new Set(blocks.map((x) => x.year))].sort((a, b) => a - b);
 
   return {
-    history,
-    services: buildServices(history, serviceFixo),
+    history: allHistory,
+    services: buildServices(allHistory, new Map()),
+    years,
   };
+}
+
+/** Totais mensais da linha TOTAL de cada bloco (para visão geral agregada). */
+export function extractMonthlyTotalsFromPivot(
+  buffer: ArrayBuffer,
+  options?: { year?: number },
+): { mes: string; total: number }[] {
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: '',
+    raw: false,
+  }) as unknown[][];
+  const year = options?.year ?? inferYearFromSheet(wb.SheetNames[0], matrix);
+  const blocks = findAllPivotBlocks(matrix, year);
+  const totals: { mes: string; total: number }[] = [];
+
+  for (let b = 0; b < blocks.length; b++) {
+    const block = blocks[b];
+    const endRow =
+      b + 1 < blocks.length ? blocks[b + 1].headerRowIdx : matrix.length;
+    for (let r = block.headerRowIdx + 1; r < endRow; r++) {
+      const line = matrix[r];
+      const nome = String(line?.[block.equipCol] ?? '').trim();
+      if (!isServiceTotalRow(nome)) continue;
+      for (const col of block.monthCols) {
+        const total = parseNumber(line?.[col.idx]);
+        if (total === null || total <= 0) continue;
+        totals.push({ mes: col.mes, total });
+      }
+      break;
+    }
+  }
+
+  return totals;
 }
 
 /** Formato longo: Mês | Serviço | Total [| Fixo] */
@@ -325,7 +468,7 @@ function parseWideByMonthColumn(matrix: unknown[][]): {
 
 export function parseServiceWorkbook(
   buffer: ArrayBuffer,
-  options?: { year?: number },
+  options?: { year?: number; startYear?: number },
 ): ParseServiceResult {
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
   const sheetName =
@@ -342,20 +485,27 @@ export function parseServiceWorkbook(
   if (matrix.length < 2) throw new Error('Planilha vazia.');
 
   const year = options?.year ?? inferYearFromSheet(sheetName, matrix);
+  const startYear = options?.startYear ?? (options?.year != null ? options.year : 2022);
 
-  const pivot = parsePivotFormat(matrix, year);
+  const pivot = parsePivotFormat(matrix, year, startYear);
   if (pivot) {
-    return { ...pivot, format: 'pivot', year, sheetName };
+    const primaryYear = pivot.years[pivot.years.length - 1] ?? year;
+    return {
+      ...pivot,
+      format: 'pivot',
+      year: primaryYear,
+      sheetName,
+    };
   }
 
   const longF = parseLongFormat(matrix);
   if (longF) {
-    return { ...longF, format: 'long', year, sheetName };
+    return { ...longF, format: 'long', year, years: [year], sheetName };
   }
 
   const wide = parseWideByMonthColumn(matrix);
   if (wide) {
-    return { ...wide, format: 'wide', year, sheetName };
+    return { ...wide, format: 'wide', year, years: [year], sheetName };
   }
 
   throw new Error(
@@ -405,6 +555,7 @@ export function demoServiceData(): ParseServiceResult {
     services,
     format: 'pivot',
     year,
+    years: [year],
     sheetName: 'Consumo 2025',
   };
 }

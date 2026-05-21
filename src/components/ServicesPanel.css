@@ -1,3 +1,35 @@
+.source-truth-banner {
+  border-left: 4px solid #2563eb;
+  background: #eff6ff;
+}
+
+.years-detected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.years-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.year-chip {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.meta.sync-ok {
+  color: #15803d;
+}
+
 .import-year-row {
   margin-bottom: 0.75rem;
 }

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { computeServiceStats } from '@shared/allocation';
 import { parseMonthKey } from '@shared/monthUtils';
+import { yearsDetectedInHistory } from '@shared/syncFromServices';
 import type { ServiceDef, ServicesPayload } from '@shared/serviceTypes';
+import { syncDashboardFromServices } from '../lib/api';
 import { clearServices, importServices, saveServices } from '../lib/servicesApi';
 import { demoServiceData, parseServiceWorkbook } from '../lib/serviceExcelParser';
 import './ServicesPanel.css';
@@ -25,13 +27,24 @@ interface Props {
   data: ServicesPayload | null;
   onDataChange: (d: ServicesPayload | null) => void;
   onReload: () => void;
+  onDashboardSynced?: () => void;
 }
 
-export default function EquipamentosPanel({ data, onDataChange, onReload }: Props) {
+export default function EquipamentosPanel({
+  data,
+  onDataChange,
+  onReload,
+  onDashboardSynced,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [importYear, setImportYear] = useState(String(new Date().getFullYear()));
   const [importInfo, setImportInfo] = useState<string | null>(null);
+  const [syncInfo, setSyncInfo] = useState<string | null>(null);
+
+  const years = useMemo(
+    () => (data?.history.length ? yearsDetectedInHistory(data.history) : []),
+    [data],
+  );
 
   const stats = useMemo(() => {
     if (!data?.history.length) return [];
@@ -57,17 +70,40 @@ export default function EquipamentosPanel({ data, onDataChange, onReload }: Prop
     });
   };
 
+  const syncVisaoGeral = async () => {
+    setSyncInfo(null);
+    setError(null);
+    try {
+      await syncDashboardFromServices();
+      setSyncInfo('Visão geral atualizada com os totais somados dos equipamentos.');
+      onDashboardSynced?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao sincronizar.');
+    }
+  };
+
   const handleFile = async (file: File) => {
     setLoading(true);
     setError(null);
+    setSyncInfo(null);
     try {
-      const year = parseInt(importYear, 10) || new Date().getFullYear();
-      const parsed = parseServiceWorkbook(await file.arrayBuffer(), { year });
-      const saved = await importServices(parsed.history, parsed.services);
+      const parsed = parseServiceWorkbook(await file.arrayBuffer());
+      const saved = await importServices(parsed.history, parsed.services, {
+        merge: true,
+        meta: {
+          sourceFile: file.name,
+          yearsDetected: parsed.years,
+        },
+      });
       onDataChange(saved);
+      const anos =
+        parsed.years.length > 1
+          ? parsed.years.join(', ')
+          : String(parsed.year);
       setImportInfo(
-        `Importado: ${FORMAT_LABELS[parsed.format]} · ano ${parsed.year} · ${parsed.services.length} equipamentos`,
+        `Importado: ${parsed.services.length} equipamentos · anos ${anos} · ${parsed.history.length} lançamentos`,
       );
+      await syncVisaoGeral();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro na planilha.');
     } finally {
@@ -80,11 +116,14 @@ export default function EquipamentosPanel({ data, onDataChange, onReload }: Prop
     setError(null);
     try {
       const demo = demoServiceData();
-      const saved = await importServices(demo.history, demo.services);
+      const saved = await importServices(demo.history, demo.services, {
+        meta: { sourceFile: 'Exemplo', yearsDetected: demo.years },
+      });
       onDataChange(saved);
       setImportInfo(
         `Exemplo: ${FORMAT_LABELS[demo.format]} · ${demo.services.length} equipamentos`,
       );
+      await syncVisaoGeral();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro.');
     } finally {
@@ -94,25 +133,23 @@ export default function EquipamentosPanel({ data, onDataChange, onReload }: Prop
 
   return (
     <div className="services-panel">
-      <section className="panel">
-        <h2>Base por equipamento</h2>
+      <section className="panel source-truth-banner">
+        <h2>Fonte única de dados</h2>
         <p className="hint">
-          Planilha <strong>Equipamento + Jan…Dez</strong>. CRAS 1, CRAS 2, CREAS 1… são linhas
-          separadas. Esta base alimenta o <strong>emergencial</strong> (4×1.200) e o{' '}
-          <strong>regular</strong> (12 meses).
+          Importe <strong>somente esta planilha</strong> (equipamento × JANEIRO…DEZEMBRO). Os{' '}
+          <strong>totais mensais</strong> e a <strong>Visão geral</strong> (KPIs, gráficos) são
+          calculados automaticamente pela soma dos equipamentos — não é necessário outro arquivo nem
+          colocar o ano na planilha.
         </p>
+      </section>
 
-        <div className="import-year-row">
-          <label>
-            Ano da planilha
-            <input
-              type="text"
-              inputMode="numeric"
-              value={importYear}
-              onChange={(e) => setImportYear(e.target.value)}
-            />
-          </label>
-        </div>
+      <section className="panel">
+        <h2>Importar histórico por equipamento</h2>
+        <p className="hint">
+          Várias tabelas na mesma aba (sem ano no título): o sistema assume a ordem{' '}
+          <strong>1ª tabela = ano mais antigo</strong> até a última = {new Date().getFullYear()}.
+          Valores <strong>PENDENTE</strong> são ignorados.
+        </p>
 
         <div className="upload-row">
           <label className="file-btn">
@@ -145,8 +182,33 @@ export default function EquipamentosPanel({ data, onDataChange, onReload }: Prop
             </button>
           ) : null}
         </div>
+
+        {years.length > 0 && (
+          <div className="years-detected">
+            <span className="years-label">Anos no histórico:</span>
+            {years.map((y) => (
+              <span key={y} className="year-chip">
+                {y}
+              </span>
+            ))}
+          </div>
+        )}
+
         {error && <p className="error">{error}</p>}
         {importInfo && <p className="meta">{importInfo}</p>}
+        {syncInfo && <p className="meta sync-ok">{syncInfo}</p>}
+
+        {data?.history.length ? (
+          <button
+            type="button"
+            className="primary-btn"
+            style={{ marginTop: '0.75rem' }}
+            disabled={loading}
+            onClick={() => void syncVisaoGeral()}
+          >
+            Atualizar Visão geral (totais)
+          </button>
+        ) : null}
       </section>
 
       {data && data.services.length > 0 && (
@@ -214,10 +276,10 @@ export default function EquipamentosPanel({ data, onDataChange, onReload }: Prop
 
           {historyByMonth.length > 0 && (
             <section className="panel">
-              <h3>Totais mensais (soma equipamentos)</h3>
+              <h3>Totais mensais (soma dos equipamentos)</h3>
               <p className="hint">
-                Use no processo <strong>Regular</strong> com o botão “Preencher meses com soma
-                dos equipamentos”.
+                Estes valores alimentam a <strong>Visão geral</strong> e o processo{' '}
+                <strong>Regular</strong>.
               </p>
               <div className="table-wrap">
                 <table>

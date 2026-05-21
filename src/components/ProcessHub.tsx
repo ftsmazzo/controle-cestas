@@ -9,7 +9,11 @@ import './ProcessPanels.css';
 
 type SubTab = 'visao' | 'emergencial' | 'regular' | 'equipamentos';
 
-export default function ProcessHub() {
+interface Props {
+  onDashboardSynced?: () => void;
+}
+
+export default function ProcessHub({ onDashboardSynced }: Props) {
   const [data, setData] = useState<ServicesPayload | null>(null);
   const [subTab, setSubTab] = useState<SubTab>('visao');
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +66,7 @@ export default function ProcessHub() {
           data={data}
           onDataChange={setData}
           onReload={load}
+          onDashboardSynced={onDashboardSynced}
         />
       )}
 
