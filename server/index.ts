@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDashboard } from '../shared/buildDashboard.js';
 import type { DashboardState, RawMonthRow } from '../shared/types.js';
+import { allocatePlans } from '../shared/allocation.js';
+import type { ServicesPayload } from '../shared/serviceTypes.js';
 import {
   clearDashboard,
   getDashboard,
@@ -14,6 +16,11 @@ import {
   saveDashboard,
 } from './db.js';
 import { runMigrations } from './migrate.js';
+import {
+  clearServicesData,
+  getServicesData,
+  saveServicesData,
+} from './servicesDb.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(
@@ -124,6 +131,87 @@ async function start() {
     try {
       const items = await listImports();
       res.json({ items });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
+    }
+  });
+
+  app.get('/api/services', async (_req, res) => {
+    try {
+      const data = await getServicesData();
+      res.json(data);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
+    }
+  });
+
+  app.put('/api/services', async (req, res) => {
+    try {
+      const body = req.body as ServicesPayload;
+      if (!Array.isArray(body.services) || !Array.isArray(body.history)) {
+        res.status(400).json({ error: 'payload inválido' });
+        return;
+      }
+      const payload: ServicesPayload = {
+        services: body.services,
+        history: body.history,
+        plans: body.plans ?? [],
+        updatedAt: new Date().toISOString(),
+      };
+      await saveServicesData(payload);
+      res.json(payload);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
+    }
+  });
+
+  app.post('/api/services/import', async (req, res) => {
+    try {
+      const { history, services, plans } = req.body as ServicesPayload;
+      if (!Array.isArray(history) || !Array.isArray(services)) {
+        res.status(400).json({ error: 'history e services obrigatórios' });
+        return;
+      }
+      const existing = await getServicesData();
+      const payload: ServicesPayload = {
+        services,
+        history,
+        plans: plans?.length ? plans : existing.plans,
+        updatedAt: new Date().toISOString(),
+      };
+      await saveServicesData(payload);
+      res.json(payload);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
+    }
+  });
+
+  app.post('/api/services/allocate', async (req, res) => {
+    try {
+      const body = req.body as ServicesPayload;
+      const data =
+        body.services?.length > 0
+          ? body
+          : await getServicesData();
+      if (!data.services.length || !data.history.length) {
+        res.status(400).json({ error: 'Importe o histórico por serviço antes.' });
+        return;
+      }
+      if (!data.plans?.length) {
+        res.status(400).json({ error: 'Informe as metas dos próximos meses.' });
+        return;
+      }
+      const results = allocatePlans(data.plans, data.services, data.history);
+      res.json({ results });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
+    }
+  });
+
+  app.delete('/api/services', async (_req, res) => {
+    try {
+      await clearServicesData();
+      res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
     }

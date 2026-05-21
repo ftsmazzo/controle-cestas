@@ -1,0 +1,65 @@
+.services-panel .plans-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 140px;
+  font-size: 0.9rem;
+}
+
+.plan-card input {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.allocation-results .month-block {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.allocation-results .month-block:last-child {
+  border-bottom: none;
+}
+
+.allocation-results h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.alerta-box {
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  margin: 0.5rem 0;
+}
+
+.meta-line {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.row-fixo {
+  background: #f0f9ff;
+}
+
+.obs-cell {
+  font-size: 0.82rem;
+  max-width: 220px;
+}
+
+.sobra {
+  color: #166534;
+  font-weight: 600;
+}

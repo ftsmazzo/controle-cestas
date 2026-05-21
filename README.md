@@ -51,6 +51,28 @@ Executadas **automaticamente** cada vez que o container sobe (`server/migrate.ts
 - Abra o site, importe planilha ou “Carregar exemplo”
 - Badge **PostgreSQL conectado** no canto superior
 
+## Por serviço (distribuição)
+
+Aba **Por serviço** no dashboard:
+
+1. Importe planilha com consumo histórico **por serviço**
+2. Marque serviços **fixos** e opcionalmente **cota fixa** (cestas/mês)
+3. Informe o total disponível para cada um dos **próximos meses** (ex.: 1.150 em Jun/2026)
+4. **Calcular distribuição** — reserva fixos primeiro; o restante divide pelos demais conforme % do histórico
+
+### Formatos de planilha aceitos
+
+**Longo** (recomendado):
+
+| Mês | Serviço | Total | Fixo |
+|-----|---------|-------|------|
+| Jun/2025 | CRAS Centro | 320 | Sim |
+
+**Largo** (uma coluna por serviço):
+
+| Mês | CRAS Centro | CREAS | Centro Pop |
+|-----|-------------|-------|------------|
+
 ## API
 
 | Método | Rota | Descrição |
@@ -61,6 +83,11 @@ Executadas **automaticamente** cada vez que o container sobe (`server/migrate.ts
 | POST | `/api/imports` | Importa linhas mensais (JSON) |
 | DELETE | `/api/dashboard` | Limpa dados |
 | GET | `/api/imports` | Histórico de uploads |
+| GET | `/api/services` | Dados por serviço |
+| PUT | `/api/services` | Salva serviços/planos |
+| POST | `/api/services/import` | Importa histórico por serviço |
+| POST | `/api/services/allocate` | Calcula distribuição |
+| DELETE | `/api/services` | Limpa dados por serviço |
 
 ## Planilha Excel
 

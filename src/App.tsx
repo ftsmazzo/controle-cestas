@@ -22,8 +22,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import ServicesPanel from './components/ServicesPanel';
 import SimulationPanel from './components/SimulationPanel';
 import './App.css';
+
+type Tab = 'geral' | 'servicos';
 
 function pct(n: number | null): string {
   if (n === null || Number.isNaN(n)) return '—';
@@ -47,6 +50,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [booting, setBooting] = useState(true);
   const [apiOk, setApiOk] = useState<boolean | null>(null);
+  const [tab, setTab] = useState<Tab>('geral');
 
   const saldoNum = useMemo(() => {
     const v = parseFloat(saldoAtual.replace(/\./g, '').replace(',', '.'));
@@ -196,6 +200,27 @@ export default function App() {
         </span>
       </header>
 
+      <nav className="tabs">
+        <button
+          type="button"
+          className={tab === 'geral' ? 'tab active' : 'tab'}
+          onClick={() => setTab('geral')}
+        >
+          Visão geral
+        </button>
+        <button
+          type="button"
+          className={tab === 'servicos' ? 'tab active' : 'tab'}
+          onClick={() => setTab('servicos')}
+        >
+          Por serviço
+        </button>
+      </nav>
+
+      {tab === 'servicos' ? (
+        <ServicesPanel />
+      ) : (
+        <>
       <section className="panel upload-panel">
         <h2>Importar histórico</h2>
         <p className="hint">
@@ -393,6 +418,8 @@ export default function App() {
               </ul>
             </details>
           </section>
+        </>
+      )}
         </>
       )}
     </div>
