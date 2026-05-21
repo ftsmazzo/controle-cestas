@@ -11,12 +11,26 @@ type SubTab = 'visao' | 'emergencial' | 'regular' | 'equipamentos';
 
 interface Props {
   onDashboardSynced?: () => void;
+  /** Abre direto em Equipamentos ao vir da Visão geral */
+  initialSubTab?: SubTab;
+  onInitialSubTabApplied?: () => void;
 }
 
-export default function ProcessHub({ onDashboardSynced }: Props) {
+export default function ProcessHub({
+  onDashboardSynced,
+  initialSubTab,
+  onInitialSubTabApplied,
+}: Props) {
   const [data, setData] = useState<ServicesPayload | null>(null);
-  const [subTab, setSubTab] = useState<SubTab>('visao');
+  const [subTab, setSubTab] = useState<SubTab>(initialSubTab ?? 'visao');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setSubTab(initialSubTab);
+      onInitialSubTabApplied?.();
+    }
+  }, [initialSubTab, onInitialSubTabApplied]);
 
   const load = useCallback(async () => {
     try {

@@ -146,9 +146,9 @@ export default function EquipamentosPanel({
       <section className="panel">
         <h2>Importar histórico por equipamento</h2>
         <p className="hint">
-          Várias tabelas na mesma aba (sem ano no título): o sistema assume a ordem{' '}
-          <strong>1ª tabela = ano mais antigo</strong> até a última = {new Date().getFullYear()}.
-          Valores <strong>PENDENTE</strong> são ignorados.
+          <strong>Uma aba por ano no Excel</strong> (nomes 2022, 2023, 2024…) ou várias tabelas na
+          mesma aba. Valores <strong>PENDENTE</strong> são ignorados. Após o import, a Visão geral
+          é atualizada sozinha.
         </p>
 
         <div className="upload-row">

@@ -466,50 +466,115 @@ function parseWideByMonthColumn(matrix: unknown[][]): {
   return { history, services: buildServices(history, new Map()) };
 }
 
-export function parseServiceWorkbook(
-  buffer: ArrayBuffer,
-  options?: { year?: number; startYear?: number },
-): ParseServiceResult {
-  const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
-  const sheetName =
-    wb.SheetNames.find((n) =>
-      /servi|equip|unidade|distribui|detalh|consumo|base|cestas/i.test(n),
-    ) ?? wb.SheetNames[0];
-  const sheet = wb.Sheets[sheetName];
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+function sheetToMatrix(sheet: XLSX.WorkSheet): unknown[][] {
+  return XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: '',
     raw: false,
   }) as unknown[][];
+}
 
-  if (matrix.length < 2) throw new Error('Planilha vazia.');
+function shouldSkipSheet(name: string): boolean {
+  return /^(sheet\d+|resumo|instrucoes|instruções|readme|capa)$/i.test(
+    name.trim(),
+  );
+}
 
-  const year = options?.year ?? inferYearFromSheet(sheetName, matrix);
-  const startYear = options?.startYear ?? (options?.year != null ? options.year : 2022);
+function yearFromSheetName(sheetName: string): number | null {
+  const m = sheetName.match(/(20\d{2})/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function mergeParseResults(
+  parts: ParseServiceResult[],
+): ParseServiceResult {
+  const history: ServiceMonthRecord[] = [];
+  const years = new Set<number>();
+  for (const p of parts) {
+    history.push(...p.history);
+    p.years.forEach((y) => years.add(y));
+  }
+  const sortedYears = [...years].sort((a, b) => a - b);
+  return {
+    history,
+    services: buildServices(history, new Map()),
+    format: 'pivot',
+    year: sortedYears[sortedYears.length - 1] ?? new Date().getFullYear(),
+    years: sortedYears,
+    sheetName: parts.map((p) => p.sheetName).join(' + '),
+  };
+}
+
+function parseMatrixAsPivot(
+  matrix: unknown[][],
+  sheetName: string,
+  options?: { year?: number; startYear?: number },
+): ParseServiceResult | null {
+  if (matrix.length < 2) return null;
+
+  const namedYear = yearFromSheetName(sheetName);
+  const year =
+    namedYear ??
+    options?.year ??
+    inferYearFromSheet(sheetName, matrix);
+  const startYear =
+    namedYear ??
+    options?.startYear ??
+    (options?.year != null ? options.year : 2022);
 
   const pivot = parsePivotFormat(matrix, year, startYear);
-  if (pivot) {
-    const primaryYear = pivot.years[pivot.years.length - 1] ?? year;
+  if (pivot?.history.length) {
     return {
       ...pivot,
       format: 'pivot',
-      year: primaryYear,
+      year: pivot.years[pivot.years.length - 1] ?? year,
       sheetName,
     };
   }
 
   const longF = parseLongFormat(matrix);
-  if (longF) {
+  if (longF?.history.length) {
     return { ...longF, format: 'long', year, years: [year], sheetName };
   }
 
   const wide = parseWideByMonthColumn(matrix);
-  if (wide) {
+  if (wide?.history.length) {
     return { ...wide, format: 'wide', year, years: [year], sheetName };
   }
 
+  return null;
+}
+
+export function parseServiceWorkbook(
+  buffer: ArrayBuffer,
+  options?: { year?: number; startYear?: number },
+): ParseServiceResult {
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+  const sheetResults: ParseServiceResult[] = [];
+
+  for (const sheetName of wb.SheetNames) {
+    if (shouldSkipSheet(sheetName)) continue;
+    const matrix = sheetToMatrix(wb.Sheets[sheetName]);
+    const parsed = parseMatrixAsPivot(matrix, sheetName, options);
+    if (parsed) sheetResults.push(parsed);
+  }
+
+  if (sheetResults.length > 1) {
+    return mergeParseResults(sheetResults);
+  }
+  if (sheetResults.length === 1) {
+    return sheetResults[0];
+  }
+
+  const fallbackName = wb.SheetNames[0];
+  const matrix = sheetToMatrix(wb.Sheets[fallbackName]);
+  if (matrix.length < 2) throw new Error('Planilha vazia.');
+
+  const parsed = parseMatrixAsPivot(matrix, fallbackName, options);
+  if (parsed) return parsed;
+
   throw new Error(
-    'Formato não reconhecido. Use: Equipamento + colunas Jan…Dez, ou Mês + Serviço + Total.',
+    'Formato não reconhecido. Use abas 2022, 2023… com Equipamento + JANEIRO…DEZEMBRO, ou várias tabelas na mesma aba.',
   );
 }
 

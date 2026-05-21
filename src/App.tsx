@@ -51,6 +51,9 @@ export default function App() {
   const [booting, setBooting] = useState(true);
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>('geral');
+  const [processSubTab, setProcessSubTab] = useState<
+    'equipamentos' | null
+  >(null);
 
   const saldoNum = useMemo(() => {
     const v = parseFloat(saldoAtual.replace(/\./g, '').replace(',', '.'));
@@ -178,42 +181,47 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <div>
-          <h1>Dashboard de Consumo de Cestas Básicas</h1>
-          <p className="subtitle">
-            Abril/2025 a Maio/2026 · Metodologia replicável (nota técnica)
-          </p>
-        </div>
-        <span className={`api-badge ${apiOk ? 'api-ok' : 'api-fail'}`}>
-          {apiOk ? 'PostgreSQL conectado' : 'API offline'}
-        </span>
-      </header>
+      <div className="app-nav-sticky">
+        <header className="header">
+          <div>
+            <h1>Dashboard de Consumo de Cestas Básicas</h1>
+            <p className="subtitle">
+              Histórico por equipamento · Totais e KPIs automáticos
+            </p>
+          </div>
+          <span className={`api-badge ${apiOk ? 'api-ok' : 'api-fail'}`}>
+            {apiOk ? 'PostgreSQL conectado' : 'API offline'}
+          </span>
+        </header>
 
-      <nav className="tabs">
-        <button
-          type="button"
-          className={tab === 'geral' ? 'tab active' : 'tab'}
-          onClick={() => setTab('geral')}
-        >
-          Visão geral
-        </button>
-        <button
-          type="button"
-          className={tab === 'processos' ? 'tab active' : 'tab'}
-          onClick={() => setTab('processos')}
-        >
-          Processos (emerg. + regular)
-        </button>
-      </nav>
+        <nav className="tabs" aria-label="Navegação principal">
+          <button
+            type="button"
+            className={tab === 'geral' ? 'tab active' : 'tab'}
+            onClick={() => setTab('geral')}
+          >
+            Visão geral
+          </button>
+          <button
+            type="button"
+            className={tab === 'processos' ? 'tab active' : 'tab'}
+            onClick={() => setTab('processos')}
+          >
+            Processos (emerg. + regular)
+          </button>
+        </nav>
+      </div>
 
       {tab === 'processos' ? (
         <ProcessHub
+          initialSubTab={processSubTab ?? undefined}
+          onInitialSubTabApplied={() => setProcessSubTab(null)}
           onDashboardSynced={async () => {
             try {
               const { state, saldoAtual: saldo } = await fetchDashboard();
               setDashboard(state);
               setSaldoAtual(formatSaldoInput(saldo));
+              setTab('geral');
             } catch {
               /* recarrega na próxima visita à aba */
             }
@@ -228,7 +236,10 @@ export default function App() {
           <button
             type="button"
             className="link-btn"
-            onClick={() => setTab('processos')}
+            onClick={() => {
+              setProcessSubTab('equipamentos');
+              setTab('processos');
+            }}
           >
             Processos → Equipamentos
           </button>
@@ -327,9 +338,26 @@ export default function App() {
 
       {!dashboard ? (
         <section className="panel empty">
-          <p>
-            Importe a planilha em <strong>Processos → Equipamentos</strong> ou use o botão acima
-            para sincronizar os totais.
+          <h3>Sem dados mensais na Visão geral</h3>
+          <ol className="steps-list">
+            <li>
+              Clique em <strong>Processos (emerg. + regular)</strong> no topo da página.
+            </li>
+            <li>
+              Depois em <strong>Equipamentos</strong> (menu logo abaixo).
+            </li>
+            <li>
+              <strong>Importar planilha</strong> (equipamento × meses). Pode ser uma aba por ano
+              (2022, 2023…) no Excel.
+            </li>
+            <li>
+              Volte aqui e use <strong>Atualizar a partir dos equipamentos</strong>, ou aguarde a
+              sincronização automática após o import.
+            </li>
+          </ol>
+          <p className="hint">
+            A planilha pivot (CRAS + JANEIRO…DEZEMBRO) <strong>não</strong> funciona em
+            “Importação alternativa” abaixo — use sempre Equipamentos.
           </p>
         </section>
       ) : (

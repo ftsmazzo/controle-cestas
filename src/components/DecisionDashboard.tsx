@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { buildChartSerie } from '@shared/insights';
+import { buildChartSerie, computeInsights } from '@shared/insights';
 import type { DashboardState } from '@shared/types';
 import {
   Bar,
@@ -37,7 +37,15 @@ export default function DecisionDashboard({
   dashboard,
   contratoMensal = 1500,
 }: Props) {
-  const ins = dashboard.insights;
+  const ins = useMemo(() => {
+    if (dashboard.insights?.mesesCompletos != null) return dashboard.insights;
+    return computeInsights(
+      dashboard.rows,
+      dashboard.kpis,
+      dashboard.tendenciaProximos[0]?.valor ?? null,
+    );
+  }, [dashboard]);
+
   const chartSerie = useMemo(
     () => buildChartSerie(dashboard.rows, ins.demandaReferenciaPreRuptura),
     [dashboard.rows, ins.demandaReferenciaPreRuptura],
