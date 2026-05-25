@@ -45,6 +45,7 @@ export default function EquipamentosPanel({
   const [error, setError] = useState<string | null>(null);
   const [importInfo, setImportInfo] = useState<string | null>(null);
   const [syncInfo, setSyncInfo] = useState<string | null>(null);
+  const [equipSaveMsg, setEquipSaveMsg] = useState<string | null>(null);
 
   const years = useMemo(
     () => (data?.history.length ? yearsDetectedInHistory(data.history) : []),
@@ -69,10 +70,28 @@ export default function EquipamentosPanel({
 
   const updateService = (id: string, patch: Partial<ServiceDef>) => {
     if (!data) return;
+    setEquipSaveMsg(null);
     onDataChange({
       ...data,
       services: data.services.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     });
+  };
+
+  const salvarEquipamentos = async () => {
+    if (!data) return;
+    setLoading(true);
+    setEquipSaveMsg(null);
+    setError(null);
+    try {
+      const saved = await saveServices(data);
+      onDataChange(saved);
+      await onReload();
+      setEquipSaveMsg('Equipamentos salvos.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao salvar equipamentos.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const syncVisaoGeral = async () => {
@@ -293,10 +312,12 @@ export default function EquipamentosPanel({
               type="button"
               className="primary-btn"
               style={{ marginTop: '0.75rem' }}
-              onClick={() => data && void saveServices(data).then(onDataChange)}
+              disabled={loading}
+              onClick={() => void salvarEquipamentos()}
             >
               Salvar equipamentos
             </button>
+            {equipSaveMsg && <p className="meta sync-ok">{equipSaveMsg}</p>}
           </section>
 
           {historyByMonth.length > 0 && (

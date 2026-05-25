@@ -22,10 +22,7 @@ export default function AdminEquipmentsPage() {
     <EquipamentosPanel
       section="equipamentos"
       data={payload}
-      onDataChange={(d) => {
-        setPayload(d);
-        if (d) void reload();
-      }}
+      onDataChange={setPayload}
       onReload={() => void reload()}
     />
     </>
