@@ -17,6 +17,8 @@ import type { ServiceDef, ServiceMonthRecord } from './serviceTypes.js';
 export interface DecisionNumbers {
   /** Média aritmética de todos os meses válidos no modelo */
   mediaLimpaHistorica: number;
+  /** Média Abr/25 – Mar/26 (base da previsão / nota técnica) */
+  mediaNotaPeriodo: number;
   /** Média dos últimos N meses válidos (janela admin); null = igual à limpa */
   mediaJanela: number | null;
   mesesMediaLimpa: number;
@@ -81,6 +83,16 @@ export function computeDecisionNumbers(
       ? janelaRows.reduce((s, r) => s + r.total, 0) / janelaRows.length
       : null;
 
+  const notaRows = rows.filter(
+    (r) => r.usoNoModelo === 'Sim' && parseMonthKey(r.mes) >= 202504,
+  );
+  const mediaNotaPeriodo =
+    notaRows.length > 0
+      ? Math.round(
+          notaRows.reduce((s, r) => s + r.total, 0) / notaRows.length,
+        )
+      : 0;
+
   const { valor: previsaoProximoMes } = forecastNextMonth(rows, janelaMeses);
   const { pontos } = computeForecastUntilYearEnd(rows, {
     windowMonths: janelaMeses,
@@ -116,6 +128,7 @@ export function computeDecisionNumbers(
 
   return {
     mediaLimpaHistorica: Math.round(mediaLimpa),
+    mediaNotaPeriodo,
     mediaJanela:
       mediaJanela != null ? Math.round(mediaJanela) : null,
     mesesMediaLimpa: validos.length,

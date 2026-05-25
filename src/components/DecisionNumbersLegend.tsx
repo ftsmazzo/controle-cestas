@@ -40,10 +40,11 @@ export default function DecisionNumbersLegend({
           <p className="dn-desc">{DECISION_NUMBERS_LEGEND.mediaPrevisaoJunDez}</p>
         </article>
         <article className="dn-card">
-          <span className="dn-label">Média limpa histórica</span>
-          <strong className="dn-value">{num(n.mediaLimpaHistorica)}</strong>
+          <span className="dn-label">Média período nota (Abr/25+)</span>
+          <strong className="dn-value">{num(n.mediaNotaPeriodo)}</strong>
           <p className="dn-desc">
-            {n.mesesMediaLimpa} meses · {DECISION_NUMBERS_LEGEND.mediaLimpa}
+            Base da regressão — alinhada à nota ~1.351. Média limpa total:{' '}
+            {num(n.mediaLimpaHistorica)} ({n.mesesMediaLimpa} meses).
           </p>
         </article>
         <article className="dn-card">
