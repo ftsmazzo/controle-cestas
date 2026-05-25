@@ -1,4 +1,10 @@
 import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
+import {
+  CalendarRange,
+  Package,
+  ShieldAlert,
+  Wallet,
+} from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import DecisionDashboard from '../../components/DecisionDashboard';
 
@@ -44,6 +50,9 @@ export default function DecisionHomePage() {
     <>
       <section className={`home-kpi-strip home-kpi-strip--${riskMod}`}>
         <article className="home-kpi-tile home-kpi-tile--primary">
+          <span className="home-kpi-icon" aria-hidden>
+            <ShieldAlert size={20} />
+          </span>
           <span className="home-kpi-label">Autonomia de estoque</span>
           {autonomia != null ? (
             <p className="home-kpi-value-line">
@@ -62,6 +71,9 @@ export default function DecisionHomePage() {
         </article>
 
         <article className="home-kpi-tile">
+          <span className="home-kpi-icon" aria-hidden>
+            <Wallet size={20} />
+          </span>
           <span className="home-kpi-label">Contrato</span>
           <p className="home-kpi-value-line">
             <span className="home-kpi-number">
@@ -72,6 +84,9 @@ export default function DecisionHomePage() {
         </article>
 
         <article className="home-kpi-tile">
+          <span className="home-kpi-icon" aria-hidden>
+            <CalendarRange size={20} />
+          </span>
           <span className="home-kpi-label">Janela de análise</span>
           <p className="home-kpi-value-line">
             <span className="home-kpi-text">{janelaLabel}</span>
@@ -80,6 +95,9 @@ export default function DecisionHomePage() {
 
         {snapshot.saldoEstoque != null && (
           <article className="home-kpi-tile">
+            <span className="home-kpi-icon" aria-hidden>
+              <Package size={20} />
+            </span>
             <span className="home-kpi-label">Saldo em estoque</span>
             <p className="home-kpi-value-line">
               <span className="home-kpi-number">{num(snapshot.saldoEstoque, 0)}</span>

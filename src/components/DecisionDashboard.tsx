@@ -1,4 +1,12 @@
 import { useMemo } from 'react';
+import {
+  Activity,
+  BarChart2,
+  FileText,
+  LineChart,
+  Sigma,
+  TrendingUp,
+} from 'lucide-react';
 import { comparativoContrato, ultimoMesValidoLabel } from '@shared/decisionMetrics';
 import { computeDecisionNumbers } from '@shared/decisionNumbers';
 import { buildChartSerie, computeInsights } from '@shared/insights';
@@ -9,7 +17,10 @@ import {
 } from '@shared/forecastPlan';
 import type { DashboardState } from '@shared/types';
 import type { ServiceDef, ServiceMonthRecord } from '@shared/serviceTypes';
+import { CHART, chartAxisProps, chartGridProps } from '../theme/charts';
 import DecisionNumbersLegend from './DecisionNumbersLegend';
+import DashboardChartTooltip from './ui/DashboardChartTooltip';
+import MetricCard from './ui/MetricCard';
 import {
   Bar,
   CartesianGrid,
@@ -33,6 +44,11 @@ function num(n: number | null, dec = 0): string {
 function deltaStr(d: number | null): string {
   if (d === null || Number.isNaN(d)) return '—';
   return `${d >= 0 ? '+' : ''}${num(d)}`;
+}
+
+function deltaTone(d: number | null): 'up' | 'down' | 'neutral' {
+  if (d == null || d === 0) return 'neutral';
+  return d > 0 ? 'up' : 'down';
 }
 
 interface Props {
@@ -151,6 +167,7 @@ export default function DecisionDashboard({
       ? `últimos ${janelaAnaliseMeses} meses válidos`
       : 'todos os meses válidos';
   const ultimoValido = meta?.ultimoMesValido ?? ultimoMesValidoLabel(dashboard.rows);
+  const desvio = meta?.desvioPadraoLimpo ?? dashboard.kpis.desvioPadrao;
 
   return (
     <div className="decision-dashboard">
@@ -158,188 +175,238 @@ export default function DecisionDashboard({
         numbers={decisionNums}
         contratoMensal={contratoMensal}
       />
-      <section className="panel projecao-kpis projecao-kpis--decisao">
-        <h3 className="projecao-kpis-title">Decisão vs contrato</h3>
-        <div className="projecao-kpi-grid">
-          <div className="kpi-highlight">
-            <span className="kpi-label">Volume de referência (próximo mês)</span>
-            <strong className="kpi-big">{num(decisionNums.previsaoProximoMes)}</strong>
-            <span className="kpi-delta">
-              vs contrato {num(contratoMensal)}: {deltaStr(cmp.previsaoVsContrato)}
+
+      <div className="dd-main-grid">
+        <section className="dd-panel dd-panel--chart">
+          <header className="dd-panel__header">
+            <span className="dd-panel__icon">
+              <LineChart size={20} />
             </span>
-            {decisionNums.cenariosProximoMes && (
-              <span className="kpi-delta kpi-faixas">
-                Menor {num(decisionNums.cenariosProximoMes.menor)} · Maior{' '}
-                {num(decisionNums.cenariosProximoMes.maior)} · Médio{' '}
-                {num(decisionNums.cenariosProximoMes.medio)}
+            <div>
+              <h2>Consumo e projeção de cessão</h2>
+              <p className="dd-panel__subtitle">
+                Histórico observado, tendência a partir de {ultimoValido ?? '—'} e
+                cenários futuros. Linha teal = contrato {num(contratoMensal)}/mês.
+              </p>
+            </div>
+          </header>
+          <ResponsiveContainer width="100%" height={420}>
+            <ComposedChart data={consumoEPrevisao} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradObservado" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CHART.observadoGradient[0]} />
+                  <stop offset="100%" stopColor={CHART.observadoGradient[1]} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid {...chartGridProps} />
+              <XAxis
+                dataKey="mes"
+                {...chartAxisProps}
+                angle={-32}
+                textAnchor="end"
+                height={68}
+                interval="preserveStartEnd"
+              />
+              <YAxis {...chartAxisProps} width={52} />
+              <Tooltip content={<DashboardChartTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+              <ReferenceLine
+                y={contratoMensal}
+                stroke={CHART.contrato}
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                label={{
+                  value: `Contrato ${contratoMensal}`,
+                  position: 'insideTopRight',
+                  fill: CHART.contrato,
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              />
+              <Bar
+                dataKey="observado"
+                name="Observado"
+                fill="url(#gradObservado)"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={28}
+              />
+              <Line
+                type="monotone"
+                dataKey="tendenciaProj"
+                name="Tendência"
+                stroke={CHART.tendencia}
+                strokeWidth={2.5}
+                strokeDasharray="8 4"
+                dot={{ r: 3, fill: CHART.tendencia, strokeWidth: 0 }}
+                connectNulls
+              />
+              <Line
+                type="monotone"
+                dataKey="previsao"
+                name="Volume de referência"
+                stroke={CHART.referencia}
+                strokeWidth={2.5}
+                strokeDasharray="6 3"
+                dot={{ r: 4, fill: CHART.referencia, strokeWidth: 0 }}
+                connectNulls
+              />
+              {meta?.metodo === 'nota_tecnica' && (
+                <>
+                  <Line
+                    type="monotone"
+                    dataKey="volumeMenor"
+                    name="Volume menor"
+                    stroke={CHART.volumeMenor}
+                    strokeWidth={1.5}
+                    strokeDasharray="3 3"
+                    dot={false}
+                    connectNulls
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="volumeMaior"
+                    name="Volume maior"
+                    stroke={CHART.volumeMaior}
+                    strokeWidth={1.5}
+                    strokeDasharray="3 3"
+                    dot={false}
+                    connectNulls
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="volumeMedio"
+                    name="Planejamento médio"
+                    stroke={CHART.planejamentoMedio}
+                    strokeWidth={2}
+                    strokeDasharray="5 2"
+                    dot={{ r: 3, fill: CHART.planejamentoMedio, strokeWidth: 0 }}
+                    connectNulls
+                  />
+                </>
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </section>
+
+        <aside className="dd-sidebar">
+          <section className="dd-panel dd-panel--sidebar">
+            <header className="dd-panel__header dd-panel__header--compact">
+              <span className="dd-panel__icon dd-panel__icon--accent">
+                <Activity size={18} />
               </span>
-            )}
-          </div>
-          <div className="kpi-highlight">
-            <span className="kpi-label">Média referência jun–dez</span>
-            <strong className="kpi-big">{num(decisionNums.mediaPrevisaoJunDez)}</strong>
-            <span className="kpi-delta">
-              vs contrato: {deltaStr(cmp.mediaPrevisaoVsContrato)} · soma{' '}
-              {num(cmp.somaPrevisaoFutura)}
-            </span>
-            {decisionNums.cenariosMediaJunDez && (
-              <span className="kpi-delta kpi-faixas">
-                Menor {num(decisionNums.cenariosMediaJunDez.menor)} · Maior{' '}
-                {num(decisionNums.cenariosMediaJunDez.maior)} · Planej. médio{' '}
-                {num(decisionNums.cenariosMediaJunDez.medio)}
+              <h2>Leitura rápida</h2>
+            </header>
+            <div className="dd-sidebar__cards">
+              <MetricCard
+                label="Referência vs contrato"
+                value={num(decisionNums.previsaoProximoMes)}
+                icon={<TrendingUp size={16} />}
+                variant="referencia"
+                size="sm"
+                delta={`${deltaStr(cmp.previsaoVsContrato)} · contrato ${num(contratoMensal)}`}
+                deltaTone={deltaTone(cmp.previsaoVsContrato)}
+              />
+              <MetricCard
+                label="Planejamento médio (próx.)"
+                value={num(decisionNums.cenariosProximoMes?.medio ?? null)}
+                icon={<Sigma size={16} />}
+                variant="medio"
+                size="sm"
+                delta={
+                  decisionNums.cenariosProximoMes
+                    ? `Menor ${num(decisionNums.cenariosProximoMes.menor)} · Maior ${num(decisionNums.cenariosProximoMes.maior)}`
+                    : undefined
+                }
+              />
+              <MetricCard
+                label="Média referência jun–dez"
+                value={num(decisionNums.mediaPrevisaoJunDez)}
+                icon={<BarChart2 size={16} />}
+                variant="primary"
+                size="sm"
+                delta={`${deltaStr(cmp.mediaPrevisaoVsContrato)} vs contrato`}
+                deltaTone={deltaTone(cmp.mediaPrevisaoVsContrato)}
+              />
+              <MetricCard
+                label="Inclinação tendência"
+                value={`${inclinacao >= 0 ? '+' : ''}${num(inclinacao)}/mês`}
+                icon={<LineChart size={16} />}
+                size="sm"
+                hint={janelaLabel}
+              />
+              <MetricCard
+                label="Desvio padrão limpo"
+                value={num(desvio)}
+                icon={<Sigma size={16} />}
+                variant="muted"
+                size="sm"
+                hint="Faixa ± usada nos cenários menor/maior"
+              />
+            </div>
+          </section>
+
+          <section className="dd-panel dd-panel--method">
+            <header className="dd-panel__header dd-panel__header--compact">
+              <span className="dd-panel__icon">
+                <FileText size={18} />
               </span>
-            )}
-          </div>
-          <div>
-            <span className="kpi-label">Contrato vigente</span>
-            <strong>{num(contratoMensal)}/mês</strong>
-          </div>
-          <div>
-            <span className="kpi-label">Último mês válido</span>
-            <strong>{ultimoValido ?? '—'}</strong>
-            <span className="hint-inline">Tendência parte daqui (Abr/Mai fora)</span>
-          </div>
-        </div>
-      </section>
+              <h2>Metodologia</h2>
+            </header>
+            <p className="dd-method-text">{PROJECAO_METODO_RESUMO}</p>
+            <ul className="dd-method-stats">
+              <li>
+                <span>Média limpa</span>
+                <strong>{num(cmp.mediaLimpaHistorica)}</strong>
+              </li>
+              <li>
+                <span>Média nota Abr/25+</span>
+                <strong>{num(decisionNums.mediaNotaPeriodo)}</strong>
+              </li>
+              <li>
+                <span>Ref. pré-ruptura</span>
+                <strong>{num(decisionNums.referenciaPreRuptura)}</strong>
+              </li>
+            </ul>
+            <p className="dd-method-foot">
+              Ajustes em <a href="/admin/metodologia">Metodologia</a>.
+            </p>
+          </section>
+        </aside>
+      </div>
 
-      <section className="panel projecao-kpis projecao-kpis--ref">
-        <h3 className="projecao-kpis-title">Referência histórica (passado)</h3>
-        <div className="projecao-kpi-grid">
-          <div>
-            <span className="kpi-label">Média limpa histórica</span>
-            <strong>{num(cmp.mediaLimpaHistorica)}</strong>
-            <span className="hint-inline">
-              vs contrato: {deltaStr(cmp.mediaLimpaVsContrato)} — não é meta de entrega
+      <div className="dd-charts-row">
+        <section className="dd-panel">
+          <header className="dd-panel__header dd-panel__header--compact">
+            <span className="dd-panel__icon">
+              <TrendingUp size={18} />
             </span>
-          </div>
-          <div>
-            <span className="kpi-label">Desvio padrão limpo</span>
-            <strong>{num(meta?.desvioPadraoLimpo ?? dashboard.kpis.desvioPadrao)}</strong>
-          </div>
-          <div>
-            <span className="kpi-label">Inclinação tendência</span>
-            <strong>
-              {inclinacao >= 0 ? '+' : ''}
-              {num(inclinacao)}/mês
-            </strong>
-            <span className="hint-inline">{janelaLabel}</span>
-          </div>
-        </div>
-        <p className="hint projecao-hint">{PROJECAO_METODO_RESUMO}</p>
-        <p className="hint">
-          A nota técnica (~1.351) usa só Abr/25–Mar/26 válidos. Se sua média limpa difere (ex.{' '}
-          {num(cmp.mediaLimpaHistorica)}), o histórico importado tem mais ou menos meses válidos.
-          Ajuste em <a href="/admin/metodologia">Metodologia</a>.
-        </p>
-      </section>
-
-      <section className="panel chart-panel chart-hero">
-        <h2>Consumo observado e tendência projetada</h2>
-        <p className="hint">
-          Barras = observado. Linha verde = tendência. Linha roxa = volume de referência. Faixas
-          cinza = volume menor e maior (± desvio). Linha âmbar tracejada = planejamento médio dos
-          três. Abr/Mai/2026 fora do modelo. Verde = contrato {num(contratoMensal)}/mês.
-        </p>
-        <ResponsiveContainer width="100%" height={400}>
-          <ComposedChart data={consumoEPrevisao}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" height={72} />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <ReferenceLine
-              y={contratoMensal}
-              stroke="#0d9488"
-              strokeDasharray="6 4"
-              label={{ value: `Contrato ${contratoMensal}`, fontSize: 10 }}
-            />
-            <Bar dataKey="observado" name="Observado" fill="#2563eb" radius={[3, 3, 0, 0]} />
-            <Line
-              type="monotone"
-              dataKey="tendenciaProj"
-              name="Tendência projetada"
-              stroke="#16a34a"
-              strokeWidth={2.5}
-              strokeDasharray="8 4"
-              dot={{ r: 3, fill: '#16a34a' }}
-              connectNulls
-            />
-            <Line
-              type="monotone"
-              dataKey="previsao"
-              name="Volume de referência"
-              stroke="#9333ea"
-              strokeWidth={2.5}
-              strokeDasharray="6 3"
-              dot={{ r: 4, fill: '#9333ea' }}
-              connectNulls
-            />
-            {meta?.metodo === 'nota_tecnica' && (
-              <>
-                <Line
-                  type="monotone"
-                  dataKey="volumeMenor"
-                  name="Volume menor"
-                  stroke="#94a3b8"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                  dot={false}
-                  connectNulls
-                />
-                <Line
-                  type="monotone"
-                  dataKey="volumeMaior"
-                  name="Volume maior"
-                  stroke="#64748b"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                  dot={false}
-                  connectNulls
-                />
-                <Line
-                  type="monotone"
-                  dataKey="volumeMedio"
-                  name="Planejamento médio"
-                  stroke="#d97706"
-                  strokeWidth={2}
-                  strokeDasharray="5 2"
-                  dot={{ r: 3, fill: '#d97706' }}
-                  connectNulls
-                />
-              </>
-            )}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </section>
-
-      <div className="charts-row">
-        <section className="panel chart-panel">
-          <h2>Tendência na janela</h2>
-          <p className="hint">
-            Ritmo {inclinacao >= 0 ? '+' : ''}
-            {num(inclinacao)} cestas/mês ({janelaLabel}).
-          </p>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={tendenciaValida}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mes" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <ReferenceLine y={contratoMensal} stroke="#0d9488" strokeDasharray="4 4" />
+            <div>
+              <h2>Tendência na janela</h2>
+              <p className="dd-panel__subtitle">{janelaLabel}</p>
+            </div>
+          </header>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={tendenciaValida} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid {...chartGridProps} />
+              <XAxis dataKey="mes" {...chartAxisProps} angle={-28} textAnchor="end" height={56} />
+              <YAxis {...chartAxisProps} width={48} />
+              <Tooltip content={<DashboardChartTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <ReferenceLine y={contratoMensal} stroke={CHART.contrato} strokeDasharray="4 4" />
               <Line
                 type="monotone"
                 dataKey="total"
                 name="Consumo válido"
-                stroke="#16a34a"
-                strokeWidth={2}
-                dot={{ r: 3 }}
+                stroke={CHART.tendencia}
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: CHART.tendencia, strokeWidth: 0 }}
               />
               <Line
                 type="monotone"
                 dataKey="mediaMovel"
                 name="Média móvel 3m"
-                stroke="#ca8a04"
+                stroke={CHART.mediaMovel}
+                strokeWidth={2}
                 strokeDasharray="4 4"
                 dot={false}
                 connectNulls
@@ -348,16 +415,24 @@ export default function DecisionDashboard({
           </ResponsiveContainer>
         </section>
 
-        <section className="panel chart-panel">
-          <h2>Histórico completo (cores)</h2>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={chartSerie}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mes" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="observado" name="Total do mês" radius={[3, 3, 0, 0]}>
+        <section className="dd-panel">
+          <header className="dd-panel__header dd-panel__header--compact">
+            <span className="dd-panel__icon">
+              <BarChart2 size={18} />
+            </span>
+            <div>
+              <h2>Histórico completo</h2>
+              <p className="dd-panel__subtitle">Meses válidos vs excluídos do modelo</p>
+            </div>
+          </header>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={chartSerie} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid {...chartGridProps} />
+              <XAxis dataKey="mes" {...chartAxisProps} angle={-28} textAnchor="end" height={56} />
+              <YAxis {...chartAxisProps} width={48} />
+              <Tooltip content={<DashboardChartTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="observado" name="Total do mês" radius={[4, 4, 0, 0]} maxBarSize={22}>
                 {chartSerie.map((entry, i) => (
                   <Cell key={i} fill={entry.fillObservado} />
                 ))}
@@ -366,7 +441,7 @@ export default function DecisionDashboard({
                 type="monotone"
                 dataKey="ajustado"
                 name="Entra no modelo"
-                stroke="#16a34a"
+                stroke={CHART.tendencia}
                 strokeWidth={2}
                 dot={false}
                 connectNulls={false}

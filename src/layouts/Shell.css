@@ -1,35 +1,45 @@
 .shell-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border, #e2e8f0);
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .shell-nav a {
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
   text-decoration: none;
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: var(--text-muted, #64748b);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease;
 }
 
 .shell-nav a:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--surface-muted);
+  color: var(--text);
 }
 
 .shell-nav a.active {
-  background: #2563eb;
+  background: linear-gradient(135deg, var(--primary), #6366f1);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
 }
 
 .shell-sticky {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--bg, #f8fafc);
-  padding-bottom: 0.25rem;
+  background: rgba(238, 242, 246, 0.92);
+  backdrop-filter: blur(10px);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
