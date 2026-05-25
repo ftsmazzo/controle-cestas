@@ -30,6 +30,7 @@ export function rawTotalsFromHistory(
   return applyMethodologyToRawRows(raw, settings.methodology);
 }
 
+/** Única fonte de KPIs/previsão: histórico por equipamento + metodologia (não usa planos de registro/emergencial). */
 export function recalculateSnapshot(
   payload: ServicesPayload,
 ): AppSnapshot {

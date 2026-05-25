@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
 import { analyzeRegular } from '@shared/processAnalysis';
+import { recalculateSnapshot } from '@shared/recalculateSnapshot';
 import {
   buildRegularPlanTable,
   fillRegularPlansFromData,
@@ -8,7 +9,6 @@ import {
 import { contractScenarios } from '@shared/simulation';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { saveServices } from '../lib/servicesApi';
-import { useData } from '../context/DataContext';
 import SimulationPanel from './SimulationPanel';
 import './ProcessPanels.css';
 
@@ -26,27 +26,38 @@ interface Props {
   data: ServicesPayload;
   onUpdate: (next: ServicesPayload) => void;
   readOnly?: boolean;
+  /** Snapshot da decisão (Visão geral) — se omitido, calcula só a partir do histórico importado */
+  decisionSnapshot?: ReturnType<typeof recalculateSnapshot> | null;
 }
 
-export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
+export default function RegularPanel({
+  data,
+  onUpdate,
+  readOnly,
+  decisionSnapshot: decisionSnapshotProp,
+}: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
-  const { dashboard } = useData();
   const cfg = data.regular;
+
+  const decisionSnap = useMemo(() => {
+    if (decisionSnapshotProp !== undefined) return decisionSnapshotProp;
+    return recalculateSnapshot(data);
+  }, [decisionSnapshotProp, data]);
+
+  const dashboard = decisionSnap?.state ?? null;
+  const processedRows = dashboard?.rows ?? [];
+
   const janela = useMemo(
     () => resolveJanelaAnaliseMeses(data.settings?.methodology),
     [data.settings?.methodology],
   );
 
-  const processedRows = dashboard?.rows ?? [];
-
-  const saldo = data.settings?.saldoEstoque ?? cfg.saldoAtual;
-
   const analise = useMemo(
     () =>
-      processedRows.length
-        ? analyzeRegular(cfg, processedRows, data.settings, saldo)
+      dashboard
+        ? analyzeRegular(cfg, dashboard, data.settings)
         : null,
-    [cfg, processedRows, data.settings, saldo],
+    [cfg, dashboard, data.settings],
   );
 
   const simDashboard = useMemo(() => {
@@ -73,7 +84,7 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
       const msg =
         e instanceof Error
           ? e.message
-          : 'Erro ao salvar. Em Admin, configure a chave de API se necessário.';
+          : 'Erro ao salvar. Em Admin, configure a chave de API.';
       setSaveError(msg);
     }
   };
@@ -81,7 +92,7 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
   const preencherPlanos = () => {
     setSaveError(null);
     if (!processedRows.length) {
-      setSaveError('Sem dados na Visão geral. Importe o histórico em Admin.');
+      setSaveError('Sem histórico importado. Use Admin → Importar.');
       return;
     }
     const plans = fillRegularPlansFromData(
@@ -93,13 +104,10 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
     onUpdate({ ...data, regular: { ...cfg, plans } });
   };
 
-  if (!dashboard || !processedRows.length) {
+  if (!dashboard) {
     return (
       <section className="panel empty">
-        <p className="hint">
-          Carregue o histórico e publique o painel em Admin → Importar para alinhar com a
-          Visão geral.
-        </p>
+        <p className="hint">Importe o histórico por equipamento para exibir indicadores.</p>
       </section>
     );
   }
@@ -109,11 +117,9 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
       <section className="panel">
         <h2>Processo regular (12 meses)</h2>
         <p className="hint">
-          Mesma base da <strong>Visão geral</strong> (metodologia + previsão). Os 12 campos são o
-          período do registro ({cfg.plans[0]?.mes} … {cfg.plans[cfg.plans.length - 1]?.mes}).
-          Preencher usa soma dos equipamentos quando o mês já existe no histórico; nos demais,
-          usa a <strong>previsão</strong> do painel.
-          {readOnly && ' Modo consulta: pode simular o preenchimento; salvar só em Admin.'}
+          <strong>Levantamento do registro</strong> (campos abaixo) é independente da Visão geral.
+          Indicadores e simulação <strong>leem a mesma série</strong> do painel principal (histórico +
+          metodologia). Preencher copia histórico ou previsão apenas nos 12 campos do registro.
         </p>
 
         <div className="config-grid">
@@ -214,13 +220,7 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
 
       {analise && (
         <section className="panel">
-          <h3>Indicadores e risco — regular</h3>
-          <p className="hint meta-line">
-            Alinhado à Visão geral · janela:{' '}
-            {janela != null && janela > 0
-              ? `últimos ${janela} meses válidos`
-              : 'todos os meses válidos'}
-          </p>
+          <h3>Indicadores (mesma base da Visão geral)</h3>
           <div className="kpi-row">
             <div className="kpi-mini kpi-mini--highlight">
               <span>Previsão próximo mês</span>
@@ -233,29 +233,13 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
             <div className="kpi-mini">
               <span>Média histórica válida</span>
               <strong>{num(analise.consumoMedioValido)}</strong>
-              <span className="hint-inline">referência passado</span>
             </div>
             <div className="kpi-mini">
-              <span>Previsão (+3 meses)</span>
-              <strong>
-                {analise.previsaoProximos3.map((v) => num(v)).join(' · ') || '—'}
-              </strong>
-            </div>
-            <div className="kpi-mini">
-              <span>Soma planejada 12m</span>
+              <span>Soma planejada (registro)</span>
               <strong>{num(analise.totalPlanejado12)}</strong>
             </div>
-            <div className="kpi-mini">
-              <span>Contrato cobre (previsão)</span>
-              <strong>
-                {(
-                  analise.mesesCobertosPelaPrevisao ?? analise.mesesCobertosPeloContrato
-                ).toFixed(1)}{' '}
-                meses
-              </strong>
-            </div>
             <div className={`kpi-mini risco-${analise.riscoRuptura.toLowerCase()}`}>
-              <span>Autonomia / Risco</span>
+              <span>Autonomia</span>
               <strong>
                 {analise.autonomiaMeses != null
                   ? `${analise.autonomiaMeses.toFixed(1)} m · ${analise.riscoRuptura}`
@@ -274,10 +258,7 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
       {simDashboard && (
         <>
           <section className="panel">
-            <h3>Plano 12 meses — histórico vs previsão</h3>
-            <p className="hint">
-              Referência para cada campo do registro (não é a lista completa do passado).
-            </p>
+            <h3>Referência por mês do plano de registro</h3>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -285,8 +266,7 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
                     <th>Mês</th>
                     <th>Soma equipamentos</th>
                     <th>Previsão (Visão geral)</th>
-                    <th>Planejado</th>
-                    <th>Fonte</th>
+                    <th>No seu plano</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -298,7 +278,6 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
                       <td>
                         <strong>{r.planejado > 0 ? num(r.planejado) : '—'}</strong>
                       </td>
-                      <td>{r.fonte}</td>
                     </tr>
                   ))}
                 </tbody>

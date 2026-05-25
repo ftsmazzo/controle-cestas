@@ -100,15 +100,6 @@ async function start() {
       const stored = await getDashboard();
       if (stored.state && !snapshot.state) {
         snapshot = { state: stored.state, saldoEstoque: stored.saldoAtual };
-      } else if (snapshot.state) {
-        const janela = resolveJanelaAnaliseMeses(payload.settings?.methodology);
-        const hydrated = hydrateDashboardState(
-          snapshot.state,
-          snapshot.saldoEstoque,
-          payload.settings?.contratoMensal ?? 1200,
-          janela,
-        );
-        snapshot = { state: hydrated, saldoEstoque: snapshot.saldoEstoque };
       }
       const methodologyTable = payload.history.length
         ? listMethodologyTable(

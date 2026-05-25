@@ -1,33 +1,10 @@
 import { normalizeServicesPayload } from '../shared/payloadNormalize.js';
-import { parseMonthKey } from '../shared/monthUtils.js';
-import { PLANNING_BLOCKED_MONTH_KEYS } from '../shared/planningMonths.js';
 import type { ServicesPayload } from '../shared/serviceTypes.js';
 import { getPool } from './db.js';
 
 const EMPTY = normalizeServicesPayload({ services: [], history: [] });
 
-function plansNeedPersist(
-  raw: Partial<ServicesPayload>,
-  normalized: ServicesPayload,
-): boolean {
-  const emergChanged =
-    JSON.stringify(raw.emergencial?.plans ?? []) !==
-    JSON.stringify(normalized.emergencial.plans);
-  const regChanged =
-    JSON.stringify(raw.regular?.plans ?? []) !==
-    JSON.stringify(normalized.regular.plans);
-  const hasBlocked = (plans: { mes: string }[] | undefined) =>
-    (plans ?? []).some((p) =>
-      PLANNING_BLOCKED_MONTH_KEYS.includes(parseMonthKey(p.mes)),
-    );
-  return (
-    emergChanged ||
-    regChanged ||
-    hasBlocked(raw.emergencial?.plans) ||
-    hasBlocked(raw.regular?.plans)
-  );
-}
-
+/** Lê e normaliza em memória — não grava no banco (evita efeitos colaterais no dashboard). */
 export async function getServicesData(): Promise<ServicesPayload> {
   const res = await getPool().query<{ payload: ServicesPayload }>(
     'SELECT payload FROM services_data WHERE id = 1',
@@ -37,7 +14,7 @@ export async function getServicesData(): Promise<ServicesPayload> {
     Pick<ServicesPayload, 'services' | 'history'>;
   if (!raw.services) return { ...EMPTY };
 
-  const normalized = normalizeServicesPayload({
+  return normalizeServicesPayload({
     services: raw.services ?? [],
     history: raw.history ?? [],
     plans: raw.plans,
@@ -48,11 +25,6 @@ export async function getServicesData(): Promise<ServicesPayload> {
     updatedAt: raw.updatedAt,
     meta: raw.meta,
   });
-
-  if (plansNeedPersist(raw, normalized)) {
-    return saveServicesData(normalized);
-  }
-  return normalized;
 }
 
 export async function saveServicesData(

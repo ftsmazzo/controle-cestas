@@ -1,29 +1,50 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { saveSettings } from '../../lib/snapshotApi';
 import EmergencialPanel from '../../components/EmergencialPanel';
 import RegularPanel from '../../components/RegularPanel';
 import { saveServices } from '../../lib/servicesApi';
+import type { ServicesPayload } from '@shared/serviceTypes';
 
 export default function AdminContractsPage() {
-  const { payload, reload, loading, setPayload } = useData();
+  const { payload, reload, loading, snapshot } = useData();
   const [tab, setTab] = useState<'emergencial' | 'rp'>('emergencial');
   const [msg, setMsg] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ServicesPayload | null>(null);
+  const [dirty, setDirty] = useState(false);
 
-  if (loading || !payload) return null;
+  useEffect(() => {
+    if (payload) {
+      setDraft(payload);
+      setDirty(false);
+    }
+  }, [payload]);
 
-  const onUpdate = async (next: typeof payload) => {
-    const saved = await saveServices(next);
-    setPayload(saved);
-    await reload();
+  if (loading || !payload || !draft) return null;
+
+  const patchDraft = (next: ServicesPayload) => {
+    setDraft(next);
+    setDirty(true);
+  };
+
+  const saveDraft = async () => {
+    try {
+      setMsg(null);
+      await saveServices(draft);
+      await reload();
+      setMsg('Contratos salvos. A Visão geral usa só o histórico importado (não os 12 campos do registro).');
+      setDirty(false);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Erro ao salvar');
+    }
   };
 
   const saveGlobal = async () => {
     try {
       await saveSettings({
-        saldoEstoque: payload.regular.saldoAtual,
-        contratoMensal: payload.regular.cestasContratoMensal,
-        contratoAnual: payload.regular.totalContratoAnual,
+        saldoEstoque: draft.regular.saldoAtual,
+        contratoMensal: draft.regular.cestasContratoMensal,
+        contratoAnual: draft.regular.totalContratoAnual,
       });
       await reload();
       setMsg('Parâmetros globais salvos.');
@@ -36,6 +57,10 @@ export default function AdminContractsPage() {
     <>
       <section className="panel">
         <h2>Parâmetros de contrato</h2>
+        <p className="hint">
+          Alterações aqui <strong>não mudam a Visão geral</strong> até você salvar o histórico ou
+          metodologia. Use &quot;Salvar contratos&quot; para gravar emergencial/registro.
+        </p>
         <nav className="process-subtabs">
           <button
             type="button"
@@ -52,17 +77,31 @@ export default function AdminContractsPage() {
             Registro de Preço
           </button>
         </nav>
-        <button type="button" className="secondary" onClick={() => void saveGlobal()}>
-          Salvar saldo e metas de contrato (global)
-        </button>
+        <div className="config-grid">
+          <button type="button" className="secondary" onClick={() => void saveGlobal()}>
+            Salvar saldo e metas (global)
+          </button>
+          <button
+            type="button"
+            className="primary-btn"
+            disabled={!dirty}
+            onClick={() => void saveDraft()}
+          >
+            Salvar contratos
+          </button>
+        </div>
         {msg && <p className="meta">{msg}</p>}
       </section>
 
       {tab === 'emergencial' && (
-        <EmergencialPanel data={payload} onUpdate={(n) => void onUpdate(n)} />
+        <EmergencialPanel data={draft} onUpdate={patchDraft} />
       )}
       {tab === 'rp' && (
-        <RegularPanel data={payload} onUpdate={(n) => void onUpdate(n)} />
+        <RegularPanel
+          data={draft}
+          onUpdate={patchDraft}
+          decisionSnapshot={snapshot}
+        />
       )}
     </>
   );

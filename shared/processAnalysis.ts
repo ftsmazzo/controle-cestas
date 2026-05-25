@@ -1,4 +1,3 @@
-import { buildDashboard } from './buildDashboard.js';
 import {
   allocateMonth,
   computeServiceStats,
@@ -14,8 +13,8 @@ import type {
   ProcessoRegularConfig,
   ProcessoRiscoItem,
 } from './processTypes.js';
-import { mergeAppSettings, type AppSettings } from './appSettings.js';
-import type { ProcessedMonthRow, RawMonthRow } from './types.js';
+import type { AppSettings } from './appSettings.js';
+import type { DashboardState, ProcessedMonthRow, RawMonthRow } from './types.js';
 import type { ServiceDef, ServiceMonthRecord } from './serviceTypes.js';
 
 function riscoPorGap(gap: number, disponivel: number): ProcessoRiscoItem['nivel'] {
@@ -101,34 +100,17 @@ export function analyzeEmergencial(
   return { processo: 'emergencial', meses, alertas };
 }
 
+/** Risco do registro de preço — usa o mesmo DashboardState da Visão geral (não recalcula série). */
 export function analyzeRegular(
   config: ProcessoRegularConfig,
-  processedRows: ProcessedMonthRow[],
+  decision: DashboardState,
   settings?: AppSettings,
-  saldoAtual?: number | null,
 ): ProcessoRegularAnalise {
+  const rows = decision.rows;
   const janela = resolveJanelaAnaliseMeses(settings?.methodology);
-  const saldo =
-    saldoAtual ??
-    config.saldoAtual ??
-    mergeAppSettings(settings).saldoEstoque;
 
-  const raw = processedRows.map((r) => ({
-    mes: r.mes,
-    total: r.total,
-    status: r.status,
-    observacao: r.observacao,
-  }));
-  const dash = buildDashboard(
-    raw,
-    'Processo regular',
-    saldo,
-    config.cestasContratoMensal,
-    janela,
-  );
-
-  const { valor: previsaoProximoMes } = forecastNextMonth(processedRows, janela);
-  const { pontos: previsaoPontos } = computeForecastUntilYearEnd(processedRows, {
+  const { valor: previsaoProximoMes } = forecastNextMonth(rows, janela);
+  const { pontos: previsaoPontos } = computeForecastUntilYearEnd(rows, {
     windowMonths: janela,
   });
   const futuros = previsaoPontos.filter((p) => p.tipo === 'projecao');
@@ -143,7 +125,7 @@ export function analyzeRegular(
     0,
   );
 
-  const media = dash.kpis.mediaMensalValida;
+  const media = decision.kpis.mediaMensalValida;
   const refContrato =
     mediaPrevisaoFutura != null
       ? Math.round(mediaPrevisaoFutura)
@@ -194,13 +176,13 @@ export function analyzeRegular(
     }
   }
 
-  if (dash.kpis.riscoRuptura === 'Vermelho') {
+  if (decision.kpis.riscoRuptura === 'Vermelho') {
     alertas.push({
       nivel: 'critico',
       titulo: 'Autonomia crítica (estoque)',
       descricao: `Menos de 2 meses de cobertura no ritmo médio atual.`,
     });
-  } else if (dash.kpis.riscoRuptura === 'Amarelo') {
+  } else if (decision.kpis.riscoRuptura === 'Amarelo') {
     alertas.push({
       nivel: 'moderado',
       titulo: 'Autonomia em atenção',
@@ -228,8 +210,8 @@ export function analyzeRegular(
     totalContratoAnual: config.totalContratoAnual,
     mesesCobertosPeloContrato: mesesCobertos,
     mesesCobertosPelaPrevisao,
-    autonomiaMeses: dash.kpis.autonomiaMeses,
-    riscoRuptura: dash.kpis.riscoRuptura,
+    autonomiaMeses: decision.kpis.autonomiaMeses,
+    riscoRuptura: decision.kpis.riscoRuptura,
     alertas,
   };
 }
