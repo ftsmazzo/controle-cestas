@@ -6,6 +6,11 @@ import {
 import { computeServiceStats } from './allocation.js';
 import { computeInsights } from './insights.js';
 import {
+  buildVolumeCenario,
+  mediaCenariosPontos,
+  type VolumeCenario,
+} from './forecastCenarios.js';
+import {
   computeForecastUntilYearEnd,
   forecastNextMonth,
 } from './forecastPlan.js';
@@ -24,10 +29,13 @@ export interface DecisionNumbers {
   mesesMediaLimpa: number;
   mesesJanelaLista: string[];
   janelaMeses: number | null;
-  /** Previsão do próximo mês de planejamento (Jun/2026+), nota técnica */
+  /** Volume de referência — próximo mês de planejamento */
   previsaoProximoMes: number | null;
-  /** Média dos meses previstos de jun a dez do ano após o último válido */
+  /** Média dos volumes de referência (jun–dez) */
   mediaPrevisaoJunDez: number | null;
+  /** Faixas de volume: menor, referência, maior e planejamento médio */
+  cenariosProximoMes: VolumeCenario | null;
+  cenariosMediaJunDez: VolumeCenario | null;
   mesesPrevisaoJunDez: string[];
   /** Média dos 3 meses válidos imediatamente antes de Abr/2026 */
   referenciaPreRuptura: number | null;
@@ -93,10 +101,14 @@ export function computeDecisionNumbers(
         )
       : 0;
 
+  const desvio = kpis.desvioPadrao ?? 0;
   const { valor: previsaoProximoMes } = forecastNextMonth(rows, janelaMeses);
   const { pontos } = computeForecastUntilYearEnd(rows, {
     windowMonths: janelaMeses,
   });
+  const refProximo = previsaoProximoMes ?? projecao1;
+  const cenariosProximoMes =
+    refProximo != null ? buildVolumeCenario(refProximo, desvio) : null;
 
   const lastValidKey =
     validos.length > 0
@@ -106,6 +118,7 @@ export function computeDecisionNumbers(
     lastValidKey > 0 ? Math.floor(lastValidKey / 100) : new Date().getFullYear();
   const { media: mediaPrevisaoJunDez, meses: mesesPrevisaoJunDez } =
     mediaPrevisaoJunDezAno(pontos, anoPrevisao);
+  const cenariosMediaJunDez = mediaCenariosPontos(pontos, anoPrevisao);
 
   const ins = computeInsights(rows, kpis, projecao1);
 
@@ -134,9 +147,11 @@ export function computeDecisionNumbers(
     mesesMediaLimpa: validos.length,
     mesesJanelaLista: janelaRows.map((r) => r.mes),
     janelaMeses,
-    previsaoProximoMes: previsaoProximoMes ?? projecao1,
+    previsaoProximoMes: refProximo,
     mediaPrevisaoJunDez,
     mesesPrevisaoJunDez,
+    cenariosProximoMes,
+    cenariosMediaJunDez,
     referenciaPreRuptura: ins.demandaReferenciaPreRuptura,
     somaMediasEquipamentos,
     mesesSomaMediasEquip: monthKeysToLabels(picked),
@@ -149,9 +164,11 @@ export const DECISION_NUMBERS_LEGEND = {
     'Média de todos os meses que entram no modelo (exclui COVID/2023/Abr-Mai/2026).',
   mediaJanela: 'Média só dos últimos N meses válidos (parâmetro em Metodologia).',
   previsaoProximoMes:
-    'Previsão para o próximo mês de entrega (regressão + sazonalidade 2025). Use para contrato e emergencial.',
+    'Volume de referência (estimativa central) para o próximo mês de cessão.',
   mediaPrevisaoJunDez:
-    'Média das previsões de jun a dez do ano — não mistura meses de 2027.',
+    'Média dos volumes de referência de jun a dez — compare com o contrato de 1.200/mês.',
+  cenarios:
+    'Três faixas em torno da referência (± desvio padrão) e o planejamento médio (média das três).',
   referenciaPreRuptura:
     'Média dos 3 meses válidos antes da ruptura Abr/2026 (referência operacional).',
   somaMediasEquipamentos:

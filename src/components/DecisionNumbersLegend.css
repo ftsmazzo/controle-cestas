@@ -65,3 +65,73 @@
   font-size: 0.8rem;
   color: #64748b;
 }
+
+.dn-intro {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.dn-cenarios-wrap {
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+
+.dn-cenarios-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.dn-cenarios-table th,
+.dn-cenarios-table td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: right;
+}
+
+.dn-cenarios-table th:first-child,
+.dn-cenarios-table td:first-child {
+  text-align: left;
+  font-weight: 600;
+  color: #334155;
+}
+
+.dn-cenarios-table thead th {
+  background: #eff6ff;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #475569;
+}
+
+.dn-cenarios-table .dn-ref,
+.dn-cenarios-table .dn-medio {
+  background: #f8fafc;
+}
+
+.dn-delta {
+  display: block;
+  font-size: 0.68rem;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.dn-details {
+  margin-top: 0.5rem;
+}
+
+.dn-details summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #475569;
+  font-weight: 500;
+}
+
+.dn-details[open] summary {
+  margin-bottom: 0.65rem;
+}

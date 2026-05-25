@@ -8,6 +8,7 @@ import {
   excludedMonthKeysFromRows,
   PLANNING_BLOCKED_MONTH_KEYS,
 } from './planningMonths.js';
+import { buildVolumeCenario } from './forecastCenarios.js';
 import type { ForecastPoint, ProcessedMonthRow } from './types.js';
 
 /** Mesma base da nota técnica (~1.351): Abr/25 em diante, sem 2023/2024 baixos na regressão. */
@@ -42,7 +43,7 @@ function consumoMesAno(
 }
 
 export const PROJECAO_METODO_RESUMO =
-  'Previsão: regressão nos últimos 8 meses do período nota (Abr/25+), média robusta (sem o pior mês) e piso na média do período. Projeção jun–dez não cai mês a mês — só mantém ou sobe com a inclinação recente.';
+  'Volume de referência: regressão nos últimos 8 meses do período nota (Abr/25+). Volume menor e maior: referência ± desvio padrão do histórico limpo. Planejamento médio: média dos três. Projeção jun–dez não cai mês a mês.';
 
 export interface ProjecaoMeta {
   metodo: 'nota_tecnica' | 'janela';
@@ -323,15 +324,17 @@ export function computeForecastUntilYearEnd(
             anchor,
             Math.round(anchor + inclinacao * (step - 1)),
           );
-    const pessimista = Math.max(0, Math.round(base - stdLimpa));
-    const otimista = Math.round(base + stdLimpa);
+    const cenarios = useNota
+      ? buildVolumeCenario(base, stdLimpa)
+      : null;
 
     pontos.push({
       mes: formatMonthKeyPt(cursor),
       valor: base,
       tipo: 'projecao',
-      valorPessimista: useNota ? pessimista : undefined,
-      valorOtimista: useNota ? otimista : undefined,
+      cenarioMenor: cenarios?.menor,
+      cenarioMaior: cenarios?.maior,
+      cenarioMedio: cenarios?.medio,
     });
     cursor = incrementMonthKey(cursor);
     if (!options?.endMonthKey && pontos.length > 18) break;

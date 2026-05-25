@@ -36,12 +36,15 @@ export interface Kpis {
 
 export interface ForecastPoint {
   mes: string;
+  /** Volume de referência (estimativa central) */
   valor: number;
   tipo: 'historico' | 'projecao';
-  /** Cenário conservador (base − desvio limpo) — nota técnica */
-  valorPessimista?: number;
-  /** Cenário otimista (base + desvio limpo) */
-  valorOtimista?: number;
+  /** Volume menor estimado (referência − desvio limpo) */
+  cenarioMenor?: number;
+  /** Volume maior estimado (referência + desvio limpo) */
+  cenarioMaior?: number;
+  /** Média dos três volumes do mês */
+  cenarioMedio?: number;
 }
 
 export interface ContractScenario {

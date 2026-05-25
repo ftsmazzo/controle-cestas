@@ -167,7 +167,16 @@ export default function EmergencialPanel({
           {decisionNums?.previsaoProximoMes != null && (
             <>
               {' '}
-              Previsão do painel: <strong>{num(decisionNums.previsaoProximoMes)}</strong>.
+              Volume de referência: <strong>{num(decisionNums.previsaoProximoMes)}</strong>
+              {decisionNums.cenariosProximoMes && (
+                <>
+                  {' '}
+                  (menor {num(decisionNums.cenariosProximoMes.menor)} · médio{' '}
+                  {num(decisionNums.cenariosProximoMes.medio)} · maior{' '}
+                  {num(decisionNums.cenariosProximoMes.maior)})
+                </>
+              )}
+              .
             </>
           )}
           {readOnly && ' Modo consulta.'}
@@ -244,7 +253,7 @@ export default function EmergencialPanel({
               disabled={readOnly}
               onClick={usarPrevisaoComoMeta}
             >
-              Usar previsão ({num(decisionNums.previsaoProximoMes)}) como cestas/mês
+              Usar volume de referência ({num(decisionNums.previsaoProximoMes)}) como cestas/mês
             </button>
           )}
         </div>

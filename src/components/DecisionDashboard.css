@@ -147,6 +147,11 @@
   margin-top: 0.15rem;
 }
 
+.kpi-faixas {
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .projecao-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

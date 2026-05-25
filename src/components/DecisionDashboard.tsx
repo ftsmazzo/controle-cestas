@@ -108,8 +108,9 @@ export default function DecisionDashboard({
       observado: r.total,
       previsao: null as number | null,
       tendenciaProj: r.usoNoModelo === 'Sim' ? r.total : null,
-      previsaoMin: null as number | null,
-      previsaoMax: null as number | null,
+      volumeMenor: null as number | null,
+      volumeMaior: null as number | null,
+      volumeMedio: null as number | null,
       excluido: r.usoNoModelo === 'Não',
     }));
     const prev = previsaoAno.pontos.map((p) => ({
@@ -117,8 +118,9 @@ export default function DecisionDashboard({
       observado: null as number | null,
       previsao: p.valor,
       tendenciaProj: p.valor,
-      previsaoMin: p.valorPessimista ?? null,
-      previsaoMax: p.valorOtimista ?? null,
+      volumeMenor: p.cenarioMenor ?? null,
+      volumeMaior: p.cenarioMaior ?? null,
+      volumeMedio: p.cenarioMedio ?? null,
       excluido: false,
     }));
     return [...hist, ...prev];
@@ -160,19 +162,33 @@ export default function DecisionDashboard({
         <h3 className="projecao-kpis-title">Decisão vs contrato</h3>
         <div className="projecao-kpi-grid">
           <div className="kpi-highlight">
-            <span className="kpi-label">Próximo mês previsto</span>
+            <span className="kpi-label">Volume de referência (próximo mês)</span>
             <strong className="kpi-big">{num(decisionNums.previsaoProximoMes)}</strong>
             <span className="kpi-delta">
               vs contrato {num(contratoMensal)}: {deltaStr(cmp.previsaoVsContrato)}
             </span>
+            {decisionNums.cenariosProximoMes && (
+              <span className="kpi-delta kpi-faixas">
+                Menor {num(decisionNums.cenariosProximoMes.menor)} · Maior{' '}
+                {num(decisionNums.cenariosProximoMes.maior)} · Médio{' '}
+                {num(decisionNums.cenariosProximoMes.medio)}
+              </span>
+            )}
           </div>
           <div className="kpi-highlight">
-            <span className="kpi-label">Média previsão jun–dez</span>
+            <span className="kpi-label">Média referência jun–dez</span>
             <strong className="kpi-big">{num(decisionNums.mediaPrevisaoJunDez)}</strong>
             <span className="kpi-delta">
               vs contrato: {deltaStr(cmp.mediaPrevisaoVsContrato)} · soma{' '}
               {num(cmp.somaPrevisaoFutura)}
             </span>
+            {decisionNums.cenariosMediaJunDez && (
+              <span className="kpi-delta kpi-faixas">
+                Menor {num(decisionNums.cenariosMediaJunDez.menor)} · Maior{' '}
+                {num(decisionNums.cenariosMediaJunDez.maior)} · Planej. médio{' '}
+                {num(decisionNums.cenariosMediaJunDez.medio)}
+              </span>
+            )}
           </div>
           <div>
             <span className="kpi-label">Contrato vigente</span>
@@ -220,9 +236,9 @@ export default function DecisionDashboard({
       <section className="panel chart-panel chart-hero">
         <h2>Consumo observado e tendência projetada</h2>
         <p className="hint">
-          Barras = observado. Linha verde tracejada = tendência a partir do último mês válido (
-          {ultimoValido ?? '—'}). Linha roxa = previsão mês a mês. Abr/Mai/2026 não entram no
-          modelo. Verde = contrato {num(contratoMensal)}/mês.
+          Barras = observado. Linha verde = tendência. Linha roxa = volume de referência. Faixas
+          cinza = volume menor e maior (± desvio). Linha âmbar tracejada = planejamento médio dos
+          três. Abr/Mai/2026 fora do modelo. Verde = contrato {num(contratoMensal)}/mês.
         </p>
         <ResponsiveContainer width="100%" height={400}>
           <ComposedChart data={consumoEPrevisao}>
@@ -251,7 +267,7 @@ export default function DecisionDashboard({
             <Line
               type="monotone"
               dataKey="previsao"
-              name="Previsão (base)"
+              name="Volume de referência"
               stroke="#9333ea"
               strokeWidth={2.5}
               strokeDasharray="6 3"
@@ -262,8 +278,8 @@ export default function DecisionDashboard({
               <>
                 <Line
                   type="monotone"
-                  dataKey="previsaoMin"
-                  name="Pessimista"
+                  dataKey="volumeMenor"
+                  name="Volume menor"
                   stroke="#94a3b8"
                   strokeWidth={1.5}
                   strokeDasharray="3 3"
@@ -272,12 +288,22 @@ export default function DecisionDashboard({
                 />
                 <Line
                   type="monotone"
-                  dataKey="previsaoMax"
-                  name="Otimista"
+                  dataKey="volumeMaior"
+                  name="Volume maior"
                   stroke="#64748b"
                   strokeWidth={1.5}
                   strokeDasharray="3 3"
                   dot={false}
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="volumeMedio"
+                  name="Planejamento médio"
+                  stroke="#d97706"
+                  strokeWidth={2}
+                  strokeDasharray="5 2"
+                  dot={{ r: 3, fill: '#d97706' }}
                   connectNulls
                 />
               </>
