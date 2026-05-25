@@ -6,7 +6,6 @@ import type { ServiceDef, ServicesPayload } from '@shared/serviceTypes';
 import { syncDashboardFromServices } from '../lib/api';
 import { clearServices, importServices, saveServices } from '../lib/servicesApi';
 import { demoServiceData, parseServiceWorkbook } from '../lib/serviceExcelParser';
-import DistribuicaoMesPanel from './DistribuicaoMesPanel';
 import './ServicesPanel.css';
 
 function num(n: number): string {
@@ -29,6 +28,8 @@ interface Props {
   onDataChange: (d: ServicesPayload | null) => void;
   onReload: () => void;
   onDashboardSynced?: () => void;
+  /** import | equipamentos | all */
+  section?: 'import' | 'equipamentos' | 'all';
 }
 
 export default function EquipamentosPanel({
@@ -36,7 +37,10 @@ export default function EquipamentosPanel({
   onDataChange,
   onReload,
   onDashboardSynced,
+  section = 'all',
 }: Props) {
+  const showImport = section === 'import' || section === 'all';
+  const showEquip = section === 'equipamentos' || section === 'all';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [importInfo, setImportInfo] = useState<string | null>(null);
@@ -102,9 +106,9 @@ export default function EquipamentosPanel({
           ? parsed.years.join(', ')
           : String(parsed.year);
       setImportInfo(
-        `Importado: ${parsed.services.length} equipamentos · anos ${anos} · ${parsed.history.length} lançamentos`,
+        `Importado: ${parsed.services.length} equipamentos · anos ${anos} · ${parsed.history.length} lançamentos · KPIs recalculados`,
       );
-      await syncVisaoGeral();
+      onDashboardSynced?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro na planilha.');
     } finally {
@@ -124,7 +128,7 @@ export default function EquipamentosPanel({
       setImportInfo(
         `Exemplo: ${FORMAT_LABELS[demo.format]} · ${demo.services.length} equipamentos`,
       );
-      await syncVisaoGeral();
+      onDashboardSynced?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro.');
     } finally {
@@ -134,18 +138,19 @@ export default function EquipamentosPanel({
 
   return (
     <div className="services-panel">
+      {showImport && (
+        <>
       <section className="panel source-truth-banner">
         <h2>Fonte única de dados</h2>
         <p className="hint">
           Importe <strong>somente esta planilha</strong> (equipamento × JANEIRO…DEZEMBRO). Os{' '}
-          <strong>totais mensais</strong> e a <strong>Visão geral</strong> (KPIs, gráficos) são
-          calculados automaticamente pela soma dos equipamentos — não é necessário outro arquivo nem
-          colocar o ano na planilha.
+          <strong>totais mensais</strong> e o <strong>painel de decisão</strong> são calculados
+          automaticamente pela soma dos equipamentos.
         </p>
       </section>
 
       <section className="panel">
-        <h2>Importar histórico por equipamento</h2>
+        <h2>Importar e validar</h2>
         <p className="hint">
           <strong>Uma aba por ano no Excel</strong> (nomes 2022, 2023, 2024…) ou várias tabelas na
           mesma aba. Valores <strong>PENDENTE</strong> são ignorados. Após o import, a Visão geral
@@ -211,18 +216,16 @@ export default function EquipamentosPanel({
           </button>
         ) : null}
       </section>
-
-      {data && data.services.length > 0 && data.history.length > 0 && (
-        <DistribuicaoMesPanel data={data} />
+        </>
       )}
 
-      {data && data.services.length > 0 && (
+      {showEquip && data && data.services.length > 0 && (
         <>
           <section className="panel">
             <h3>Equipamentos — fixos e cotas</h3>
             <p className="hint">
               Marque <strong>Fixo</strong> ou informe <strong>Cota fixa</strong> (ex.: SAICA 40/mês)
-              antes de calcular a distribuição acima.
+              antes de usar Distribuir mês na consulta pública.
             </p>
             <div className="table-wrap">
               <table>
@@ -287,8 +290,7 @@ export default function EquipamentosPanel({
             <section className="panel">
               <h3>Totais mensais (soma dos equipamentos)</h3>
               <p className="hint">
-                Estes valores alimentam a <strong>Visão geral</strong> e o processo{' '}
-                <strong>Regular</strong>.
+                Estes valores alimentam o painel de decisão e o Registro de Preço.
               </p>
               <div className="table-wrap">
                 <table>

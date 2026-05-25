@@ -1,0 +1,26 @@
+.methodology-timeline .timeline-track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+
+.timeline-chip {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  min-width: 5.5rem;
+  cursor: help;
+}
+
+.timeline-mes {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.timeline-tag {
+  display: block;
+  font-size: 0.65rem;
+  opacity: 0.85;
+}

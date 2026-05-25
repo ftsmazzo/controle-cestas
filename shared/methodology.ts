@@ -3,7 +3,7 @@ import { getYearMonth } from './monthUtils.js';
 
 /** Contexto operacional documentado — não confundir com queda de demanda */
 export const NOTA_METODOLOGICA_RESUMO =
-  'Abr/2026 registrou parada no fornecimento (ruptura de estoque). Mai/2026 está incompleto, com retorno gradual do abastecimento e racionamento. Esses meses ficam visíveis no histórico, mas são excluídos da média, tendência e previsão para não distorcer a análise.';
+  'Jan–Mar/2022 refletem o encerramento das ações de Combate ao COVID (consumo inflado). O ano de 2023 foi de racionamento agressivo por falta de cestas. Abr/2026 registrou ruptura de estoque (parada no fornecimento) e Mai/2026 está parcial, com retorno gradual. Esses períodos permanecem visíveis no histórico, mas são excluídos da média, tendência e previsão para não distorcer a análise da demanda representativa.';
 
 export const NOTA_ABR_2026 =
   'Abr/2026: parada no fornecimento (ruptura). O consumo observado reflete falta de cestas, não redução da necessidade social. Excluído do modelo preditivo.';

@@ -1,7 +1,15 @@
-/** Definição de um serviço/unidade que recebe cestas */
+import type { AppSettings } from './appSettings.js';
+import type { AssistancePayload } from './assistanceTypes.js';
+
+export type ConsumptionLevel = 'equipamento' | 'servico';
+
+/** Unidade de consumo (equipamento hoje; serviço filho no futuro, ex. 12 CRAS) */
 export interface ServiceDef {
   id: string;
   nome: string;
+  level?: ConsumptionLevel;
+  /** Equipamento pai quando level === 'servico' */
+  parentId?: string | null;
   /** Não pode ter alocação reduzida abaixo da cota */
   fixo: boolean;
   /** Cota mensal explícita (opcional; se fixo e vazio, usa média histórica) */
@@ -75,6 +83,10 @@ export interface ServicesPayload {
   plans: MonthlyPlan[];
   emergencial: ProcessoEmergencialConfig;
   regular: ProcessoRegularConfig;
+  /** Saldo, metodologia e parâmetros globais (fonte única) */
+  settings?: AppSettings;
+  /** Fase 4 — atendimentos SEMAS */
+  assistance?: AssistancePayload;
   updatedAt: string;
   meta?: ServicesMeta;
 }

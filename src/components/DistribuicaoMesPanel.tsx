@@ -25,7 +25,10 @@ export default function DistribuicaoMesPanel({ data }: Props) {
 
   const [mes, setMes] = useState('');
   const [totalStr, setTotalStr] = useState('');
-  const [janelaMeses, setJanelaMeses] = useState<string>('8');
+  const defaultJanela = String(
+    data.settings?.methodology.janelaMediaMeses ?? 8,
+  );
+  const [janelaMeses, setJanelaMeses] = useState<string>(defaultJanela);
   const [resultado, setResultado] = useState<MonthAllocationResult | null>(null);
 
   const mesAtivo = mes.trim() || mesesSugeridos[0] || '';

@@ -3,9 +3,11 @@ import cors from 'cors';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildDashboard, hydrateDashboardState } from '../shared/buildDashboard.js';
-import { rawRowsFromServiceHistory } from '../shared/syncFromServices.js';
-import type { DashboardState, RawMonthRow } from '../shared/types.js';
+import { hydrateDashboardState } from '../shared/buildDashboard.js';
+import { recalculateSnapshot } from '../shared/recalculateSnapshot.js';
+import { listMethodologyTable } from '../shared/methodologyCalendar.js';
+import { rawRowsFromPayload } from '../shared/syncFromServices.js';
+import type { DashboardState } from '../shared/types.js';
 import { allocatePlans } from '../shared/allocation.js';
 import { mergeServiceDefs, mergeServiceHistory } from '../shared/mergeServices.js';
 import { normalizeServicesPayload } from '../shared/payloadNormalize.js';
@@ -15,7 +17,6 @@ import {
   getDashboard,
   getPool,
   listImports,
-  logImport,
   saveDashboard,
 } from './db.js';
 import { runMigrations } from './migrate.js';
@@ -24,7 +25,10 @@ import {
   getServicesData,
   saveServicesData,
 } from './servicesDb.js';
+import { mergeAppSettings } from '../shared/appSettings.js';
 import { requireAdminWrite } from './adminAuth.js';
+import { persistAndRecalculate } from './recalculate.js';
+import type { AppSettings } from '../shared/appSettings.js';
 
 const ADMIN_PATH = (process.env.ADMIN_PATH || '/admin').replace(/\/$/, '') || '/admin';
 
@@ -83,6 +87,42 @@ async function start() {
     }
   });
 
+  app.get('/api/snapshot', async (_req, res) => {
+    try {
+      const payload = await getServicesData();
+      let snapshot = recalculateSnapshot(payload);
+      const stored = await getDashboard();
+      if (stored.state && !snapshot.state) {
+        snapshot = { state: stored.state, saldoEstoque: stored.saldoAtual };
+      } else if (snapshot.state) {
+        const hydrated = hydrateDashboardState(
+          snapshot.state,
+          snapshot.saldoEstoque,
+          payload.settings?.contratoMensal ?? 1500,
+        );
+        snapshot = { state: hydrated, saldoEstoque: snapshot.saldoEstoque };
+      }
+      const methodologyTable = payload.history.length
+        ? listMethodologyTable(
+            rawRowsFromPayload(payload),
+            payload.settings?.methodology ?? {
+              overrides: {},
+              excludeYear2023: true,
+              exclude2022Q1: true,
+              janelaMediaMeses: 8,
+            },
+          )
+        : [];
+      res.json({
+        payload,
+        snapshot,
+        methodologyTable,
+      });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
+    }
+  });
+
   app.get('/api/dashboard', async (_req, res) => {
     try {
       const data = await getDashboard();
@@ -130,45 +170,21 @@ async function start() {
         });
         return;
       }
-      const current = await getDashboard();
-      const saldo = current.saldoAtual;
-      const rows = rawRowsFromServiceHistory(servicesData.history);
-      const fileName =
-        servicesData.meta?.sourceFile ?? 'Equipamentos (fonte única)';
-      const state = buildDashboard(
-        rows,
-        fileName,
-        saldo,
-      );
-      await saveDashboard(state, saldo);
-      res.json({ state, saldoAtual: saldo });
+      const { snapshot } = await persistAndRecalculate(servicesData);
+      res.json({
+        state: snapshot.state,
+        saldoAtual: snapshot.saldoEstoque,
+      });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
     }
   });
 
-  app.post('/api/imports', requireAdminWrite, async (req, res) => {
-    try {
-      const { fileName, rows, saldoAtual } = req.body as {
-        fileName: string;
-        rows: RawMonthRow[];
-        saldoAtual?: number | null;
-      };
-      if (!fileName || !Array.isArray(rows) || rows.length === 0) {
-        res.status(400).json({ error: 'fileName e rows são obrigatórios' });
-        return;
-      }
-      const saldo =
-        saldoAtual === undefined || saldoAtual === null
-          ? null
-          : Number(saldoAtual);
-      const state = buildDashboard(rows, fileName, Number.isNaN(saldo) ? null : saldo);
-      await saveDashboard(state, Number.isNaN(saldo) ? null : saldo);
-      await logImport(fileName, Number.isNaN(saldo) ? null : saldo, rows.length);
-      res.json({ state, saldoAtual: Number.isNaN(saldo) ? null : saldo });
-    } catch (e) {
-      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
-    }
+  app.post('/api/imports', requireAdminWrite, (_req, res) => {
+    res.status(410).json({
+      error:
+        'Importação Mês+Total descontinuada. Use /admin → Importar e validar (planilha por equipamento).',
+    });
   });
 
   app.delete('/api/dashboard', requireAdminWrite, async (_req, res) => {
@@ -206,8 +222,8 @@ async function start() {
         res.status(400).json({ error: 'payload inválido' });
         return;
       }
-      const saved = await saveServicesData(body);
-      res.json(saved);
+      const { payload } = await persistAndRecalculate(body);
+      res.json(payload);
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
     }
@@ -229,15 +245,16 @@ async function start() {
       const services = merge
         ? mergeServiceDefs(existing.services, body.services)
         : body.services;
-      const saved = await saveServicesData({
+      const { payload } = await persistAndRecalculate({
         services,
         history,
         emergencial: body.emergencial ?? existing.emergencial,
         regular: body.regular ?? existing.regular,
         plans: body.plans,
         meta: body.meta ?? existing.meta,
+        settings: body.settings ?? existing.settings,
       });
-      res.json(saved);
+      res.json(payload);
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
     }
@@ -275,9 +292,24 @@ async function start() {
     }
   });
 
+  app.put('/api/settings', requireAdminWrite, async (req, res) => {
+    try {
+      const existing = await getServicesData();
+      const body = req.body as Partial<AppSettings>;
+      const { payload } = await persistAndRecalculate({
+        ...existing,
+        settings: mergeAppSettings({ ...existing.settings, ...body }),
+      });
+      res.json(payload);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });
+    }
+  });
+
   app.delete('/api/services', requireAdminWrite, async (_req, res) => {
     try {
       await clearServicesData();
+      await clearDashboard();
       res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });

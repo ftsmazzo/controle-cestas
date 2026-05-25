@@ -4,11 +4,10 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
+import { useLocation } from 'react-router-dom';
 
 export interface AppModeValue {
-  /** URL da área de carga de dados (padrão /admin) */
   adminPath: string;
-  /** true = somente leitura (rota pública) */
   readOnly: boolean;
   isAdminRoute: boolean;
 }
@@ -20,17 +19,17 @@ const AppModeContext = createContext<AppModeValue>({
 });
 
 export function AppModeProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const value = useMemo((): AppModeValue => {
     const adminPath =
       (import.meta.env.VITE_ADMIN_PATH as string | undefined)?.trim() || '/admin';
-    const normalized = window.location.pathname.replace(/\/$/, '') || '/';
-    const isAdminRoute = normalized === adminPath;
+    const isAdminRoute = location.pathname.startsWith(adminPath);
     return {
       adminPath,
       readOnly: !isAdminRoute,
       isAdminRoute,
     };
-  }, []);
+  }, [location.pathname]);
 
   return (
     <AppModeContext.Provider value={value}>{children}</AppModeContext.Provider>
