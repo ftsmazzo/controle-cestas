@@ -2,6 +2,7 @@ import { parseMonthKey } from './monthUtils.js';
 import {
   excludedMonthKeysFromRows,
   isExcludedPlanningMonth,
+  PLANNING_BLOCKED_MONTH_KEYS,
   suggestPlanningMonths,
 } from './planningMonths.js';
 import {
@@ -61,7 +62,10 @@ export function sanitizeProcessPlans(
     excluded,
   );
   let nextEmerg = emergencial;
-  if (planNeedsRefresh(emergencial.plans, emergPlanning, excluded)) {
+  const emergHasBlocked = emergencial.plans.some((p) =>
+    PLANNING_BLOCKED_MONTH_KEYS.includes(parseMonthKey(p.mes)),
+  );
+  if (emergHasBlocked || planNeedsRefresh(emergencial.plans, emergPlanning, excluded)) {
     nextEmerg = {
       ...emergencial,
       plans: rebuildPlans(
@@ -78,7 +82,10 @@ export function sanitizeProcessPlans(
     excluded,
   );
   let nextReg = regular;
-  if (planNeedsRefresh(regular.plans, regPlanning, excluded)) {
+  const regHasBlocked = regular.plans.some((p) =>
+    PLANNING_BLOCKED_MONTH_KEYS.includes(parseMonthKey(p.mes)),
+  );
+  if (regHasBlocked || planNeedsRefresh(regular.plans, regPlanning, excluded)) {
     nextReg = {
       ...regular,
       plans: rebuildPlans(regPlanning, regular.plans, 0),

@@ -80,11 +80,18 @@ export function presetsFromDashboard(d: DashboardState): ScenarioPreset[] {
   };
 
   add('planejado', 'Contrato (1.200)', 1200);
-  add('media', 'Média válida', d.kpis.mediaMensalValida);
+  const prevFuturos = (d.previsaoAteFimAno ?? []).filter((p) => p.tipo === 'projecao');
+  if (prevFuturos[0]) add('previsao', 'Previsão próximo mês', prevFuturos[0].valor);
+  if (prevFuturos.length > 0) {
+    const mediaPrev =
+      prevFuturos.reduce((s, p) => s + p.valor, 0) / prevFuturos.length;
+    add('mediaPrevisao', 'Média previsão futura', mediaPrev);
+  }
+  const proj = d.tendenciaProximos[0];
+  if (proj && !prevFuturos[0]) add('forecast', 'Projeção +1', proj.valor);
+  add('media', 'Média histórica (ref.)', d.kpis.mediaMensalValida);
   add('pico', 'Pico histórico', d.kpis.picoConsumo);
   add('mm3', 'Média móvel 3m', d.mediaMovelUltimos3);
-  const proj = d.tendenciaProximos[0];
-  if (proj) add('forecast', 'Projeção +1', proj.valor);
 
   return items;
 }

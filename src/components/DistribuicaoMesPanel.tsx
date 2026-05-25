@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { allocateMonth } from '@shared/allocation';
-import { suggestPlanningMonths } from '@shared/planningMonths';
+import {
+  isExcludedPlanningMonth,
+  suggestPlanningMonths,
+} from '@shared/planningMonths';
 import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
 import AllocationResumoBox from './AllocationResumoBox';
 import './DistribuicaoMesPanel.css';
@@ -30,7 +33,10 @@ export default function DistribuicaoMesPanel({
   previsaoProximoMes = null,
 }: Props) {
   const mesesSugeridos = useMemo(
-    () => suggestPlanningMonths(validMonthKeys, 8, excludedMonthKeys),
+    () =>
+      suggestPlanningMonths(validMonthKeys, 8, excludedMonthKeys).filter(
+        (m) => !isExcludedPlanningMonth(m, excludedMonthKeys),
+      ),
     [validMonthKeys, excludedMonthKeys],
   );
 

@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { buildDashboard } from '@shared/buildDashboard';
+import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
 import { aggregateHistoryByMonth, analyzeRegular } from '@shared/processAnalysis';
 import { contractScenarios } from '@shared/simulation';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { saveServices } from '../lib/servicesApi';
 import SimulationPanel from './SimulationPanel';
-import MethodologyBanner from './MethodologyBanner';
 import './ProcessPanels.css';
 
 function num(n: number | null, dec = 0): string {
@@ -25,7 +25,12 @@ interface Props {
 }
 
 export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
+  const [saveError, setSaveError] = useState<string | null>(null);
   const cfg = data.regular;
+  const janela = useMemo(
+    () => resolveJanelaAnaliseMeses(data.settings?.methodology),
+    [data.settings?.methodology],
+  );
 
   const historicoRows = useMemo(() => {
     const fromPlans = cfg.plans.filter((p) => p.totalDisponivel > 0);
@@ -47,9 +52,15 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
   const dashboard = useMemo(
     () =>
       historicoRows.length
-        ? buildDashboard(historicoRows, 'Processo regular', cfg.saldoAtual)
+        ? buildDashboard(
+            historicoRows,
+            'Processo regular',
+            cfg.saldoAtual,
+            cfg.cestasContratoMensal,
+            janela,
+          )
         : null,
-    [historicoRows, cfg.saldoAtual],
+    [historicoRows, cfg.saldoAtual, cfg.cestasContratoMensal, janela],
   );
 
   const simDashboard = useMemo(() => {
@@ -62,29 +73,42 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
 
   const persist = async (next: ServicesPayload) => {
     if (readOnly) return;
-    const saved = await saveServices(next);
-    onUpdate(saved);
+    setSaveError(null);
+    try {
+      const saved = await saveServices(next);
+      onUpdate(saved);
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'Erro ao salvar. Em Admin, configure a chave de API se necessário.';
+      setSaveError(msg);
+    }
   };
 
   const preencherDoHistorico = () => {
     if (readOnly) return;
+    setSaveError(null);
     const agg = aggregateHistoryByMonth(data.history);
     const byMes = new Map(agg.map((r) => [r.mes, r.total]));
-    const plans = cfg.plans.map((p) => ({
-      ...p,
-      totalDisponivel: byMes.get(p.mes) ?? p.totalDisponivel,
-    }));
-    void persist({ ...data, regular: { ...cfg, plans } });
+    const plans = cfg.plans.map((p) => {
+      const hist = byMes.get(p.mes);
+      return {
+        ...p,
+        totalDisponivel: hist != null && hist > 0 ? hist : p.totalDisponivel,
+      };
+    });
+    onUpdate({ ...data, regular: { ...cfg, plans } });
   };
 
   return (
     <div className="process-panel">
-      {simDashboard && <MethodologyBanner rows={simDashboard.rows} compact />}
       <section className="panel">
         <h2>Processo regular (12 meses)</h2>
         <p className="hint">
           Levantamento do <strong>total mensal</strong> para registro/contrato. Use totais
-          informados abaixo ou importe da soma dos equipamentos. Inclui previsão e risco.
+          informados abaixo ou preencha com a soma dos equipamentos (meses com histórico).
+          Indicadores de risco usam <strong>previsão</strong>, não só média histórica.
           {readOnly && ' Em modo consulta, valores exibidos não podem ser alterados.'}
         </p>
 
@@ -153,6 +177,7 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
           >
             Preencher meses com soma dos equipamentos
           </button>
+          {saveError && <p className="error">{saveError}</p>}
           {!readOnly && (
             <button
               type="button"

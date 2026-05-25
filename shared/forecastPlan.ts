@@ -4,7 +4,10 @@ import {
   validMonthKeysFromRows,
 } from './analysisWindow.js';
 import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
-import { excludedMonthKeysFromRows } from './planningMonths.js';
+import {
+  excludedMonthKeysFromRows,
+  PLANNING_BLOCKED_MONTH_KEYS,
+} from './planningMonths.js';
 import type { ForecastPoint, ProcessedMonthRow } from './types.js';
 
 function incrementMonthKey(key: number): number {
@@ -139,10 +142,19 @@ export function forecastNextMonth(
     validRows.reduce((s, r) => s + r.total, 0) / validRows.length;
   const linear = forecastLinear(xs.length + 1, xs, ys);
 
-  const lastKey = Math.max(
-    ...rows.map((r) => parseMonthKey(r.mes)).filter((k) => k > 0),
-  );
-  const nextKey = incrementMonthKey(lastKey);
+  const validKeys = validMonthKeysFromRows(validRows);
+  const excluded = new Set([
+    ...PLANNING_BLOCKED_MONTH_KEYS,
+    ...excludedMonthKeysFromRows(rows),
+  ]);
+  const lastValid =
+    validKeys.length > 0
+      ? Math.max(...validKeys)
+      : Math.max(...rows.map((r) => parseMonthKey(r.mes)).filter((k) => k > 0));
+  let nextKey = incrementMonthKey(lastValid);
+  while (excluded.has(nextKey) && nextKey < 203012) {
+    nextKey = incrementMonthKey(nextKey);
+  }
   const nextMonth = nextKey % 100;
   const ref2025 = useNota ? consumoMesAno(rows, 2025, nextMonth) : null;
 

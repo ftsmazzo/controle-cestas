@@ -276,6 +276,7 @@ async function start() {
         emergencial: raw.emergencial,
         regular: raw.regular,
         plans: raw.plans,
+        settings: raw.settings,
       });
       const plans = data.emergencial.plans?.length
         ? data.emergencial.plans

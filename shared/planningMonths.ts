@@ -1,6 +1,9 @@
 import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
 import type { ProcessedMonthRow } from './types.js';
 
+/** Ruptura/parcial fixos (nota técnica) — sempre fora do planejamento, mesmo sem linha no histórico. */
+export const PLANNING_BLOCKED_MONTH_KEYS: readonly number[] = [202604, 202605];
+
 function incrementMonthKey(key: number): number {
   const year = Math.floor(key / 100);
   const month = key % 100;
@@ -9,10 +12,11 @@ function incrementMonthKey(key: number): number {
 }
 
 export function excludedMonthKeysFromRows(rows: ProcessedMonthRow[]): number[] {
-  return rows
+  const fromRows = rows
     .filter((r) => r.usoNoModelo === 'Não')
     .map((r) => parseMonthKey(r.mes))
     .filter((k) => k > 0);
+  return [...new Set([...PLANNING_BLOCKED_MONTH_KEYS, ...fromRows])];
 }
 
 /**
@@ -24,7 +28,7 @@ export function suggestPlanningMonths(
   count: number,
   excludedMonthKeys: number[] = [],
 ): string[] {
-  const excluded = new Set(excludedMonthKeys);
+  const excluded = new Set([...PLANNING_BLOCKED_MONTH_KEYS, ...excludedMonthKeys]);
   let cursor =
     validMonthKeys.length > 0 ? Math.max(...validMonthKeys) : 0;
   const result: string[] = [];
@@ -48,5 +52,9 @@ export function isExcludedPlanningMonth(
   excludedMonthKeys: number[],
 ): boolean {
   const k = parseMonthKey(mes);
-  return k > 0 && excludedMonthKeys.includes(k);
+  return (
+    k > 0 &&
+    ((PLANNING_BLOCKED_MONTH_KEYS as readonly number[]).includes(k) ||
+      excludedMonthKeys.includes(k))
+  );
 }
