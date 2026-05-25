@@ -13,6 +13,7 @@ import { useData } from '../../context/DataContext';
 import { saveSettings } from '../../lib/snapshotApi';
 
 const JANELA_OPCOES: { value: string; label: string; meses: number | null }[] = [
+  { value: '4', label: 'Últimos 4 meses válidos', meses: 4 },
   { value: '8', label: 'Últimos 8 meses válidos', meses: 8 },
   { value: '12', label: 'Últimos 12 meses válidos', meses: 12 },
   { value: '24', label: 'Últimos 24 meses válidos', meses: 24 },

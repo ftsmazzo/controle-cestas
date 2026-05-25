@@ -111,27 +111,25 @@ export function allocateMonth(
     ? [...options.validMonthKeys].sort((a, b) => a - b)
     : null;
 
-  if (validPool) {
-    const picked = pickWindowKeys(validPool, windowN ?? null, excluir);
-    mediaJanelaMeses = windowN ?? null;
-    histForMedia = historyForMonthKeys(history, picked);
-    mesesJanelaUsados = monthKeysToLabels(picked);
-  } else if (windowN != null && windowN > 0) {
-    mediaJanelaMeses = windowN;
-    const { filtered, monthKeys } = filterHistoryLastMonths(history, windowN, {
-      excluirMes: excluir,
-    });
-    histForMedia = filtered;
-    mesesJanelaUsados = monthKeys.map(formatMonthKeyPt);
-  } else {
-    const keys = new Set<number>();
-    for (const h of history) {
-      const k = parseMonthKey(h.mes);
-      if (k > 0) keys.add(k);
-    }
-    mesesJanelaUsados = [...keys].sort((a, b) => a - b).map(formatMonthKeyPt);
-    histForMedia = history;
+  if (!validPool?.length) {
+    return {
+      mes: plan.mes,
+      totalDisponivel: plan.totalDisponivel,
+      totalAlocado: 0,
+      sobra: plan.totalDisponivel,
+      linhas: [],
+      alerta:
+        'Não há meses válidos no modelo para calcular a média. Confira metodologia (ex.: excluir Abr/Mai/2026) e recarregue os dados.',
+      mesesJanelaUsados: [],
+      mediaJanelaMeses: windowN ?? null,
+      totalDemandaReferencia: 0,
+    };
   }
+
+  const picked = pickWindowKeys(validPool, windowN ?? null, excluir);
+  mediaJanelaMeses = windowN ?? null;
+  histForMedia = historyForMonthKeys(history, picked);
+  mesesJanelaUsados = monthKeysToLabels(picked);
 
   const stats = computeServiceStats(histForMedia, services.map((s) => s.id));
   const statsMap = new Map(stats.map((s) => [s.servicoId, s]));
@@ -274,16 +272,21 @@ export function allocatePlans(
     .map((p) => allocateMonth(p, services, history, options));
 }
 
-/** Próximos N meses a partir do último mês do histórico (labels PT) */
+/** Próximos N meses após o último mês válido no modelo (não usa ruptura/parcial). */
 export function suggestNextMonths(
   history: ServiceMonthRecord[],
   count = 4,
+  validMonthKeys?: number[],
 ): string[] {
   const PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   let maxKey = 0;
-  for (const h of history) {
-    const k = parseMonthKey(h.mes);
-    if (k > maxKey) maxKey = k;
+  if (validMonthKeys?.length) {
+    maxKey = Math.max(...validMonthKeys);
+  } else {
+    for (const h of history) {
+      const k = parseMonthKey(h.mes);
+      if (k > maxKey) maxKey = k;
+    }
   }
   if (maxKey === 0) {
     const now = new Date();

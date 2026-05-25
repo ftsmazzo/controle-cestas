@@ -17,7 +17,7 @@ export function hydrateDashboardState(
   janelaAnaliseMeses: number | null = null,
 ): DashboardState {
   const precisaRecalc =
-    state.forecastModelVersion !== 2 ||
+    state.forecastModelVersion !== 3 ||
     !state.previsaoAteFimAno?.length ||
     state.tendenciaProximos[0]?.mes?.startsWith('Projeção') ||
     state.insights?.mesesCompletos == null;
@@ -64,6 +64,6 @@ export function buildDashboard(
     cenariosContrato: contractScenarios(contratoMensal * 12, contratoMensal),
     uploadedAt: new Date().toISOString(),
     fileName,
-    forecastModelVersion: 2,
+    forecastModelVersion: 3,
   };
 }

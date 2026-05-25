@@ -27,8 +27,8 @@ export default function DistribuicaoMesPanel({
   previsaoProximoMes = null,
 }: Props) {
   const mesesSugeridos = useMemo(
-    () => suggestNextMonths(data.history, 6),
-    [data.history],
+    () => suggestNextMonths(data.history, 6, validMonthKeys),
+    [data.history, validMonthKeys],
   );
 
   const [mes, setMes] = useState('');
@@ -52,7 +52,7 @@ export default function DistribuicaoMesPanel({
         {
           mediaWindowMonths: janela,
           excluirMesDistribuicao: true,
-          validMonthKeys: validMonthKeys.length ? validMonthKeys : undefined,
+          validMonthKeys,
         },
       ),
     );
@@ -83,6 +83,7 @@ export default function DistribuicaoMesPanel({
         <label>
           Janela (média por equipamento)
           <select value={janelaMeses} onChange={(e) => setJanelaMeses(e.target.value)}>
+            <option value="4">Últimos 4 meses válidos</option>
             <option value="8">Últimos 8 meses válidos</option>
             <option value="12">Últimos 12 meses válidos</option>
             <option value="24">Últimos 24 meses válidos</option>
@@ -129,8 +130,12 @@ export default function DistribuicaoMesPanel({
           </h3>
           {resultado.mesesJanelaUsados.length > 0 && (
             <p className="meta janela-meses">
-              Meses na média: <strong>{resultado.mesesJanelaUsados.join(' · ')}</strong>
+              Meses válidos na média (sem Abr/Mai ruptura):{' '}
+              <strong>{resultado.mesesJanelaUsados.join(' · ')}</strong>
             </p>
+          )}
+          {resultado.alerta && (
+            <p className="error">{resultado.alerta}</p>
           )}
           <AllocationResumoBox resultado={resultado} />
           <div className="table-wrap">

@@ -35,7 +35,7 @@ function consumoMesAno(
 }
 
 export const PROJECAO_METODO_RESUMO =
-  'Com “todos os meses válidos”: regressão linear na série limpa + média limpa + sazonalidade do mesmo mês em 2025 (nota técnica). Com janela (8/12/24): só regressão nos últimos N meses válidos. Faixas pessimista/otimista = base ± desvio padrão limpo.';
+  'Para gargalos e contrato, compare com a previsão (próximo mês e média dos meses futuros no gráfico). A média limpa é só o passado observado — não substitui a tendência. Abr/2026 e Mai/2026 não entram no modelo nem na distribuição por equipamento.';
 
 export interface ProjecaoMeta {
   metodo: 'nota_tecnica' | 'janela';
@@ -48,8 +48,11 @@ export interface ProjecaoMeta {
   proximoMesPrevisto: number | null;
   inclinacaoPorMes: number;
   somaPrevisaoAno: number;
+  /** Média aritmética dos meses previstos (jun–dez) — use para comparar com contrato */
+  mediaPrevisaoFutura: number;
   anoAlvo: number;
   ultimoMesHistorico: string;
+  ultimoMesValido: string;
 }
 
 function sliceValidRows(
@@ -215,6 +218,11 @@ export function computeForecastUntilYearEnd(
 
   const { valor: proximo } = forecastNextMonth(rows, windowMonths);
   const somaPrevisaoAno = pontos.reduce((s, p) => s + p.valor, 0);
+  const mediaPrevisaoFutura =
+    pontos.length > 0 ? somaPrevisaoAno / pontos.length : 0;
+  const ultimoValido = validRows.length
+    ? validRows[validRows.length - 1].mes
+    : formatMonthKeyPt(lastObserved);
 
   return {
     pontos,
@@ -227,8 +235,10 @@ export function computeForecastUntilYearEnd(
       ),
       proximoMesPrevisto: proximo,
       somaPrevisaoAno,
+      mediaPrevisaoFutura,
       anoAlvo: targetYear,
       ultimoMesHistorico: formatMonthKeyPt(lastObserved),
+      ultimoMesValido: ultimoValido,
     },
   };
 }

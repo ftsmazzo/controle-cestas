@@ -120,6 +120,33 @@
   border: 1px solid var(--border);
 }
 
+.projecao-kpis--decisao {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.projecao-kpis--ref {
+  background: #f8fafc;
+}
+
+.projecao-kpis-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.kpi-highlight {
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+}
+
+.kpi-delta {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
 .projecao-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
