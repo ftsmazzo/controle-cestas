@@ -1,3 +1,4 @@
+import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
 import { useData } from '../../context/DataContext';
 import DecisionDashboard from '../../components/DecisionDashboard';
 
@@ -23,10 +24,7 @@ export default function DecisionHomePage() {
     );
   }
 
-  const janela =
-    payload?.settings?.methodology.janelaAnaliseMeses ??
-    payload?.settings?.methodology.janelaMediaMeses ??
-    8;
+  const janela = resolveJanelaAnaliseMeses(payload?.settings?.methodology);
 
   const riskClass =
     dashboard.kpis.riscoRuptura === 'Verde'

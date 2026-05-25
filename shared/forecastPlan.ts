@@ -3,7 +3,7 @@ import {
   pickWindowKeys,
   validMonthKeysFromRows,
 } from './analysisWindow.js';
-import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
+import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
 import type { ForecastPoint, ProcessedMonthRow } from './types.js';
 
 function incrementMonthKey(key: number): number {
@@ -13,16 +13,41 @@ function incrementMonthKey(key: number): number {
   return year * 100 + month + 1;
 }
 
+function populationStdDev(values: number[]): number {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance =
+    values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function consumoMesAno(
+  rows: ProcessedMonthRow[],
+  year: number,
+  month: number,
+): number | null {
+  const hit = rows.find((r) => {
+    if (r.usoNoModelo !== 'Sim') return false;
+    const ym = getYearMonth(r.mes);
+    return ym?.year === year && ym.month === month;
+  });
+  return hit?.total ?? null;
+}
+
 export const PROJECAO_METODO_RESUMO =
-  'Tendência calculada só com meses válidos na janela escolhida (ex.: últimos 8 ou 12). A linha roxa no gráfico é regressão linear nessa janela — o mesmo recorte usado em Distribuir mês. Não confundir com a soma das médias por equipamento (só referência na divisão).';
+  'Com “todos os meses válidos”: regressão linear na série limpa + média limpa + sazonalidade do mesmo mês em 2025 (nota técnica). Com janela (8/12/24): só regressão nos últimos N meses válidos. Faixas pessimista/otimista = base ± desvio padrão limpo.';
 
 export interface ProjecaoMeta {
+  metodo: 'nota_tecnica' | 'janela';
   janelaMeses: number | null;
   mesesNaJanela: string[];
   mesesValidosTotal: number;
   mediaJanela: number;
+  mediaLimpaTotal: number;
+  desvioPadraoLimpo: number;
   proximoMesPrevisto: number | null;
   inclinacaoPorMes: number;
+  somaPrevisaoAno: number;
   anoAlvo: number;
   ultimoMesHistorico: string;
 }
@@ -36,42 +61,101 @@ function sliceValidRows(
   return valid.slice(-windowMonths);
 }
 
-/** Próximo mês após o último observado, usando a mesma janela da tendência. */
+/** Base mensal: linear + média limpa + referência 2025 (mesmo mês). */
+function forecastBaseNotaTecnica(
+  linear: number,
+  mediaLimpa: number,
+  ref2025: number | null,
+): number {
+  if (ref2025 != null) {
+    return Math.round(linear * 0.5 + mediaLimpa * 0.25 + ref2025 * 0.25);
+  }
+  return Math.round(linear * 0.6 + mediaLimpa * 0.4);
+}
+
+function buildMetaBase(
+  validRows: ProcessedMonthRow[],
+  windowRows: ProcessedMonthRow[],
+  windowMonths: number | null,
+  metodo: ProjecaoMeta['metodo'],
+): Pick<
+  ProjecaoMeta,
+  | 'metodo'
+  | 'janelaMeses'
+  | 'mesesNaJanela'
+  | 'mesesValidosTotal'
+  | 'mediaJanela'
+  | 'mediaLimpaTotal'
+  | 'desvioPadraoLimpo'
+  | 'inclinacaoPorMes'
+> {
+  const ysAll = validRows.map((r) => r.total);
+  const ysWin = windowRows.map((r) => r.total);
+  const xsWin = windowRows.map((_, i) => i + 1);
+  const { slope } = linearRegression(xsWin, ysWin);
+  const validKeys = validMonthKeysFromRows(validRows);
+  const picked = pickWindowKeys(validKeys, windowMonths);
+
+  return {
+    metodo,
+    janelaMeses: windowMonths,
+    mesesNaJanela: picked.map(formatMonthKeyPt),
+    mesesValidosTotal: validKeys.length,
+    mediaJanela:
+      ysWin.length > 0 ? ysWin.reduce((a, b) => a + b, 0) / ysWin.length : 0,
+    mediaLimpaTotal:
+      ysAll.length > 0 ? ysAll.reduce((a, b) => a + b, 0) / ysAll.length : 0,
+    desvioPadraoLimpo: populationStdDev(ysAll),
+    inclinacaoPorMes: slope,
+  };
+}
+
+/** Próximo mês após o último observado. */
 export function forecastNextMonth(
   rows: ProcessedMonthRow[],
   windowMonths: number | null | undefined,
-): { valor: number | null; meta: Omit<ProjecaoMeta, 'anoAlvo' | 'ultimoMesHistorico'> & Partial<ProjecaoMeta> } {
-  const allValidKeys = validMonthKeysFromRows(rows);
+): {
+  valor: number | null;
+  meta: Partial<ProjecaoMeta>;
+} {
+  const useNota = windowMonths == null || windowMonths <= 0;
+  const validRows = rows.filter((r) => r.usoNoModelo === 'Sim');
   const windowRows = sliceValidRows(rows, windowMonths);
+
   if (windowRows.length < 2) {
     return {
       valor: windowRows.length === 1 ? windowRows[0].total : null,
-      meta: {
-        janelaMeses: windowMonths ?? null,
-        mesesNaJanela: windowRows.map((r) => r.mes),
-        mesesValidosTotal: allValidKeys.length,
-        mediaJanela: windowRows[0]?.total ?? 0,
-        proximoMesPrevisto: null,
-        inclinacaoPorMes: 0,
-      },
+      meta: buildMetaBase(validRows, windowRows, windowMonths ?? null, useNota ? 'nota_tecnica' : 'janela'),
     };
   }
 
   const xs = windowRows.map((_, i) => i + 1);
   const ys = windowRows.map((r) => r.total);
-  const { slope } = linearRegression(xs, ys);
-  const media = ys.reduce((a, b) => a + b, 0) / ys.length;
-  const nextVal = Math.max(0, Math.round(forecastLinear(xs.length + 1, xs, ys)));
+  const mediaLimpa =
+    validRows.reduce((s, r) => s + r.total, 0) / validRows.length;
+  const linear = forecastLinear(xs.length + 1, xs, ys);
+
+  const lastKey = Math.max(
+    ...rows.map((r) => parseMonthKey(r.mes)).filter((k) => k > 0),
+  );
+  const nextKey = incrementMonthKey(lastKey);
+  const nextMonth = nextKey % 100;
+  const ref2025 = useNota ? consumoMesAno(rows, 2025, nextMonth) : null;
+
+  const valor = useNota
+    ? forecastBaseNotaTecnica(linear, mediaLimpa, ref2025)
+    : Math.max(0, Math.round(linear));
 
   return {
-    valor: nextVal,
+    valor,
     meta: {
-      janelaMeses: windowMonths ?? null,
-      mesesNaJanela: windowRows.map((r) => r.mes),
-      mesesValidosTotal: allValidKeys.length,
-      mediaJanela: media,
-      proximoMesPrevisto: nextVal,
-      inclinacaoPorMes: slope,
+      ...buildMetaBase(
+        validRows,
+        windowRows,
+        windowMonths ?? null,
+        useNota ? 'nota_tecnica' : 'janela',
+      ),
+      proximoMesPrevisto: valor,
     },
   };
 }
@@ -82,15 +166,19 @@ export function computeForecastUntilYearEnd(
   options?: { endYear?: number; windowMonths?: number | null },
 ): { pontos: ForecastPoint[]; meta: ProjecaoMeta | null } {
   const windowMonths = options?.windowMonths;
+  const useNota = windowMonths == null || windowMonths <= 0;
+  const validRows = rows.filter((r) => r.usoNoModelo === 'Sim');
   const windowRows = sliceValidRows(rows, windowMonths);
+
   if (windowRows.length < 2) {
     return { pontos: [], meta: null };
   }
 
   const xs = windowRows.map((_, i) => i + 1);
   const ys = windowRows.map((r) => r.total);
-  const { slope } = linearRegression(xs, ys);
-  const media = ys.reduce((a, b) => a + b, 0) / ys.length;
+  const mediaLimpa =
+    validRows.reduce((s, r) => s + r.total, 0) / validRows.length;
+  const stdLimpa = populationStdDev(validRows.map((r) => r.total));
 
   const allKeys = rows.map((r) => parseMonthKey(r.mes)).filter((k) => k > 0);
   if (!allKeys.length) return { pontos: [], meta: null };
@@ -105,30 +193,40 @@ export function computeForecastUntilYearEnd(
 
   while (cursor <= endKey) {
     x += 1;
-    const valor = Math.max(0, Math.round(forecastLinear(x, xs, ys)));
+    const linear = forecastLinear(x, xs, ys);
+    const monthNum = cursor % 100;
+    const ref2025 = useNota ? consumoMesAno(rows, 2025, monthNum) : null;
+    const base = useNota
+      ? forecastBaseNotaTecnica(linear, mediaLimpa, ref2025)
+      : Math.max(0, Math.round(linear));
+    const pessimista = Math.max(0, Math.round(base - stdLimpa));
+    const otimista = Math.round(base + stdLimpa);
+
     pontos.push({
       mes: formatMonthKeyPt(cursor),
-      valor,
+      valor: base,
       tipo: 'projecao',
+      valorPessimista: useNota ? pessimista : undefined,
+      valorOtimista: useNota ? otimista : undefined,
     });
     cursor = incrementMonthKey(cursor);
     if (pontos.length > 18) break;
   }
 
   const { valor: proximo } = forecastNextMonth(rows, windowMonths);
-
-  const validKeys = validMonthKeysFromRows(rows);
-  const picked = pickWindowKeys(validKeys, windowMonths);
+  const somaPrevisaoAno = pontos.reduce((s, p) => s + p.valor, 0);
 
   return {
     pontos,
     meta: {
-      janelaMeses: windowMonths ?? null,
-      mesesNaJanela: picked.map(formatMonthKeyPt),
-      mesesValidosTotal: validKeys.length,
-      mediaJanela: media,
+      ...buildMetaBase(
+        validRows,
+        windowRows,
+        windowMonths ?? null,
+        useNota ? 'nota_tecnica' : 'janela',
+      ),
       proximoMesPrevisto: proximo,
-      inclinacaoPorMes: slope,
+      somaPrevisaoAno,
       anoAlvo: targetYear,
       ultimoMesHistorico: formatMonthKeyPt(lastObserved),
     },

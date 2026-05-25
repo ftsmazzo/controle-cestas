@@ -25,10 +25,48 @@ export interface MethodologySettings {
   excludeYear2023: boolean;
   /** Jan–Mar/2022 como legado COVID */
   exclude2022Q1: boolean;
-  /** Últimos N meses válidos para tendência, previsão e distribuição (padrão 8) */
-  janelaMediaMeses: number;
-  /** null = todos os meses válidos na janela */
+  /** Últimos N meses válidos — legado; use janelaAnaliseMeses */
+  janelaMediaMeses: number | null;
+  /** null = todos os meses válidos (nota técnica); N = últimos N válidos */
   janelaAnaliseMeses: number | null;
+}
+
+/** Lê janela salva sem confundir null (todos) com ausência de valor. */
+export function resolveJanelaAnaliseMeses(
+  m: MethodologySettings | undefined | null,
+): number | null {
+  if (!m) return null;
+  if (m.janelaAnaliseMeses === null) return null;
+  if (m.janelaAnaliseMeses != null && m.janelaAnaliseMeses > 0) {
+    return m.janelaAnaliseMeses;
+  }
+  if (m.janelaMediaMeses === null) return null;
+  if (m.janelaMediaMeses != null && m.janelaMediaMeses > 0) {
+    return m.janelaMediaMeses;
+  }
+  return null;
+}
+
+export function mergeMethodologySettings(
+  base: MethodologySettings,
+  partial?: Partial<MethodologySettings> | null,
+): MethodologySettings {
+  if (!partial) return { ...base };
+  const merged: MethodologySettings = {
+    ...base,
+    ...partial,
+    overrides: {
+      ...base.overrides,
+      ...partial.overrides,
+    },
+  };
+  if ('janelaAnaliseMeses' in partial) {
+    merged.janelaAnaliseMeses = partial.janelaAnaliseMeses ?? null;
+  }
+  if ('janelaMediaMeses' in partial) {
+    merged.janelaMediaMeses = partial.janelaMediaMeses ?? null;
+  }
+  return merged;
 }
 
 export const NOTA_COVID_2022 =
@@ -42,8 +80,8 @@ export function defaultMethodologySettings(): MethodologySettings {
     overrides: {},
     excludeYear2023: true,
     exclude2022Q1: true,
-    janelaMediaMeses: 8,
-    janelaAnaliseMeses: 8,
+    janelaMediaMeses: null,
+    janelaAnaliseMeses: null,
   };
 }
 
@@ -178,7 +216,7 @@ export function resolveMonthFromMethodology(
   if (ym?.year === 2026 && ym.month === 5) {
     return {
       status: 'Parcial',
-      observacao: existingObs?.trim() || 'Mai/2026: parcial.',
+      observacao: existingObs?.trim() || 'Mai/2026: mês parcial.',
       excluirDoModelo: true,
       tag: 'partial',
     };
@@ -192,12 +230,12 @@ export function resolveMonthFromMethodology(
 }
 
 export function applyMethodologyToRawRows(
-  rows: RawMonthRow[],
+  raw: RawMonthRow[],
   settings: MethodologySettings,
 ): RawMonthRow[] {
-  const months = rows.map((r) => r.mes);
+  const months = raw.map((r) => r.mes);
   const overrides = buildDefaultOverrides(settings, months);
-  return rows.map((r) => {
+  return raw.map((r) => {
     const resolved = resolveMonthFromMethodology(
       r.mes,
       overrides,
@@ -214,10 +252,10 @@ export function applyMethodologyToRawRows(
 }
 
 export function listMethodologyTable(
-  rows: RawMonthRow[],
+  raw: RawMonthRow[],
   settings: MethodologySettings,
 ): MethodologyMonthOverride[] {
-  const months = rows.map((r) => r.mes);
+  const months = raw.map((r) => r.mes);
   const overrides = buildDefaultOverrides(settings, months);
   return Object.values(overrides).sort(
     (a, b) => parseMonthKey(a.mes) - parseMonthKey(b.mes),

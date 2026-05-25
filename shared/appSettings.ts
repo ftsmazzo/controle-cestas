@@ -1,5 +1,6 @@
 import {
   defaultMethodologySettings,
+  mergeMethodologySettings,
   type MethodologySettings,
 } from './methodologyCalendar.js';
 
@@ -30,21 +31,9 @@ export function mergeAppSettings(partial?: Partial<AppSettings> | null): AppSett
         : base.saldoEstoque,
     contratoMensal: partial.contratoMensal ?? base.contratoMensal,
     contratoAnual: partial.contratoAnual ?? base.contratoAnual,
-    methodology: {
-      ...base.methodology,
-      ...partial.methodology,
-      janelaAnaliseMeses:
-        partial.methodology?.janelaAnaliseMeses ??
-        partial.methodology?.janelaMediaMeses ??
-        base.methodology.janelaAnaliseMeses,
-      janelaMediaMeses:
-        partial.methodology?.janelaMediaMeses ??
-        partial.methodology?.janelaAnaliseMeses ??
-        base.methodology.janelaMediaMeses,
-      overrides: {
-        ...base.methodology.overrides,
-        ...partial.methodology?.overrides,
-      },
-    },
+    methodology: mergeMethodologySettings(
+      base.methodology,
+      partial.methodology,
+    ),
   };
 }

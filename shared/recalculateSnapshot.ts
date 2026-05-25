@@ -2,6 +2,7 @@ import { buildDashboard } from './buildDashboard.js';
 import {
   applyMethodologyToRawRows,
   defaultMethodologySettings,
+  resolveJanelaAnaliseMeses,
   type MethodologySettings,
 } from './methodologyCalendar.js';
 import { aggregateHistoryByMonth } from './processAnalysis.js';
@@ -40,10 +41,7 @@ export function recalculateSnapshot(
   const raw = rawTotalsFromHistory(payload);
   const fileName =
     payload.meta?.sourceFile ?? 'Histórico por equipamento (fonte única)';
-  const janela =
-    settings.methodology.janelaAnaliseMeses ??
-    settings.methodology.janelaMediaMeses ??
-    8;
+  const janela = resolveJanelaAnaliseMeses(settings.methodology);
   const state = buildDashboard(
     raw,
     fileName,

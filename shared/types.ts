@@ -38,6 +38,10 @@ export interface ForecastPoint {
   mes: string;
   valor: number;
   tipo: 'historico' | 'projecao';
+  /** Cenário conservador (base − desvio limpo) — nota técnica */
+  valorPessimista?: number;
+  /** Cenário otimista (base + desvio limpo) */
+  valorOtimista?: number;
 }
 
 export interface ContractScenario {
@@ -56,8 +60,10 @@ export interface DashboardState {
   insights: InsightsKpis;
   forecast: ForecastPoint[];
   tendenciaProximos: ForecastPoint[];
-  /** Previsão linear até dezembro do ano (meses nomeados, ex. Jun/2026…) */
+  /** Previsão até dezembro (meses nomeados, ex. Jun/2026…) */
   previsaoAteFimAno?: ForecastPoint[];
+  /** Bump quando o motor de previsão muda (força recálculo no hydrate) */
+  forecastModelVersion?: number;
   mediaMovelUltimos3: number | null;
   cenariosContrato: ContractScenario[];
   uploadedAt: string;

@@ -14,9 +14,10 @@ export function hydrateDashboardState(
   state: DashboardState,
   saldoAtual: number | null,
   contratoMensal = 1200,
-  janelaAnaliseMeses: number | null = 8,
+  janelaAnaliseMeses: number | null = null,
 ): DashboardState {
   const precisaRecalc =
+    state.forecastModelVersion !== 2 ||
     !state.previsaoAteFimAno?.length ||
     state.tendenciaProximos[0]?.mes?.startsWith('Projeção') ||
     state.insights?.mesesCompletos == null;
@@ -41,7 +42,7 @@ export function buildDashboard(
   fileName: string,
   saldoAtual: number | null,
   contratoMensal = 1200,
-  janelaAnaliseMeses: number | null = 8,
+  janelaAnaliseMeses: number | null = null,
 ): DashboardState {
   const rows = processSeries(raw);
   const kpis = computeKpis(rows, saldoAtual);
@@ -63,5 +64,6 @@ export function buildDashboard(
     cenariosContrato: contractScenarios(contratoMensal * 12, contratoMensal),
     uploadedAt: new Date().toISOString(),
     fileName,
+    forecastModelVersion: 2,
   };
 }

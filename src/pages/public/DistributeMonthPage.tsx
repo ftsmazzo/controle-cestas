@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
 import { forecastNextMonth } from '@shared/forecastPlan';
 import { validMonthKeysForPayload } from '@shared/payloadAnalysis';
 import { useData } from '../../context/DataContext';
@@ -8,10 +9,7 @@ export default function DistributeMonthPage() {
   const { loading, payload, dashboard } = useData();
 
   const janela = useMemo(
-    () =>
-      payload?.settings?.methodology.janelaAnaliseMeses ??
-      payload?.settings?.methodology.janelaMediaMeses ??
-      8,
+    () => resolveJanelaAnaliseMeses(payload?.settings?.methodology),
     [payload],
   );
 

@@ -8,6 +8,8 @@ import { recalculateSnapshot } from '../shared/recalculateSnapshot.js';
 import {
   defaultMethodologySettings,
   listMethodologyTable,
+  mergeMethodologySettings,
+  resolveJanelaAnaliseMeses,
 } from '../shared/methodologyCalendar.js';
 import { rawRowsFromPayload } from '../shared/syncFromServices.js';
 import type { DashboardState } from '../shared/types.js';
@@ -98,10 +100,7 @@ async function start() {
       if (stored.state && !snapshot.state) {
         snapshot = { state: stored.state, saldoEstoque: stored.saldoAtual };
       } else if (snapshot.state) {
-        const janela =
-          payload.settings?.methodology.janelaAnaliseMeses ??
-          payload.settings?.methodology.janelaMediaMeses ??
-          8;
+        const janela = resolveJanelaAnaliseMeses(payload.settings?.methodology);
         const hydrated = hydrateDashboardState(
           snapshot.state,
           snapshot.saldoEstoque,
@@ -299,9 +298,17 @@ async function start() {
     try {
       const existing = await getServicesData();
       const body = req.body as Partial<AppSettings>;
+      const base = mergeAppSettings(existing.settings);
+      const settings = mergeAppSettings({
+        ...base,
+        ...body,
+        methodology: body.methodology
+          ? mergeMethodologySettings(base.methodology, body.methodology)
+          : base.methodology,
+      });
       const { payload } = await persistAndRecalculate({
         ...existing,
-        settings: mergeAppSettings({ ...existing.settings, ...body }),
+        settings,
       });
       res.json(payload);
     } catch (e) {

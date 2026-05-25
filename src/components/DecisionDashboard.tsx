@@ -35,7 +35,7 @@ interface Props {
 export default function DecisionDashboard({
   dashboard,
   contratoMensal = 1200,
-  janelaAnaliseMeses = 8,
+  janelaAnaliseMeses = null,
 }: Props) {
   const previsaoAno = useMemo(
     () =>
@@ -73,6 +73,8 @@ export default function DecisionDashboard({
       mes: p.mes,
       observado: null as number | null,
       previsao: p.valor,
+      previsaoMin: p.valorPessimista ?? null,
+      previsaoMax: p.valorOtimista ?? null,
       excluido: false,
     }));
     return [...hist, ...prev];
@@ -108,25 +110,35 @@ export default function DecisionDashboard({
       <section className="panel projecao-kpis">
         <div className="projecao-kpi-grid">
           <div>
-            <span className="kpi-label">Próximo mês (previsão)</span>
+            <span className="kpi-label">Próximo mês (base)</span>
             <strong className="kpi-big">{num(proximoMes.valor)}</strong>
-            <span className="hint-inline">Mesma janela: {janelaLabel}</span>
+            <span className="hint-inline">
+              {meta?.metodo === 'nota_tecnica' ? 'Nota técnica' : 'Regressão na janela'} ·{' '}
+              {janelaLabel}
+            </span>
           </div>
           <div>
-            <span className="kpi-label">Média na janela</span>
-            <strong>{num(meta?.mediaJanela ?? dashboard.kpis.mediaMensalValida)}</strong>
+            <span className="kpi-label">Média limpa (todos válidos)</span>
+            <strong>{num(meta?.mediaLimpaTotal ?? dashboard.kpis.mediaMensalValida)}</strong>
+          </div>
+          <div>
+            <span className="kpi-label">Desvio padrão limpo</span>
+            <strong>{num(meta?.desvioPadraoLimpo ?? dashboard.kpis.desvioPadrao)}</strong>
+          </div>
+          <div>
+            <span className="kpi-label">Forecast jun–dez/{meta?.anoAlvo ?? 2026}</span>
+            <strong>{num(meta?.somaPrevisaoAno ?? null)}</strong>
+          </div>
+          <div>
+            <span className="kpi-label">Inclinação tendência</span>
+            <strong>
+              {inclinacao >= 0 ? '+' : ''}
+              {num(inclinacao)}/mês
+            </strong>
           </div>
           <div>
             <span className="kpi-label">Contrato</span>
             <strong>{num(contratoMensal)}/mês</strong>
-          </div>
-          <div>
-            <span className="kpi-label">vs contrato (1ª previsão)</span>
-            <strong>
-              {ins.projecao1VsContrato != null
-                ? `${ins.projecao1VsContrato >= 0 ? '+' : ''}${num(ins.projecao1VsContrato)}`
-                : '—'}
-            </strong>
           </div>
         </div>
         <p className="hint projecao-hint">{PROJECAO_METODO_RESUMO}</p>
@@ -142,11 +154,11 @@ export default function DecisionDashboard({
         <h2>Consumo total e previsão</h2>
         <p className="hint">
           Barras = total mensal (soma dos equipamentos). Vermelho/amarelo = fora do modelo. Linha
-          roxa = regressão na janela ({janelaLabel}). Verde = contrato {num(contratoMensal)}/mês.
-          {meta && (
-            <>
-              {' '}
-              Meses na janela: {meta.mesesNaJanela.join(', ')}.
+          roxa = cenário base ({janelaLabel}). Tracejado claro = pessimista/otimista (± desvio, só no
+          modo nota técnica). Verde = contrato {num(contratoMensal)}/mês.
+          {meta && meta.mesesNaJanela.length > 0 && (
+            <> Meses no cálculo: {meta.mesesNaJanela.slice(-6).join(', ')}
+              {meta.mesesNaJanela.length > 6 ? '…' : ''}.
             </>
           )}
         </p>
@@ -167,13 +179,37 @@ export default function DecisionDashboard({
             <Line
               type="monotone"
               dataKey="previsao"
-              name="Previsão"
+              name="Previsão (base)"
               stroke="#9333ea"
               strokeWidth={2.5}
               strokeDasharray="6 3"
               dot={{ r: 4, fill: '#9333ea' }}
               connectNulls
             />
+            {meta?.metodo === 'nota_tecnica' && (
+              <>
+                <Line
+                  type="monotone"
+                  dataKey="previsaoMin"
+                  name="Pessimista"
+                  stroke="#94a3b8"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                  dot={false}
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="previsaoMax"
+                  name="Otimista"
+                  stroke="#64748b"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                  dot={false}
+                  connectNulls
+                />
+              </>
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </section>

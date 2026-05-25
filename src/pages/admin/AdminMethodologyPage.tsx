@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { defaultMethodologySettings } from '@shared/methodologyCalendar';
+import {
+  defaultMethodologySettings,
+  resolveJanelaAnaliseMeses,
+} from '@shared/methodologyCalendar';
 import { useData } from '../../context/DataContext';
 import { saveSettings } from '../../lib/snapshotApi';
 
@@ -18,10 +21,8 @@ export default function AdminMethodologyPage() {
   if (loading || !payload) return null;
 
   const m = payload.settings?.methodology ?? defaultMethodologySettings();
-  const janelaAtual =
-    m.janelaAnaliseMeses ?? m.janelaMediaMeses ?? 8;
-  const janelaSelect =
-    janelaAtual == null ? 'all' : String(janelaAtual);
+  const janelaAtual = resolveJanelaAnaliseMeses(m);
+  const janelaSelect = janelaAtual == null ? 'all' : String(janelaAtual);
 
   const save = async (patch: Partial<typeof m>) => {
     setSaving(true);
@@ -43,7 +44,7 @@ export default function AdminMethodologyPage() {
     const opt = JANELA_OPCOES.find((o) => o.value === value) ?? JANELA_OPCOES[0];
     void save({
       janelaAnaliseMeses: opt.meses,
-      janelaMediaMeses: opt.meses ?? 8,
+      janelaMediaMeses: opt.meses,
     });
   };
 
@@ -51,8 +52,10 @@ export default function AdminMethodologyPage() {
     <section className="panel">
       <h2>Metodologia e janela de análise</h2>
       <p className="hint">
-        Meses excluídos (COVID, 2023, ruptura) continuam no histórico, mas não entram na média nem
-        na previsão. A janela abaixo vale para o painel e para Distribuir mês.
+        <strong>Todos os meses válidos</strong> usa a mesma lógica da nota técnica (regressão na
+        série limpa + sazonalidade 2025 + faixas ± desvio). <strong>8/12/24</strong> usa só os
+        últimos N meses na regressão. Meses excluídos (COVID, 2023, Abr/Mai 2026) permanecem visíveis
+        no histórico.
       </p>
 
       <div className="config-grid">
