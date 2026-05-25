@@ -1,7 +1,12 @@
 import { buildDashboard } from './buildDashboard.js';
-import { computeServiceStats } from './allocation.js';
-import { computeForecast } from './calculations.js';
-import { allocateMonth } from './allocation.js';
+import {
+  allocateMonth,
+  computeServiceStats,
+  type AllocateOptions,
+} from './allocation.js';
+import { computeForecastUntilYearEnd, forecastNextMonth } from './forecastPlan.js';
+import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
+import { processedRowsFromPayload } from './payloadAnalysis.js';
 import { parseMonthKey } from './monthUtils.js';
 import type {
   ProcessoEmergencialAnalise,
@@ -10,6 +15,7 @@ import type {
   ProcessoRegularConfig,
   ProcessoRiscoItem,
 } from './processTypes.js';
+import { mergeAppSettings, type AppSettings } from './appSettings.js';
 import type { RawMonthRow } from './types.js';
 import type { ServiceDef, ServiceMonthRecord } from './serviceTypes.js';
 
@@ -42,13 +48,14 @@ export function analyzeEmergencial(
   config: ProcessoEmergencialConfig,
   services: ServiceDef[],
   history: ServiceMonthRecord[],
+  allocateOptions?: AllocateOptions,
 ): ProcessoEmergencialAnalise {
   const stats = computeServiceStats(history, services.map((s) => s.id));
   const demandaMensalRef = stats.reduce((s, x) => s + x.mediaHistorica, 0);
 
   const meses = config.plans.map((plan) => {
     const disp = plan.totalDisponivel || config.cestasPorMes;
-    const result = allocateMonth(plan, services, history);
+    const result = allocateMonth(plan, services, history, allocateOptions);
     const demanda = result.totalDemandaReferencia;
     const gap = demanda - disp;
     return {
@@ -80,7 +87,10 @@ export function analyzeEmergencial(
     });
   }
 
-  const total4 = config.plans.reduce((s, p) => s + (p.totalDisponivel || config.cestasPorMes), 0);
+  const total4 = config.plans.reduce(
+    (s, p) => s + (p.totalDisponivel || config.cestasPorMes),
+    0,
+  );
   if (total4 < demandaMensalRef * config.duracaoMeses) {
     alertas.push({
       nivel: 'critico',
@@ -96,14 +106,40 @@ export function analyzeRegular(
   config: ProcessoRegularConfig,
   history: ServiceMonthRecord[],
   historicoMensal?: RawMonthRow[],
+  settings?: AppSettings,
 ): ProcessoRegularAnalise {
   const rows =
     historicoMensal && historicoMensal.length > 0
       ? historicoMensal
       : aggregateHistoryByMonth(history);
 
-  const dash = buildDashboard(rows, 'Processo regular', config.saldoAtual);
-  const { tendencia } = computeForecast(dash.rows, 3);
+  const dash = buildDashboard(
+    rows,
+    'Processo regular',
+    config.saldoAtual,
+    config.cestasContratoMensal,
+    resolveJanelaAnaliseMeses(settings?.methodology),
+  );
+
+  const janela = resolveJanelaAnaliseMeses(settings?.methodology);
+  const processed =
+    historicoMensal && historicoMensal.length >= 3
+      ? dash.rows
+      : processedRowsFromPayload({
+          history,
+          settings: mergeAppSettings(settings),
+        });
+
+  const { valor: previsaoProximoMes } = forecastNextMonth(processed, janela);
+  const { pontos: previsaoPontos } = computeForecastUntilYearEnd(processed, {
+    windowMonths: janela,
+  });
+  const futuros = previsaoPontos.filter((p) => p.tipo === 'projecao');
+  const previsaoProximos3 = futuros.slice(0, 3).map((p) => p.valor);
+  const mediaPrevisaoFutura =
+    futuros.length > 0
+      ? futuros.reduce((s, p) => s + p.valor, 0) / futuros.length
+      : null;
 
   const totalPlanejado12 = config.plans.reduce(
     (s, p) => s + (p.totalDisponivel > 0 ? p.totalDisponivel : 0),
@@ -111,8 +147,17 @@ export function analyzeRegular(
   );
 
   const media = dash.kpis.mediaMensalValida;
+  const refContrato =
+    mediaPrevisaoFutura != null
+      ? Math.round(mediaPrevisaoFutura)
+      : previsaoProximoMes ?? media;
+
   const mesesCobertos =
-    media > 0 ? config.totalContratoAnual / media : 0;
+    refContrato > 0 ? config.totalContratoAnual / refContrato : 0;
+  const mesesCobertosPelaPrevisao =
+    mediaPrevisaoFutura != null && mediaPrevisaoFutura > 0
+      ? config.totalContratoAnual / Math.round(mediaPrevisaoFutura)
+      : null;
 
   const alertas: ProcessoRiscoItem[] = [];
 
@@ -124,19 +169,28 @@ export function analyzeRegular(
     });
   }
 
-  if (media > config.cestasContratoMensal) {
+  if (
+    previsaoProximoMes != null &&
+    previsaoProximoMes > config.cestasContratoMensal
+  ) {
     alertas.push({
       nivel: 'alto',
-      titulo: 'Consumo médio acima do contrato mensal',
-      descricao: `Média válida ${Math.round(media)} > ${config.cestasContratoMensal}/mês contratados.`,
+      titulo: 'Previsão do próximo mês acima do contrato',
+      descricao: `Previsão ~${Math.round(previsaoProximoMes)} > ${config.cestasContratoMensal}/mês contratados (média limpa histórica: ${Math.round(media)}).`,
+    });
+  } else if (media > config.cestasContratoMensal) {
+    alertas.push({
+      nivel: 'moderado',
+      titulo: 'Média histórica acima do contrato mensal',
+      descricao: `Média válida ${Math.round(media)} > ${config.cestasContratoMensal}/mês — use a previsão (${previsaoProximoMes != null ? Math.round(previsaoProximoMes) : '—'}) para decisão.`,
     });
   }
 
-  for (const t of tendencia) {
+  for (const t of futuros.slice(0, 3)) {
     if (t.valor > config.cestasContratoMensal * 1.1) {
       alertas.push({
         nivel: 'moderado',
-        titulo: `Projeção ${t.mes} elevada`,
+        titulo: `Previsão ${t.mes} elevada`,
         descricao: `Tendência ~${t.valor} cestas, acima do ritmo contratual.`,
       });
       break;
@@ -169,10 +223,14 @@ export function analyzeRegular(
   return {
     processo: 'regular',
     consumoMedioValido: media,
-    previsaoProximos3: tendencia.map((t) => t.valor),
+    previsaoProximoMes,
+    mediaPrevisaoFutura:
+      mediaPrevisaoFutura != null ? Math.round(mediaPrevisaoFutura) : null,
+    previsaoProximos3,
     totalPlanejado12,
     totalContratoAnual: config.totalContratoAnual,
     mesesCobertosPeloContrato: mesesCobertos,
+    mesesCobertosPelaPrevisao,
     autonomiaMeses: dash.kpis.autonomiaMeses,
     riscoRuptura: dash.kpis.riscoRuptura,
     alertas,

@@ -1,5 +1,6 @@
 import { mergeAppSettings } from './appSettings.js';
 import { defaultEmergencialConfig, defaultRegularConfig } from './processTypes.js';
+import { sanitizeProcessPlans } from './processSanitize.js';
 import type { ServiceDef, ServicesPayload } from './serviceTypes.js';
 
 function normalizeUnit(s: ServiceDef): ServiceDef {
@@ -15,8 +16,12 @@ export function normalizeServicesPayload(
 ): ServicesPayload {
   const history = raw.history ?? [];
   const settings = mergeAppSettings(raw.settings);
-  const emergencial = raw.emergencial ?? defaultEmergencialConfig(history);
-  const regular = raw.regular ?? defaultRegularConfig(history);
+  const base = { history, settings };
+  let emergencial = raw.emergencial ?? defaultEmergencialConfig(base);
+  let regular = raw.regular ?? defaultRegularConfig(base);
+  const sanitized = sanitizeProcessPlans(base, emergencial, regular);
+  emergencial = sanitized.emergencial;
+  regular = sanitized.regular;
   const plans =
     raw.plans && raw.plans.length > 0 ? raw.plans : emergencial.plans;
 

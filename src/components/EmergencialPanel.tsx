@@ -1,10 +1,18 @@
 import { useMemo, useState } from 'react';
-import { allocatePlans, suggestNextMonths } from '@shared/allocation';
+import { allocatePlans } from '@shared/allocation';
+import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
+import {
+  excludedMonthKeysForPayload,
+  validMonthKeysForPayload,
+} from '@shared/payloadAnalysis';
+import {
+  isExcludedPlanningMonth,
+  suggestPlanningMonths,
+} from '@shared/planningMonths';
 import { analyzeEmergencial } from '@shared/processAnalysis';
 import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
 import { calculateAllocation, saveServices } from '../lib/servicesApi';
 import AllocationResumoBox from './AllocationResumoBox';
-import MethodologyBanner from './MethodologyBanner';
 import './ProcessPanels.css';
 
 function num(n: number): string {
@@ -27,18 +35,44 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
   const [loading, setLoading] = useState(false);
 
   const cfg = data.emergencial;
+  const validMonthKeys = useMemo(() => validMonthKeysForPayload(data), [data]);
+  const excludedMonthKeys = useMemo(
+    () => excludedMonthKeysForPayload(data),
+    [data],
+  );
+  const janela = useMemo(
+    () => resolveJanelaAnaliseMeses(data.settings?.methodology),
+    [data.settings?.methodology],
+  );
+
+  const allocateOpts = useMemo(
+    () => ({
+      validMonthKeys,
+      mediaWindowMonths: janela,
+      excluirMesDistribuicao: true,
+    }),
+    [validMonthKeys, janela],
+  );
+
+  const planningMonths = useMemo(
+    () =>
+      suggestPlanningMonths(
+        validMonthKeys,
+        cfg.duracaoMeses,
+        excludedMonthKeys,
+      ),
+    [validMonthKeys, excludedMonthKeys, cfg.duracaoMeses],
+  );
+
   const analise = useMemo(
-    () => analyzeEmergencial(cfg, data.services, data.history),
-    [cfg, data.services, data.history],
+    () =>
+      analyzeEmergencial(cfg, data.services, data.history, allocateOpts),
+    [cfg, data.services, data.history, allocateOpts],
   );
 
   const applyPadrao1200 = () => {
     if (readOnly) return;
-    const months =
-      cfg.plans.length >= 4
-        ? cfg.plans.map((p) => p.mes)
-        : suggestNextMonths(data.history, cfg.duracaoMeses);
-    const plans = months.slice(0, cfg.duracaoMeses).map((mes) => ({
+    const plans = planningMonths.map((mes) => ({
       mes,
       totalDisponivel: cfg.cestasPorMes,
     }));
@@ -49,11 +83,18 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
     });
   };
 
+  const corrigirMeses = () => {
+    if (readOnly) return;
+    applyPadrao1200();
+  };
+
   const runCalc = async () => {
     setLoading(true);
     try {
       if (readOnly) {
-        setResults(allocatePlans(cfg.plans, data.services, data.history));
+        setResults(
+          allocatePlans(cfg.plans, data.services, data.history, allocateOpts),
+        );
         return;
       }
       const payload = { ...data, plans: cfg.plans };
@@ -69,16 +110,33 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
     }
   };
 
+  const temMesesInvalidos = cfg.plans.some(
+    (p) =>
+      isExcludedPlanningMonth(p.mes, excludedMonthKeys) ||
+      !planningMonths.includes(p.mes),
+  );
+
   return (
     <div className="process-panel">
-      <MethodologyBanner compact />
       <section className="panel">
         <h2>Processo emergencial</h2>
         <p className="hint">
-          Operação de curto prazo (ex.: <strong>1.200 cestas/mês × 4 meses</strong>). O sistema
-          divide por equipamento com base no histórico, respeitando <strong>fixos</strong>.
+          Operação de curto prazo (ex.: <strong>1.200 cestas/mês × 4 meses</strong>). Período de
+          planejamento: <strong>{planningMonths.join(' · ')}</strong> (após o último mês válido;
+          Abr/Mai/2026 fora do modelo).
           {readOnly && ' Em modo consulta, alterações não são salvas no servidor.'}
         </p>
+
+        {(temMesesInvalidos ||
+          cfg.plans.some((p) => !planningMonths.includes(p.mes))) &&
+          !readOnly && (
+            <p className="alerta-box alerta-nivel-moderado">
+              Meses antigos (ex. Abr/Mai) detectados.{' '}
+              <button type="button" className="link-btn" onClick={corrigirMeses}>
+                Corrigir para {planningMonths.join(', ')}
+              </button>
+            </p>
+          )}
 
         <div className="config-grid">
           <label>
@@ -108,21 +166,19 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
               disabled={readOnly}
               onChange={(e) => {
                 const n = parseInt(e.target.value, 10) || 4;
-                const months = suggestNextMonths(data.history, n);
+                const months = suggestPlanningMonths(
+                  validMonthKeys,
+                  n,
+                  excludedMonthKeys,
+                );
+                const plans = months.map((mes) => ({
+                  mes,
+                  totalDisponivel: cfg.cestasPorMes,
+                }));
                 onUpdate({
                   ...data,
-                  emergencial: {
-                    ...cfg,
-                    duracaoMeses: n,
-                    plans: months.map((mes) => ({
-                      mes,
-                      totalDisponivel: cfg.cestasPorMes,
-                    })),
-                  },
-                  plans: months.map((mes) => ({
-                    mes,
-                    totalDisponivel: cfg.cestasPorMes,
-                  })),
+                  emergencial: { ...cfg, duracaoMeses: n, plans },
+                  plans,
                 });
               }}
             />
@@ -164,9 +220,19 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
           ))}
         </div>
 
-        <button type="button" className="primary-btn" disabled={loading} onClick={() => void runCalc()}>
+        <button
+          type="button"
+          className="primary-btn"
+          disabled={loading || validMonthKeys.length === 0}
+          onClick={() => void runCalc()}
+        >
           Calcular distribuição por equipamento
         </button>
+        {validMonthKeys.length === 0 && (
+          <p className="error">
+            Nenhum mês válido no modelo — importe dados e confira metodologia em Admin.
+          </p>
+        )}
       </section>
 
       <section className="panel">

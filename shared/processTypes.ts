@@ -1,5 +1,6 @@
-import { suggestNextMonths } from './allocation.js';
-import type { MonthlyPlan, ServiceMonthRecord } from './serviceTypes.js';
+import { suggestPlanningMonths, excludedMonthKeysFromRows } from './planningMonths.js';
+import { processedRowsFromPayload, validMonthKeysForPayload } from './payloadAnalysis.js';
+import type { MonthlyPlan, ServicesPayload } from './serviceTypes.js';
 
 /** Processo emergencial: ex. 1.200 cestas/mês por 4 meses — distribuição por equipamento */
 export interface ProcessoEmergencialConfig {
@@ -42,19 +43,33 @@ export interface ProcessoEmergencialAnalise {
 export interface ProcessoRegularAnalise {
   processo: 'regular';
   consumoMedioValido: number;
+  previsaoProximoMes: number | null;
+  mediaPrevisaoFutura: number | null;
   previsaoProximos3: number[];
   totalPlanejado12: number;
   totalContratoAnual: number;
   mesesCobertosPeloContrato: number;
+  mesesCobertosPelaPrevisao: number | null;
   autonomiaMeses: number | null;
   riscoRuptura: 'Verde' | 'Amarelo' | 'Vermelho';
   alertas: ProcessoRiscoItem[];
 }
 
+function planningContext(
+  payload: Pick<ServicesPayload, 'history' | 'settings'>,
+): { valid: number[]; excluded: number[] } {
+  const rows = processedRowsFromPayload(payload);
+  return {
+    valid: validMonthKeysForPayload(payload),
+    excluded: excludedMonthKeysFromRows(rows),
+  };
+}
+
 export function defaultEmergencialConfig(
-  history: ServiceMonthRecord[],
+  payload: Pick<ServicesPayload, 'history' | 'settings'>,
 ): ProcessoEmergencialConfig {
-  const months = suggestNextMonths(history, 4);
+  const { valid, excluded } = planningContext(payload);
+  const months = suggestPlanningMonths(valid, 4, excluded);
   return {
     ativo: true,
     duracaoMeses: 4,
@@ -65,9 +80,10 @@ export function defaultEmergencialConfig(
 }
 
 export function defaultRegularConfig(
-  history: ServiceMonthRecord[],
+  payload: Pick<ServicesPayload, 'history' | 'settings'>,
 ): ProcessoRegularConfig {
-  const months = suggestNextMonths(history, 12);
+  const { valid, excluded } = planningContext(payload);
+  const months = suggestPlanningMonths(valid, 12, excluded);
   return {
     ativo: true,
     duracaoMeses: 12,

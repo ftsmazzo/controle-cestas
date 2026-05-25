@@ -4,6 +4,7 @@ import {
   monthKeysToLabels,
 } from './analysisWindow.js';
 import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
+import { suggestPlanningMonths } from './planningMonths.js';
 import type {
   MonthAllocationResult,
   MonthlyPlan,
@@ -272,36 +273,16 @@ export function allocatePlans(
     .map((p) => allocateMonth(p, services, history, options));
 }
 
-/** Próximos N meses após o último mês válido no modelo (não usa ruptura/parcial). */
+/** Meses de planejamento após o último válido, pulando ruptura/parcial (ex.: Abr/Mai/2026). */
 export function suggestNextMonths(
-  history: ServiceMonthRecord[],
+  _history: ServiceMonthRecord[],
   count = 4,
   validMonthKeys?: number[],
+  excludedMonthKeys?: number[],
 ): string[] {
-  const PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  let maxKey = 0;
-  if (validMonthKeys?.length) {
-    maxKey = Math.max(...validMonthKeys);
-  } else {
-    for (const h of history) {
-      const k = parseMonthKey(h.mes);
-      if (k > maxKey) maxKey = k;
-    }
-  }
-  if (maxKey === 0) {
-    const now = new Date();
-    maxKey = now.getFullYear() * 100 + now.getMonth();
-  }
-  const result: string[] = [];
-  let y = Math.floor(maxKey / 100);
-  let m = maxKey % 100;
-  for (let i = 0; i < count; i++) {
-    m += 1;
-    if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-    result.push(`${PT[m - 1]}/${y}`);
-  }
-  return result;
+  return suggestPlanningMonths(
+    validMonthKeys ?? [],
+    count,
+    excludedMonthKeys ?? [],
+  );
 }

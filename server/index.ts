@@ -16,6 +16,7 @@ import type { DashboardState } from '../shared/types.js';
 import { allocatePlans } from '../shared/allocation.js';
 import { mergeServiceDefs, mergeServiceHistory } from '../shared/mergeServices.js';
 import { normalizeServicesPayload } from '../shared/payloadNormalize.js';
+import { validMonthKeysForPayload } from '../shared/payloadAnalysis.js';
 import type { ServicesPayload } from '../shared/serviceTypes.js';
 import {
   clearDashboard,
@@ -287,7 +288,13 @@ async function start() {
         res.status(400).json({ error: 'Informe as metas do processo emergencial.' });
         return;
       }
-      const results = allocatePlans(plans, data.services, data.history);
+      const validMonthKeys = validMonthKeysForPayload(data);
+      const janela = resolveJanelaAnaliseMeses(data.settings?.methodology);
+      const results = allocatePlans(plans, data.services, data.history, {
+        validMonthKeys,
+        mediaWindowMonths: janela,
+        excluirMesDistribuicao: true,
+      });
       res.json({ results });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : 'Erro' });

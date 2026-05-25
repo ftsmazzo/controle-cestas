@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { allocateMonth, suggestNextMonths } from '@shared/allocation';
+import { allocateMonth } from '@shared/allocation';
+import { suggestPlanningMonths } from '@shared/planningMonths';
 import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
 import AllocationResumoBox from './AllocationResumoBox';
 import './DistribuicaoMesPanel.css';
@@ -16,6 +17,7 @@ function parseQty(s: string): number {
 interface Props {
   data: ServicesPayload;
   validMonthKeys?: number[];
+  excludedMonthKeys?: number[];
   janelaPadrao?: number | null;
   previsaoProximoMes?: number | null;
 }
@@ -23,12 +25,13 @@ interface Props {
 export default function DistribuicaoMesPanel({
   data,
   validMonthKeys = [],
+  excludedMonthKeys = [],
   janelaPadrao = 8,
   previsaoProximoMes = null,
 }: Props) {
   const mesesSugeridos = useMemo(
-    () => suggestNextMonths(data.history, 6, validMonthKeys),
-    [data.history, validMonthKeys],
+    () => suggestPlanningMonths(validMonthKeys, 8, excludedMonthKeys),
+    [validMonthKeys, excludedMonthKeys],
   );
 
   const [mes, setMes] = useState('');

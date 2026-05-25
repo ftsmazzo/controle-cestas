@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
 import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
 import { forecastNextMonth } from '@shared/forecastPlan';
-import { validMonthKeysForPayload } from '@shared/payloadAnalysis';
+import {
+  excludedMonthKeysForPayload,
+  validMonthKeysForPayload,
+} from '@shared/payloadAnalysis';
 import { useData } from '../../context/DataContext';
 import DistribuicaoMesPanel from '../../components/DistribuicaoMesPanel';
 
@@ -15,6 +18,11 @@ export default function DistributeMonthPage() {
 
   const validMonthKeys = useMemo(
     () => (payload ? validMonthKeysForPayload(payload) : []),
+    [payload],
+  );
+
+  const excludedMonthKeys = useMemo(
+    () => (payload ? excludedMonthKeysForPayload(payload) : []),
     [payload],
   );
 
@@ -48,6 +56,7 @@ export default function DistributeMonthPage() {
       <DistribuicaoMesPanel
         data={payload}
         validMonthKeys={validMonthKeys}
+        excludedMonthKeys={excludedMonthKeys}
         janelaPadrao={janela}
         previsaoProximoMes={previsaoProximoMes}
       />

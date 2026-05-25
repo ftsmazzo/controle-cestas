@@ -40,8 +40,8 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
   }, [cfg.plans, data.history]);
 
   const analise = useMemo(
-    () => analyzeRegular(cfg, data.history, historicoRows),
-    [cfg, data.history, historicoRows],
+    () => analyzeRegular(cfg, data.history, historicoRows, data.settings),
+    [cfg, data.history, historicoRows, data.settings],
   );
 
   const dashboard = useMemo(
@@ -191,12 +191,21 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
       <section className="panel">
         <h3>Indicadores e risco — regular</h3>
         <div className="kpi-row">
-          <div className="kpi-mini">
-            <span>Média mensal válida</span>
-            <strong>{num(analise.consumoMedioValido)}</strong>
+          <div className="kpi-mini kpi-mini--highlight">
+            <span>Previsão próximo mês</span>
+            <strong>{num(analise.previsaoProximoMes)}</strong>
+          </div>
+          <div className="kpi-mini kpi-mini--highlight">
+            <span>Média previsão futura</span>
+            <strong>{num(analise.mediaPrevisaoFutura)}</strong>
           </div>
           <div className="kpi-mini">
-            <span>Projeção (+3 meses)</span>
+            <span>Média histórica válida</span>
+            <strong>{num(analise.consumoMedioValido)}</strong>
+            <span className="hint-inline">referência passado</span>
+          </div>
+          <div className="kpi-mini">
+            <span>Previsão (+3 meses)</span>
             <strong>
               {analise.previsaoProximos3.map((v) => num(v)).join(' · ') || '—'}
             </strong>
@@ -206,8 +215,13 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
             <strong>{num(analise.totalPlanejado12)}</strong>
           </div>
           <div className="kpi-mini">
-            <span>Contrato cobre (~média)</span>
-            <strong>{analise.mesesCobertosPeloContrato.toFixed(1)} meses</strong>
+            <span>Contrato cobre (previsão)</span>
+            <strong>
+              {(analise.mesesCobertosPelaPrevisao ?? analise.mesesCobertosPeloContrato).toFixed(
+                1,
+              )}{' '}
+              meses
+            </strong>
           </div>
           <div className={`kpi-mini risco-${analise.riscoRuptura.toLowerCase()}`}>
             <span>Autonomia / Risco</span>

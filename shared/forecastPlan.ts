@@ -4,6 +4,7 @@ import {
   validMonthKeysFromRows,
 } from './analysisWindow.js';
 import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
+import { excludedMonthKeysFromRows } from './planningMonths.js';
 import type { ForecastPoint, ProcessedMonthRow } from './types.js';
 
 function incrementMonthKey(key: number): number {
@@ -183,18 +184,23 @@ export function computeForecastUntilYearEnd(
     validRows.reduce((s, r) => s + r.total, 0) / validRows.length;
   const stdLimpa = populationStdDev(validRows.map((r) => r.total));
 
-  const allKeys = rows.map((r) => parseMonthKey(r.mes)).filter((k) => k > 0);
-  if (!allKeys.length) return { pontos: [], meta: null };
+  const validKeys = validMonthKeysFromRows(validRows);
+  if (!validKeys.length) return { pontos: [], meta: null };
 
-  const lastObserved = Math.max(...allKeys);
-  const targetYear = options?.endYear ?? Math.floor(lastObserved / 100);
+  const excluded = new Set(excludedMonthKeysFromRows(rows));
+  const lastValid = Math.max(...validKeys);
+  const targetYear = options?.endYear ?? Math.floor(lastValid / 100);
   const endKey = targetYear * 100 + 12;
 
   const pontos: ForecastPoint[] = [];
-  let cursor = incrementMonthKey(lastObserved);
+  let cursor = incrementMonthKey(lastValid);
   let x = xs.length;
 
   while (cursor <= endKey) {
+    if (excluded.has(cursor)) {
+      cursor = incrementMonthKey(cursor);
+      continue;
+    }
     x += 1;
     const linear = forecastLinear(x, xs, ys);
     const monthNum = cursor % 100;
@@ -222,7 +228,7 @@ export function computeForecastUntilYearEnd(
     pontos.length > 0 ? somaPrevisaoAno / pontos.length : 0;
   const ultimoValido = validRows.length
     ? validRows[validRows.length - 1].mes
-    : formatMonthKeyPt(lastObserved);
+    : formatMonthKeyPt(lastValid);
 
   return {
     pontos,
@@ -237,7 +243,7 @@ export function computeForecastUntilYearEnd(
       somaPrevisaoAno,
       mediaPrevisaoFutura,
       anoAlvo: targetYear,
-      ultimoMesHistorico: formatMonthKeyPt(lastObserved),
+      ultimoMesHistorico: formatMonthKeyPt(lastValid),
       ultimoMesValido: ultimoValido,
     },
   };
