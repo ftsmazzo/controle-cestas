@@ -143,12 +143,6 @@
   font-size: 0.88rem;
 }
 
-.risk-strip-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 1rem;
-}
-
 .danger-btn {
   color: #b91c1c;
   border-color: #fca5a5;

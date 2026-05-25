@@ -7,6 +7,12 @@ function num(n: number | null, dec = 1): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: dec });
 }
 
+function riskModifier(risco: string): string {
+  if (risco === 'Verde') return 'verde';
+  if (risco === 'Vermelho') return 'vermelho';
+  return 'amarelo';
+}
+
 export default function DecisionHomePage() {
   const { loading, dashboard, snapshot, payload } = useData();
 
@@ -25,38 +31,62 @@ export default function DecisionHomePage() {
   }
 
   const janela = resolveJanelaAnaliseMeses(payload?.settings?.methodology);
+  const autonomia = dashboard.kpis.autonomiaMeses;
+  const risco = dashboard.kpis.riscoRuptura;
+  const riskMod = riskModifier(risco);
 
-  const riskClass =
-    dashboard.kpis.riscoRuptura === 'Verde'
-      ? 'risk-verde'
-      : dashboard.kpis.riscoRuptura === 'Amarelo'
-        ? 'risk-amarelo'
-        : 'risk-vermelho';
+  const janelaLabel =
+    janela != null && janela > 0
+      ? `Últimos ${janela} meses válidos`
+      : 'Todos os meses válidos';
 
   return (
     <>
-      <section className={`kpi-card risk-strip ${riskClass}`}>
-        <div className="risk-strip-grid">
-          <div>
-            <span className="kpi-label">Autonomia de estoque</span>
-            <strong>{num(dashboard.kpis.autonomiaMeses)} meses</strong>
-            <span className="risk-badge">{dashboard.kpis.riscoRuptura}</span>
-          </div>
-          <div>
-            <span className="kpi-label">Contrato</span>
-            <strong>{num(payload?.settings?.contratoMensal ?? 1200, 0)}/mês</strong>
-          </div>
-          <div>
-            <span className="kpi-label">Janela de análise</span>
-            <strong>{janela ? `Últimos ${janela} meses válidos` : 'Todos os válidos'}</strong>
-          </div>
-          {snapshot.saldoEstoque != null && (
-            <div>
-              <span className="kpi-label">Saldo</span>
-              <strong>{num(snapshot.saldoEstoque, 0)}</strong>
-            </div>
+      <section className={`home-kpi-strip home-kpi-strip--${riskMod}`}>
+        <article className="home-kpi-tile home-kpi-tile--primary">
+          <span className="home-kpi-label">Autonomia de estoque</span>
+          {autonomia != null ? (
+            <p className="home-kpi-value-line">
+              <span className="home-kpi-number">{num(autonomia)}</span>
+              <span className="home-kpi-unit">meses</span>
+            </p>
+          ) : (
+            <p className="home-kpi-value-line home-kpi-value-line--muted">
+              <span className="home-kpi-number">—</span>
+              <span className="home-kpi-hint">
+                Informe o saldo em <a href="/admin/contratos">Admin → Contratos</a>
+              </span>
+            </p>
           )}
-        </div>
+          <span className={`home-kpi-pill home-kpi-pill--${riskMod}`}>{risco}</span>
+        </article>
+
+        <article className="home-kpi-tile">
+          <span className="home-kpi-label">Contrato</span>
+          <p className="home-kpi-value-line">
+            <span className="home-kpi-number">
+              {num(payload?.settings?.contratoMensal ?? 1200, 0)}
+            </span>
+            <span className="home-kpi-unit">/mês</span>
+          </p>
+        </article>
+
+        <article className="home-kpi-tile">
+          <span className="home-kpi-label">Janela de análise</span>
+          <p className="home-kpi-value-line">
+            <span className="home-kpi-text">{janelaLabel}</span>
+          </p>
+        </article>
+
+        {snapshot.saldoEstoque != null && (
+          <article className="home-kpi-tile">
+            <span className="home-kpi-label">Saldo em estoque</span>
+            <p className="home-kpi-value-line">
+              <span className="home-kpi-number">{num(snapshot.saldoEstoque, 0)}</span>
+              <span className="home-kpi-unit">cestas</span>
+            </p>
+          </article>
+        )}
       </section>
 
       <DecisionDashboard
