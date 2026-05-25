@@ -77,23 +77,11 @@ export function analyzeEmergencial(
     }
   }
 
-  if (demandaMensalRef > config.cestasPorMes) {
+  if (demandaMensalRef > config.cestasPorMes * 1.05) {
     alertas.push({
-      nivel: 'alto',
-      titulo: 'Emergencial abaixo da média histórica total',
-      descricao: `Soma das médias por equipamento (${demandaMensalRef}) supera ${config.cestasPorMes}/mês. Priorize fixos e monitore ruptura nos flexíveis.`,
-    });
-  }
-
-  const total4 = config.plans.reduce(
-    (s, p) => s + (p.totalDisponivel || config.cestasPorMes),
-    0,
-  );
-  if (total4 < demandaMensalRef * config.duracaoMeses) {
-    alertas.push({
-      nivel: 'critico',
-      titulo: 'Volume emergencial insuficiente no período',
-      descricao: `${config.duracaoMeses} meses × ~${demandaMensalRef} ≈ ${demandaMensalRef * config.duracaoMeses} necessários vs ${total4} previstos.`,
+      nivel: 'moderado',
+      titulo: 'Referência equipamentos acima do volume informado',
+      descricao: `Soma das médias na janela (${demandaMensalRef}) é só referência de divisão — não é previsão nem meta. Você informou ${config.cestasPorMes}/mês; a divisão usa apenas esse total.`,
     });
   }
 

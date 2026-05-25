@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { comparativoContrato, ultimoMesValidoLabel } from '@shared/decisionMetrics';
+import { computeDecisionNumbers } from '@shared/decisionNumbers';
 import { buildChartSerie, computeInsights } from '@shared/insights';
 import {
   computeForecastUntilYearEnd,
@@ -7,6 +8,8 @@ import {
   PROJECAO_METODO_RESUMO,
 } from '@shared/forecastPlan';
 import type { DashboardState } from '@shared/types';
+import type { ServiceDef, ServiceMonthRecord } from '@shared/serviceTypes';
+import DecisionNumbersLegend from './DecisionNumbersLegend';
 import {
   Bar,
   CartesianGrid,
@@ -36,12 +39,16 @@ interface Props {
   dashboard: DashboardState;
   contratoMensal?: number;
   janelaAnaliseMeses?: number | null;
+  history?: ServiceMonthRecord[];
+  services?: ServiceDef[];
 }
 
 export default function DecisionDashboard({
   dashboard,
   contratoMensal = 1200,
   janelaAnaliseMeses = null,
+  history = [],
+  services = [],
 }: Props) {
   const previsaoAno = useMemo(
     () =>
@@ -56,15 +63,35 @@ export default function DecisionDashboard({
     [dashboard.rows, janelaAnaliseMeses],
   );
 
+  const decisionNums = useMemo(
+    () =>
+      computeDecisionNumbers(
+        dashboard.rows,
+        janelaAnaliseMeses,
+        history,
+        services,
+        dashboard.kpis,
+        proximoMes.valor,
+      ),
+    [
+      dashboard.rows,
+      dashboard.kpis,
+      janelaAnaliseMeses,
+      history,
+      services,
+      proximoMes.valor,
+    ],
+  );
+
   const cmp = useMemo(
     () =>
       comparativoContrato(
         dashboard.rows,
         contratoMensal,
-        proximoMes.valor,
+        decisionNums.previsaoProximoMes,
         previsaoAno.pontos,
       ),
-    [dashboard, contratoMensal, proximoMes, previsaoAno.pontos],
+    [dashboard.rows, contratoMensal, decisionNums.previsaoProximoMes, previsaoAno.pontos],
   );
 
   const ins = useMemo(() => {
@@ -125,19 +152,23 @@ export default function DecisionDashboard({
 
   return (
     <div className="decision-dashboard">
+      <DecisionNumbersLegend
+        numbers={decisionNums}
+        contratoMensal={contratoMensal}
+      />
       <section className="panel projecao-kpis projecao-kpis--decisao">
-        <h3 className="projecao-kpis-title">Decisão vs contrato (use a previsão)</h3>
+        <h3 className="projecao-kpis-title">Decisão vs contrato</h3>
         <div className="projecao-kpi-grid">
           <div className="kpi-highlight">
             <span className="kpi-label">Próximo mês previsto</span>
-            <strong className="kpi-big">{num(cmp.previsaoProximoMes)}</strong>
+            <strong className="kpi-big">{num(decisionNums.previsaoProximoMes)}</strong>
             <span className="kpi-delta">
               vs contrato {num(contratoMensal)}: {deltaStr(cmp.previsaoVsContrato)}
             </span>
           </div>
           <div className="kpi-highlight">
             <span className="kpi-label">Média previsão jun–dez</span>
-            <strong className="kpi-big">{num(cmp.mediaPrevisaoFutura)}</strong>
+            <strong className="kpi-big">{num(decisionNums.mediaPrevisaoJunDez)}</strong>
             <span className="kpi-delta">
               vs contrato: {deltaStr(cmp.mediaPrevisaoVsContrato)} · soma{' '}
               {num(cmp.somaPrevisaoFutura)}

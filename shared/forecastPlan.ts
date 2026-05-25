@@ -243,9 +243,14 @@ export function computeForecastUntilYearEnd(
   }
 
   const { valor: proximo } = forecastNextMonth(rows, windowMonths);
-  const somaPrevisaoAno = pontos.reduce((s, p) => s + p.valor, 0);
+  const junDez = pontos.filter((p) => {
+    const k = parseMonthKey(p.mes);
+    const m = k % 100;
+    return Math.floor(k / 100) === targetYear && m >= 6 && m <= 12;
+  });
+  const somaPrevisaoAno = junDez.reduce((s, p) => s + p.valor, 0);
   const mediaPrevisaoFutura =
-    pontos.length > 0 ? somaPrevisaoAno / pontos.length : 0;
+    junDez.length > 0 ? somaPrevisaoAno / junDez.length : 0;
   const ultimoValido = validRows.length
     ? validRows[validRows.length - 1].mes
     : formatMonthKeyPt(lastValid);

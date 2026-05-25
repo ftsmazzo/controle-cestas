@@ -1,0 +1,67 @@
+.decision-numbers-legend {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.decision-numbers-legend.compact {
+  padding: 0.75rem;
+}
+
+.decision-numbers-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.decision-numbers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.65rem;
+}
+
+.dn-card {
+  padding: 0.6rem 0.75rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.dn-card--primary {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.dn-card--ref {
+  border-style: dashed;
+  background: #fffbeb;
+}
+
+.dn-label {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.dn-value {
+  display: block;
+  font-size: 1.35rem;
+  margin: 0.15rem 0;
+}
+
+.dn-desc {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #475569;
+  line-height: 1.35;
+}
+
+.dn-footer {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}

@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
+import { computeDecisionNumbers } from '@shared/decisionNumbers';
+import { forecastNextMonth } from '@shared/forecastPlan';
 import { analyzeRegular } from '@shared/processAnalysis';
 import { recalculateSnapshot } from '@shared/recalculateSnapshot';
+import DecisionNumbersLegend from './DecisionNumbersLegend';
 import {
   buildRegularPlanTable,
   fillRegularPlansFromData,
@@ -44,13 +47,26 @@ export default function RegularPanel({
     return recalculateSnapshot(data);
   }, [decisionSnapshotProp, data]);
 
-  const dashboard = decisionSnap?.state ?? null;
-  const processedRows = dashboard?.rows ?? [];
-
   const janela = useMemo(
     () => resolveJanelaAnaliseMeses(data.settings?.methodology),
     [data.settings?.methodology],
   );
+
+  const dashboard = decisionSnap?.state ?? null;
+  const processedRows = dashboard?.rows ?? [];
+
+  const decisionNums = useMemo(() => {
+    if (!dashboard) return null;
+    const proj = forecastNextMonth(processedRows, janela).valor;
+    return computeDecisionNumbers(
+      processedRows,
+      janela,
+      data.history,
+      data.services,
+      dashboard.kpis,
+      proj,
+    );
+  }, [dashboard, processedRows, janela, data.history, data.services]);
 
   const analise = useMemo(
     () =>
@@ -114,6 +130,13 @@ export default function RegularPanel({
 
   return (
     <div className="process-panel">
+      {decisionNums && (
+        <DecisionNumbersLegend
+          numbers={decisionNums}
+          contratoMensal={cfg.cestasContratoMensal}
+          compact
+        />
+      )}
       <section className="panel">
         <h2>Processo regular (12 meses)</h2>
         <p className="hint">

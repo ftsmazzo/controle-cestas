@@ -9,10 +9,14 @@ import {
   isExcludedPlanningMonth,
   suggestPlanningMonths,
 } from '@shared/planningMonths';
+import { computeDecisionNumbers } from '@shared/decisionNumbers';
+import { forecastNextMonth } from '@shared/forecastPlan';
 import { analyzeEmergencial } from '@shared/processAnalysis';
 import type { MonthAllocationResult, ServicesPayload } from '@shared/serviceTypes';
+import type { DashboardState } from '@shared/types';
 import { calculateAllocation, saveServices } from '../lib/servicesApi';
 import AllocationResumoBox from './AllocationResumoBox';
+import DecisionNumbersLegend from './DecisionNumbersLegend';
 import './ProcessPanels.css';
 
 function num(n: number): string {
@@ -28,9 +32,16 @@ interface Props {
   data: ServicesPayload;
   onUpdate: (next: ServicesPayload) => void;
   readOnly?: boolean;
+  /** Mesma série da Visão geral — não recalcular à parte */
+  decisionDashboard?: DashboardState | null;
 }
 
-export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
+export default function EmergencialPanel({
+  data,
+  onUpdate,
+  readOnly,
+  decisionDashboard,
+}: Props) {
   const [results, setResults] = useState<MonthAllocationResult[] | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -64,11 +75,33 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
     [validMonthKeys, excludedMonthKeys, cfg.duracaoMeses],
   );
 
+  const decisionNums = useMemo(() => {
+    if (!decisionDashboard) return null;
+    const proj = forecastNextMonth(decisionDashboard.rows, janela).valor;
+    return computeDecisionNumbers(
+      decisionDashboard.rows,
+      janela,
+      data.history,
+      data.services,
+      decisionDashboard.kpis,
+      proj,
+    );
+  }, [decisionDashboard, janela, data.history, data.services]);
+
   const analise = useMemo(
     () =>
       analyzeEmergencial(cfg, data.services, data.history, allocateOpts),
     [cfg, data.services, data.history, allocateOpts],
   );
+
+  const usarPrevisaoComoMeta = () => {
+    if (readOnly || !decisionNums?.previsaoProximoMes) return;
+    const v = Math.round(decisionNums.previsaoProximoMes);
+    onUpdate({
+      ...data,
+      emergencial: { ...cfg, cestasPorMes: v },
+    });
+  };
 
   const applyPadrao1200 = () => {
     if (readOnly) return;
@@ -118,13 +151,26 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
 
   return (
     <div className="process-panel">
+      {decisionNums && (
+        <DecisionNumbersLegend
+          numbers={decisionNums}
+          contratoMensal={data.settings?.contratoMensal ?? 1200}
+          compact
+        />
+      )}
       <section className="panel">
         <h2>Processo emergencial</h2>
         <p className="hint">
-          Operação de curto prazo (ex.: <strong>1.200 cestas/mês × 4 meses</strong>). Período de
-          planejamento: <strong>{planningMonths.join(' · ')}</strong> (após o último mês válido;
-          Abr/Mai/2026 fora do modelo).
-          {readOnly && ' Em modo consulta, alterações não são salvas no servidor.'}
+          Volume informado abaixo é o que você <strong>distribui</strong>. A coluna &quot;Ref.
+          equipamentos&quot; ({decisionNums ? num(decisionNums.somaMediasEquipamentos) : '—'}){' '}
+          <strong>não é previsão</strong> — é só se cada um recebesse sua média na janela.
+          {decisionNums?.previsaoProximoMes != null && (
+            <>
+              {' '}
+              Previsão do painel: <strong>{num(decisionNums.previsaoProximoMes)}</strong>.
+            </>
+          )}
+          {readOnly && ' Modo consulta.'}
         </p>
 
         {(temMesesInvalidos ||
@@ -191,6 +237,16 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
           >
             Aplicar {num(cfg.cestasPorMes)} em todos os meses
           </button>
+          {decisionNums?.previsaoProximoMes != null && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={readOnly}
+              onClick={usarPrevisaoComoMeta}
+            >
+              Usar previsão ({num(decisionNums.previsaoProximoMes)}) como cestas/mês
+            </button>
+          )}
         </div>
 
         <div className="plans-grid">
@@ -243,7 +299,7 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
               <tr>
                 <th>Mês</th>
                 <th>Total informado</th>
-                <th>Soma médias*</th>
+                <th>Ref. equipamentos</th>
                 <th>Diferença</th>
                 <th>Risco</th>
               </tr>
@@ -262,8 +318,10 @@ export default function EmergencialPanel({ data, onUpdate, readOnly }: Props) {
           </table>
         </div>
         <p className="hint" style={{ marginTop: '0.5rem' }}>
-          * Soma médias = soma do consumo médio de cada equipamento no histórico; não é o valor a
-          distribuir. Gap = soma médias − total informado (quando positivo).
+          Ref. equipamentos = soma das médias por equipamento na janela (ex.{' '}
+          {decisionNums?.mesesSomaMediasEquip.slice(0, 3).join(', ')}…). Não confundir com
+          previsão ({decisionNums ? num(decisionNums.previsaoProximoMes) : '—'}) nem média limpa (
+          {decisionNums ? num(decisionNums.mediaLimpaHistorica) : '—'}).
         </p>
         {analise.alertas.map((a, i) => (
           <p key={i} className={`alerta-box alerta-nivel-${a.nivel}`}>

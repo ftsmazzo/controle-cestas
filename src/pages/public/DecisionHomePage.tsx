@@ -93,6 +93,8 @@ export default function DecisionHomePage() {
         dashboard={dashboard}
         contratoMensal={payload?.settings?.contratoMensal ?? 1200}
         janelaAnaliseMeses={janela}
+        history={payload?.history ?? []}
+        services={payload?.services ?? []}
       />
     </>
   );

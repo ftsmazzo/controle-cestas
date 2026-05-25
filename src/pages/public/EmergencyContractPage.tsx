@@ -2,7 +2,7 @@ import { useData } from '../../context/DataContext';
 import EmergencialPanel from '../../components/EmergencialPanel';
 
 export default function EmergencyContractPage() {
-  const { loading, payload } = useData();
+  const { loading, payload, dashboard } = useData();
 
   if (loading) return null;
 
@@ -22,7 +22,12 @@ export default function EmergencyContractPage() {
         Monitoramento do processo de curto prazo (ex.: 1.200 cestas/mês × 4 meses).
         Distribuição por equipamento com base no histórico — modo consulta (não grava).
       </p>
-      <EmergencialPanel data={payload} readOnly onUpdate={() => {}} />
+      <EmergencialPanel
+        data={payload}
+        readOnly
+        onUpdate={() => {}}
+        decisionDashboard={dashboard}
+      />
     </section>
   );
 }

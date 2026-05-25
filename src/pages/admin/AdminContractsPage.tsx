@@ -7,7 +7,7 @@ import { saveServices } from '../../lib/servicesApi';
 import type { ServicesPayload } from '@shared/serviceTypes';
 
 export default function AdminContractsPage() {
-  const { payload, reload, loading, snapshot } = useData();
+  const { payload, reload, loading, snapshot, dashboard } = useData();
   const [tab, setTab] = useState<'emergencial' | 'rp'>('emergencial');
   const [msg, setMsg] = useState<string | null>(null);
   const [draft, setDraft] = useState<ServicesPayload | null>(null);
@@ -94,7 +94,11 @@ export default function AdminContractsPage() {
       </section>
 
       {tab === 'emergencial' && (
-        <EmergencialPanel data={draft} onUpdate={patchDraft} />
+        <EmergencialPanel
+          data={draft}
+          onUpdate={patchDraft}
+          decisionDashboard={dashboard}
+        />
       )}
       {tab === 'rp' && (
         <RegularPanel

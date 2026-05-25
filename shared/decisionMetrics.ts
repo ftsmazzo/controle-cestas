@@ -26,10 +26,22 @@ export function comparativoContrato(
       ? validos.reduce((s, r) => s + r.total, 0) / validos.length
       : 0;
 
-  const futuros = pontosPrevisao.filter((p) => p.tipo === 'projecao');
-  const somaPrevisaoFutura = futuros.reduce((s, p) => s + p.valor, 0);
+  const lastKey =
+    validos.length > 0
+      ? Math.max(...validos.map((r) => parseMonthKey(r.mes)))
+      : 0;
+  const ano = lastKey > 0 ? Math.floor(lastKey / 100) : 0;
+  const futurosJunDez = pontosPrevisao.filter((p) => {
+    if (p.tipo !== 'projecao') return false;
+    const k = parseMonthKey(p.mes);
+    const m = k % 100;
+    return Math.floor(k / 100) === ano && m >= 6 && m <= 12;
+  });
+  const somaPrevisaoFutura = futurosJunDez.reduce((s, p) => s + p.valor, 0);
   const mediaPrevisaoFutura =
-    futuros.length > 0 ? somaPrevisaoFutura / futuros.length : null;
+    futurosJunDez.length > 0
+      ? somaPrevisaoFutura / futurosJunDez.length
+      : null;
 
   return {
     contratoMensal,
@@ -45,7 +57,7 @@ export function comparativoContrato(
         : null,
     mediaLimpaVsContrato: Math.round(mediaLimpa) - contratoMensal,
     somaPrevisaoFutura,
-    mesesPrevisao: futuros.length,
+    mesesPrevisao: futurosJunDez.length,
   };
 }
 
