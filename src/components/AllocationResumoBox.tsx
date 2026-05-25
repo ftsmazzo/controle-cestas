@@ -51,23 +51,26 @@ export default function AllocationResumoBox({ resultado }: Props) {
         </div>
       </div>
 
-      <div className="resumo-referencia">
-        <h5>Soma das médias históricas (só comparação — não é projeção)</h5>
+      <details className="resumo-referencia">
+        <summary>
+          Soma das médias por equipamento ({num(resumo.somaMediasHistoricas)}) — só referência
+        </summary>
         <p>
           Se cada equipamento recebesse <strong>exatamente</strong> sua média (
           {resultado.mediaJanelaMeses != null
-            ? `últimos ${resultado.mediaJanelaMeses} meses`
-            : 'todo o histórico'}
+            ? `últimos ${resultado.mediaJanelaMeses} meses válidos`
+            : 'todos os válidos'}
           {resultado.mesesJanelaUsados.length > 0 && (
             <> — {resultado.mesesJanelaUsados.join(', ')}</>
           )}
-          ), a soma seria <strong>{num(resumo.somaMediasHistoricas)} cestas</strong>.
-          Isso <strong>não</strong> é uma meta, previsão nem valor que o sistema tenta entregar.
+          ), a soma seria <strong>{num(resumo.somaMediasHistoricas)} cestas</strong>. Isso{' '}
+          <strong>não</strong> é previsão do painel nem o total a entregar — apenas comparação com
+          o passado.
         </p>
         {resumo.diferencaVsHabitual > 0 && (
           <p className="resumo-diff">
-            Diferença: <strong>−{num(resumo.diferencaVsHabitual)}</strong> em relação ao ritmo
-            habitual (você tem menos cestas este mês do que a média do passado sugeriria).
+            Você informou <strong>{num(resumo.cestasInformadas)}</strong>, ou seja{' '}
+            <strong>−{num(resumo.diferencaVsHabitual)}</strong> abaixo da soma das médias.
           </p>
         )}
         {resumo.diferencaVsHabitual <= 0 && (
@@ -75,7 +78,7 @@ export default function AllocationResumoBox({ resultado }: Props) {
             O total informado cobre ou supera a soma das médias históricas.
           </p>
         )}
-      </div>
+      </details>
 
       {aviso && (
         <div className={`allocation-aviso allocation-aviso-${aviso.nivel}`}>

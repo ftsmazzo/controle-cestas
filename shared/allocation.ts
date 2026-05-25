@@ -1,3 +1,8 @@
+import {
+  historyForMonthKeys,
+  pickWindowKeys,
+  monthKeysToLabels,
+} from './analysisWindow.js';
 import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
 import type {
   MonthAllocationResult,
@@ -13,10 +18,11 @@ function round(n: number): number {
 }
 
 export interface AllocateOptions {
-  /** Se definido, usa só os últimos N meses do histórico para calcular médias */
+  /** Últimos N meses válidos (mesma janela do painel de decisão) */
   mediaWindowMonths?: number | null;
-  /** Excluir o mês da distribuição da janela (ex.: não usar Jun/2026 na média de Jun/2026) */
   excluirMesDistribuicao?: boolean;
+  /** YYYYMM dos meses válidos no modelo — exclui 2023, COVID, ruptura etc. */
+  validMonthKeys?: number[];
 }
 
 /** Últimos N meses distintos presentes no histórico (ordem cronológica crescente nos labels) */
@@ -100,10 +106,20 @@ export function allocateMonth(
   let mesesJanelaUsados: string[] = [];
   let mediaJanelaMeses: number | null = null;
 
-  if (windowN != null && windowN > 0) {
+  const excluir = options?.excluirMesDistribuicao !== false ? plan.mes : undefined;
+  const validPool = options?.validMonthKeys?.length
+    ? [...options.validMonthKeys].sort((a, b) => a - b)
+    : null;
+
+  if (validPool) {
+    const picked = pickWindowKeys(validPool, windowN ?? null, excluir);
+    mediaJanelaMeses = windowN ?? null;
+    histForMedia = historyForMonthKeys(history, picked);
+    mesesJanelaUsados = monthKeysToLabels(picked);
+  } else if (windowN != null && windowN > 0) {
     mediaJanelaMeses = windowN;
     const { filtered, monthKeys } = filterHistoryLastMonths(history, windowN, {
-      excluirMes: options?.excluirMesDistribuicao !== false ? plan.mes : undefined,
+      excluirMes: excluir,
     });
     histForMedia = filtered;
     mesesJanelaUsados = monthKeys.map(formatMonthKeyPt);
@@ -114,6 +130,7 @@ export function allocateMonth(
       if (k > 0) keys.add(k);
     }
     mesesJanelaUsados = [...keys].sort((a, b) => a - b).map(formatMonthKeyPt);
+    histForMedia = history;
   }
 
   const stats = computeServiceStats(histForMedia, services.map((s) => s.id));

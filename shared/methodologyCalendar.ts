@@ -25,7 +25,10 @@ export interface MethodologySettings {
   excludeYear2023: boolean;
   /** Jan–Mar/2022 como legado COVID */
   exclude2022Q1: boolean;
+  /** Últimos N meses válidos para tendência, previsão e distribuição (padrão 8) */
   janelaMediaMeses: number;
+  /** null = todos os meses válidos na janela */
+  janelaAnaliseMeses: number | null;
 }
 
 export const NOTA_COVID_2022 =
@@ -40,6 +43,7 @@ export function defaultMethodologySettings(): MethodologySettings {
     excludeYear2023: true,
     exclude2022Q1: true,
     janelaMediaMeses: 8,
+    janelaAnaliseMeses: 8,
   };
 }
 

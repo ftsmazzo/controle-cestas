@@ -114,3 +114,42 @@
   margin-top: 0.65rem;
   font-size: 0.85rem;
 }
+
+.projecao-kpis {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+}
+
+.projecao-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.projecao-kpi-grid .kpi-big {
+  font-size: 1.75rem;
+  display: block;
+}
+
+.hint-inline {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+.projecao-hint {
+  margin-top: 0.75rem;
+  font-size: 0.88rem;
+}
+
+.risk-strip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.danger-btn {
+  color: #b91c1c;
+  border-color: #fca5a5;
+}

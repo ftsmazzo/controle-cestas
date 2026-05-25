@@ -176,15 +176,28 @@ export default function EquipamentosPanel({
           {data?.history.length ? (
             <button
               type="button"
-              className="secondary"
+              className="secondary danger-btn"
               disabled={loading}
               onClick={async () => {
-                await clearServices();
-                onDataChange(null);
-                onReload();
+                if (
+                  !window.confirm(
+                    'Limpar TUDO? Remove histórico por equipamento, equipamentos e painel. Depois importe a planilha de novo.',
+                  )
+                ) {
+                  return;
+                }
+                setLoading(true);
+                try {
+                  await clearServices();
+                  onDataChange(null);
+                  await onReload();
+                  setImportInfo('Base zerada. Importe a planilha novamente.');
+                } finally {
+                  setLoading(false);
+                }
               }}
             >
-              Limpar
+              Limpar tudo
             </button>
           ) : null}
         </div>

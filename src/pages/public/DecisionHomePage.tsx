@@ -1,6 +1,5 @@
 import { useData } from '../../context/DataContext';
 import DecisionDashboard from '../../components/DecisionDashboard';
-import MethodologyTimeline from '../../components/MethodologyTimeline';
 
 function num(n: number | null, dec = 1): string {
   if (n === null || Number.isNaN(n)) return '—';
@@ -17,12 +16,17 @@ export default function DecisionHomePage() {
       <section className="panel empty">
         <h3>Sem dados publicados</h3>
         <p className="hint">
-          O histórico por equipamento ainda não foi importado na área administrativa.
-          Após a carga, este painel exibirá risco de ruptura, autonomia e tendências.
+          Em <a href="/admin/importar">/admin → Importar</a> envie a planilha por equipamento.
+          Use <strong>Limpar tudo</strong> antes se quiser recomeçar do zero.
         </p>
       </section>
     );
   }
+
+  const janela =
+    payload?.settings?.methodology.janelaAnaliseMeses ??
+    payload?.settings?.methodology.janelaMediaMeses ??
+    8;
 
   const riskClass =
     dashboard.kpis.riscoRuptura === 'Verde'
@@ -34,31 +38,34 @@ export default function DecisionHomePage() {
   return (
     <>
       <section className={`kpi-card risk-strip ${riskClass}`}>
-        <span className="kpi-label">Autonomia de estoque</span>
-        <strong>{num(dashboard.kpis.autonomiaMeses)} meses</strong>
-        <span className="risk-badge">{dashboard.kpis.riscoRuptura}</span>
-        {snapshot.saldoEstoque != null && (
-          <span className="hint" style={{ marginLeft: '1rem' }}>
-            Saldo: {num(snapshot.saldoEstoque, 0)} cestas
-          </span>
-        )}
+        <div className="risk-strip-grid">
+          <div>
+            <span className="kpi-label">Autonomia de estoque</span>
+            <strong>{num(dashboard.kpis.autonomiaMeses)} meses</strong>
+            <span className="risk-badge">{dashboard.kpis.riscoRuptura}</span>
+          </div>
+          <div>
+            <span className="kpi-label">Contrato</span>
+            <strong>{num(payload?.settings?.contratoMensal ?? 1200, 0)}/mês</strong>
+          </div>
+          <div>
+            <span className="kpi-label">Janela de análise</span>
+            <strong>{janela ? `Últimos ${janela} meses válidos` : 'Todos os válidos'}</strong>
+          </div>
+          {snapshot.saldoEstoque != null && (
+            <div>
+              <span className="kpi-label">Saldo</span>
+              <strong>{num(snapshot.saldoEstoque, 0)}</strong>
+            </div>
+          )}
+        </div>
       </section>
-
-      <MethodologyTimeline rows={dashboard.rows} />
 
       <DecisionDashboard
         dashboard={dashboard}
         contratoMensal={payload?.settings?.contratoMensal ?? 1200}
+        janelaAnaliseMeses={janela}
       />
-
-      <section className="panel apresentacao">
-        <h2>Objetivo deste painel</h2>
-        <p>
-          Apoiar a <strong>decisão sobre estoque e contrato</strong>: consumo médio com
-          meses distorcidos (COVID/2022, racionamento/2023, ruptura Abr e parcial Mai/2026)
-          excluídos do modelo, mas sempre visíveis no histórico.
-        </p>
-      </section>
     </>
   );
 }

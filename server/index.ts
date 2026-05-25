@@ -5,7 +5,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hydrateDashboardState } from '../shared/buildDashboard.js';
 import { recalculateSnapshot } from '../shared/recalculateSnapshot.js';
-import { listMethodologyTable } from '../shared/methodologyCalendar.js';
+import {
+  defaultMethodologySettings,
+  listMethodologyTable,
+} from '../shared/methodologyCalendar.js';
 import { rawRowsFromPayload } from '../shared/syncFromServices.js';
 import type { DashboardState } from '../shared/types.js';
 import { allocatePlans } from '../shared/allocation.js';
@@ -95,22 +98,22 @@ async function start() {
       if (stored.state && !snapshot.state) {
         snapshot = { state: stored.state, saldoEstoque: stored.saldoAtual };
       } else if (snapshot.state) {
+        const janela =
+          payload.settings?.methodology.janelaAnaliseMeses ??
+          payload.settings?.methodology.janelaMediaMeses ??
+          8;
         const hydrated = hydrateDashboardState(
           snapshot.state,
           snapshot.saldoEstoque,
           payload.settings?.contratoMensal ?? 1200,
+          janela,
         );
         snapshot = { state: hydrated, saldoEstoque: snapshot.saldoEstoque };
       }
       const methodologyTable = payload.history.length
         ? listMethodologyTable(
             rawRowsFromPayload(payload),
-            payload.settings?.methodology ?? {
-              overrides: {},
-              excludeYear2023: true,
-              exclude2022Q1: true,
-              janelaMediaMeses: 8,
-            },
+            payload.settings?.methodology ?? defaultMethodologySettings(),
           )
         : [];
       res.json({

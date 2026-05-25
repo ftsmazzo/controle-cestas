@@ -33,6 +33,14 @@ export function mergeAppSettings(partial?: Partial<AppSettings> | null): AppSett
     methodology: {
       ...base.methodology,
       ...partial.methodology,
+      janelaAnaliseMeses:
+        partial.methodology?.janelaAnaliseMeses ??
+        partial.methodology?.janelaMediaMeses ??
+        base.methodology.janelaAnaliseMeses,
+      janelaMediaMeses:
+        partial.methodology?.janelaMediaMeses ??
+        partial.methodology?.janelaAnaliseMeses ??
+        base.methodology.janelaMediaMeses,
       overrides: {
         ...base.methodology.overrides,
         ...partial.methodology?.overrides,

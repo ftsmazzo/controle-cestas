@@ -1,8 +1,29 @@
+import { useMemo } from 'react';
+import { forecastNextMonth } from '@shared/forecastPlan';
+import { validMonthKeysForPayload } from '@shared/payloadAnalysis';
 import { useData } from '../../context/DataContext';
 import DistribuicaoMesPanel from '../../components/DistribuicaoMesPanel';
 
 export default function DistributeMonthPage() {
-  const { loading, payload } = useData();
+  const { loading, payload, dashboard } = useData();
+
+  const janela = useMemo(
+    () =>
+      payload?.settings?.methodology.janelaAnaliseMeses ??
+      payload?.settings?.methodology.janelaMediaMeses ??
+      8,
+    [payload],
+  );
+
+  const validMonthKeys = useMemo(
+    () => (payload ? validMonthKeysForPayload(payload) : []),
+    [payload],
+  );
+
+  const previsaoProximoMes = useMemo(() => {
+    if (!dashboard) return null;
+    return forecastNextMonth(dashboard.rows, janela).valor;
+  }, [dashboard, janela]);
 
   if (loading) return null;
 
@@ -11,8 +32,9 @@ export default function DistributeMonthPage() {
       <section className="panel empty">
         <h3>Distribuir o mês</h3>
         <p className="hint">
-          Informe o total de cestas do mês e veja a divisão proporcional por equipamento
-          (média dos últimos meses válidos). Requer histórico importado em /admin.
+          Importe a planilha por equipamento em{' '}
+          <a href="/admin/importar">/admin → Importar</a>. O total do mês deve ser a soma dos
+          equipamentos.
         </p>
       </section>
     );
@@ -22,10 +44,15 @@ export default function DistributeMonthPage() {
     <section className="panel">
       <h2>Distribuir o mês</h2>
       <p className="hint">
-        Simulação local — não altera a base. Use para planejar a entrega antes de
-        registrar o fechamento no admin.
+        Simulação local — não grava na base. Usa a mesma janela da Visão geral (
+        {janela ? `últimos ${janela} meses válidos` : 'todos os válidos'}).
       </p>
-      <DistribuicaoMesPanel data={payload} />
+      <DistribuicaoMesPanel
+        data={payload}
+        validMonthKeys={validMonthKeys}
+        janelaPadrao={janela}
+        previsaoProximoMes={previsaoProximoMes}
+      />
     </section>
   );
 }

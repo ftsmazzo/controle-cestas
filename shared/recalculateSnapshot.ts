@@ -40,11 +40,16 @@ export function recalculateSnapshot(
   const raw = rawTotalsFromHistory(payload);
   const fileName =
     payload.meta?.sourceFile ?? 'Histórico por equipamento (fonte única)';
+  const janela =
+    settings.methodology.janelaAnaliseMeses ??
+    settings.methodology.janelaMediaMeses ??
+    8;
   const state = buildDashboard(
     raw,
     fileName,
     settings.saldoEstoque,
     settings.contratoMensal,
+    janela,
   );
   return { state, saldoEstoque: settings.saldoEstoque };
 }

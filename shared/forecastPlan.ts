@@ -1,4 +1,8 @@
 import { forecastLinear, linearRegression } from './calculations.js';
+import {
+  pickWindowKeys,
+  validMonthKeysFromRows,
+} from './analysisWindow.js';
 import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
 import type { ForecastPoint, ProcessedMonthRow } from './types.js';
 
@@ -10,38 +14,89 @@ function incrementMonthKey(key: number): number {
 }
 
 export const PROJECAO_METODO_RESUMO =
-  'Regressão linear sobre os meses marcados como válidos no modelo (exclui COVID/2022-Q1, racionamento/2023, ruptura Abr/2026 e parcial Mai/2026). Cada mês futuro é o valor da reta de tendência, arredondado — não é meta de contrato nem divisão por equipamento.';
+  'Tendência calculada só com meses válidos na janela escolhida (ex.: últimos 8 ou 12). A linha roxa no gráfico é regressão linear nessa janela — o mesmo recorte usado em Distribuir mês. Não confundir com a soma das médias por equipamento (só referência na divisão).';
 
 export interface ProjecaoMeta {
-  mesesValidosUsados: number;
-  mediaValida: number;
+  janelaMeses: number | null;
+  mesesNaJanela: string[];
+  mesesValidosTotal: number;
+  mediaJanela: number;
+  proximoMesPrevisto: number | null;
   inclinacaoPorMes: number;
   anoAlvo: number;
   ultimoMesHistorico: string;
 }
 
-/** Previsão mês a mês até dezembro do ano alvo (padrão: ano do último mês no histórico). */
+function sliceValidRows(
+  rows: ProcessedMonthRow[],
+  windowMonths: number | null | undefined,
+): ProcessedMonthRow[] {
+  const valid = rows.filter((r) => r.usoNoModelo === 'Sim');
+  if (windowMonths == null || windowMonths <= 0) return valid;
+  return valid.slice(-windowMonths);
+}
+
+/** Próximo mês após o último observado, usando a mesma janela da tendência. */
+export function forecastNextMonth(
+  rows: ProcessedMonthRow[],
+  windowMonths: number | null | undefined,
+): { valor: number | null; meta: Omit<ProjecaoMeta, 'anoAlvo' | 'ultimoMesHistorico'> & Partial<ProjecaoMeta> } {
+  const allValidKeys = validMonthKeysFromRows(rows);
+  const windowRows = sliceValidRows(rows, windowMonths);
+  if (windowRows.length < 2) {
+    return {
+      valor: windowRows.length === 1 ? windowRows[0].total : null,
+      meta: {
+        janelaMeses: windowMonths ?? null,
+        mesesNaJanela: windowRows.map((r) => r.mes),
+        mesesValidosTotal: allValidKeys.length,
+        mediaJanela: windowRows[0]?.total ?? 0,
+        proximoMesPrevisto: null,
+        inclinacaoPorMes: 0,
+      },
+    };
+  }
+
+  const xs = windowRows.map((_, i) => i + 1);
+  const ys = windowRows.map((r) => r.total);
+  const { slope } = linearRegression(xs, ys);
+  const media = ys.reduce((a, b) => a + b, 0) / ys.length;
+  const nextVal = Math.max(0, Math.round(forecastLinear(xs.length + 1, xs, ys)));
+
+  return {
+    valor: nextVal,
+    meta: {
+      janelaMeses: windowMonths ?? null,
+      mesesNaJanela: windowRows.map((r) => r.mes),
+      mesesValidosTotal: allValidKeys.length,
+      mediaJanela: media,
+      proximoMesPrevisto: nextVal,
+      inclinacaoPorMes: slope,
+    },
+  };
+}
+
+/** Previsão mês a mês até dezembro do ano alvo. */
 export function computeForecastUntilYearEnd(
   rows: ProcessedMonthRow[],
-  endYear?: number,
+  options?: { endYear?: number; windowMonths?: number | null },
 ): { pontos: ForecastPoint[]; meta: ProjecaoMeta | null } {
-  const validRows = rows.filter((r) => r.usoNoModelo === 'Sim');
-  if (validRows.length < 2) {
+  const windowMonths = options?.windowMonths;
+  const windowRows = sliceValidRows(rows, windowMonths);
+  if (windowRows.length < 2) {
     return { pontos: [], meta: null };
   }
 
-  const xs = validRows.map((_, i) => i + 1);
-  const ys = validRows.map((r) => r.total);
+  const xs = windowRows.map((_, i) => i + 1);
+  const ys = windowRows.map((r) => r.total);
   const { slope } = linearRegression(xs, ys);
   const media = ys.reduce((a, b) => a + b, 0) / ys.length;
 
-  const keys = rows
-    .map((r) => parseMonthKey(r.mes))
-    .filter((k) => k > 0);
-  if (!keys.length) return { pontos: [], meta: null };
+  const allKeys = rows.map((r) => parseMonthKey(r.mes)).filter((k) => k > 0);
+  if (!allKeys.length) return { pontos: [], meta: null };
 
-  const lastObserved = Math.max(...keys);
-  const targetYear = endYear ?? Math.floor(lastObserved / 100);
+  const lastObserved = Math.max(...allKeys);
+  const targetYear = options?.endYear ?? Math.floor(lastObserved / 100);
   const endKey = targetYear * 100 + 12;
 
   const pontos: ForecastPoint[] = [];
@@ -60,11 +115,19 @@ export function computeForecastUntilYearEnd(
     if (pontos.length > 18) break;
   }
 
+  const { valor: proximo } = forecastNextMonth(rows, windowMonths);
+
+  const validKeys = validMonthKeysFromRows(rows);
+  const picked = pickWindowKeys(validKeys, windowMonths);
+
   return {
     pontos,
     meta: {
-      mesesValidosUsados: validRows.length,
-      mediaValida: media,
+      janelaMeses: windowMonths ?? null,
+      mesesNaJanela: picked.map(formatMonthKeyPt),
+      mesesValidosTotal: validKeys.length,
+      mediaJanela: media,
+      proximoMesPrevisto: proximo,
       inclinacaoPorMes: slope,
       anoAlvo: targetYear,
       ultimoMesHistorico: formatMonthKeyPt(lastObserved),

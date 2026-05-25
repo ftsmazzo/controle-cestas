@@ -2,12 +2,12 @@ import { useMemo } from 'react';
 import { buildChartSerie, computeInsights } from '@shared/insights';
 import {
   computeForecastUntilYearEnd,
+  forecastNextMonth,
   PROJECAO_METODO_RESUMO,
 } from '@shared/forecastPlan';
 import type { DashboardState } from '@shared/types';
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   ComposedChart,
@@ -19,7 +19,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import MethodologyBanner from './MethodologyBanner';
 import './DecisionDashboard.css';
 
 function num(n: number | null, dec = 0): string {
@@ -30,36 +29,38 @@ function num(n: number | null, dec = 0): string {
 interface Props {
   dashboard: DashboardState;
   contratoMensal?: number;
+  janelaAnaliseMeses?: number | null;
 }
 
 export default function DecisionDashboard({
   dashboard,
   contratoMensal = 1200,
+  janelaAnaliseMeses = 8,
 }: Props) {
-  const ins = useMemo(() => {
-    if (dashboard.insights?.mesesCompletos != null) return dashboard.insights;
-    return computeInsights(
-      dashboard.rows,
-      dashboard.kpis,
-      dashboard.tendenciaProximos[0]?.valor ?? null,
-      contratoMensal,
-    );
-  }, [dashboard, contratoMensal]);
-
-  const previsaoAno = useMemo(() => {
-    if (dashboard.previsaoAteFimAno?.length) {
-      return {
-        pontos: dashboard.previsaoAteFimAno,
-        meta: computeForecastUntilYearEnd(dashboard.rows).meta,
-      };
-    }
-    return computeForecastUntilYearEnd(dashboard.rows);
-  }, [dashboard]);
-
-  const chartSerie = useMemo(
-    () => buildChartSerie(dashboard.rows, ins.demandaReferenciaPreRuptura),
-    [dashboard.rows, ins.demandaReferenciaPreRuptura],
+  const previsaoAno = useMemo(
+    () =>
+      computeForecastUntilYearEnd(dashboard.rows, {
+        windowMonths: janelaAnaliseMeses,
+      }),
+    [dashboard.rows, janelaAnaliseMeses],
   );
+
+  const proximoMes = useMemo(
+    () => forecastNextMonth(dashboard.rows, janelaAnaliseMeses),
+    [dashboard.rows, janelaAnaliseMeses],
+  );
+
+  const ins = useMemo(() => {
+    const proj =
+      proximoMes.valor ??
+      previsaoAno.pontos[0]?.valor ??
+      dashboard.tendenciaProximos[0]?.valor ??
+      null;
+    if (dashboard.insights?.mesesCompletos != null) {
+      return { ...dashboard.insights, projecao1VsContrato: proj != null ? proj - contratoMensal : null };
+    }
+    return computeInsights(dashboard.rows, dashboard.kpis, proj, contratoMensal);
+  }, [dashboard, contratoMensal, proximoMes, previsaoAno.pontos]);
 
   const consumoEPrevisao = useMemo(() => {
     const hist = dashboard.rows.map((r) => ({
@@ -77,84 +78,82 @@ export default function DecisionDashboard({
     return [...hist, ...prev];
   }, [dashboard.rows, previsaoAno.pontos]);
 
-  const tendenciaValida = useMemo(
-    () =>
-      dashboard.rows
-        .filter((r) => r.usoNoModelo === 'Sim')
-        .map((r) => ({
-          mes: r.mes,
-          total: r.total,
-          mediaMovel: r.mediaMovel3m,
-        })),
-    [dashboard.rows],
+  const tendenciaValida = useMemo(() => {
+    const valid = dashboard.rows.filter((r) => r.usoNoModelo === 'Sim');
+    const slice =
+      janelaAnaliseMeses != null && janelaAnaliseMeses > 0
+        ? valid.slice(-janelaAnaliseMeses)
+        : valid;
+    return slice.map((r) => ({
+      mes: r.mes,
+      total: r.total,
+      mediaMovel: r.mediaMovel3m,
+    }));
+  }, [dashboard.rows, janelaAnaliseMeses]);
+
+  const chartSerie = useMemo(
+    () => buildChartSerie(dashboard.rows, ins.demandaReferenciaPreRuptura),
+    [dashboard.rows, ins.demandaReferenciaPreRuptura],
   );
 
-  const comparativoContrato = useMemo(() => {
-    const media = dashboard.kpis.mediaMensalValida;
-    const projJun = previsaoAno.pontos[0]?.valor ?? null;
-    const somaPrevisaoAno = previsaoAno.pontos.reduce((s, p) => s + p.valor, 0);
-    return [
-      { nome: 'Contrato (mês)', valor: contratoMensal },
-      { nome: 'Média válida', valor: media },
-      { nome: '1ª previsão futura', valor: projJun ?? 0 },
-      {
-        nome: 'Soma previsão ano',
-        valor: somaPrevisaoAno,
-      },
-    ].filter((x) => x.valor > 0);
-  }, [dashboard, contratoMensal, previsaoAno.pontos]);
-
-  const inclinacao = previsaoAno.meta?.inclinacaoPorMes ?? 0;
-  const tendenciaLabel =
-    inclinacao > 5
-      ? 'alta'
-      : inclinacao < -5
-        ? 'queda'
-        : 'estável';
+  const meta = previsaoAno.meta;
+  const inclinacao = meta?.inclinacaoPorMes ?? 0;
+  const janelaLabel =
+    janelaAnaliseMeses != null && janelaAnaliseMeses > 0
+      ? `últimos ${janelaAnaliseMeses} meses válidos`
+      : 'todos os meses válidos';
 
   return (
     <div className="decision-dashboard">
-      <MethodologyBanner rows={dashboard.rows} compact />
-
-      <section className="panel projecao-explicacao">
-        <h2>De onde vêm as projeções?</h2>
-        <p>{PROJECAO_METODO_RESUMO}</p>
-        {previsaoAno.meta && (
-          <ul className="projecao-meta-list">
-            <li>
-              <strong>{previsaoAno.meta.mesesValidosUsados}</strong> meses válidos
-              entraram no cálculo (último histórico: {previsaoAno.meta.ultimoMesHistorico}).
-            </li>
-            <li>
-              Média desses meses: <strong>{num(previsaoAno.meta.mediaValida)}</strong> cestas/mês.
-            </li>
-            <li>
-              Tendência da reta: <strong>{inclinacao >= 0 ? '+' : ''}{num(inclinacao)}</strong>{' '}
-              cestas por mês adicional → ritmo <strong>{tendenciaLabel}</strong>.
-            </li>
-            <li>
-              Linha verde tracejada no gráfico = contrato de{' '}
-              <strong>{num(contratoMensal)}</strong> cestas/mês (
-              {num(contratoMensal * 12)}/ano).
-            </li>
-            <li>
-              Previsão exibida até <strong>Dez/{previsaoAno.meta.anoAlvo}</strong> — não
-              confundir com a divisão por equipamento (aba Distribuir mês).
-            </li>
-          </ul>
-        )}
+      <section className="panel projecao-kpis">
+        <div className="projecao-kpi-grid">
+          <div>
+            <span className="kpi-label">Próximo mês (previsão)</span>
+            <strong className="kpi-big">{num(proximoMes.valor)}</strong>
+            <span className="hint-inline">Mesma janela: {janelaLabel}</span>
+          </div>
+          <div>
+            <span className="kpi-label">Média na janela</span>
+            <strong>{num(meta?.mediaJanela ?? dashboard.kpis.mediaMensalValida)}</strong>
+          </div>
+          <div>
+            <span className="kpi-label">Contrato</span>
+            <strong>{num(contratoMensal)}/mês</strong>
+          </div>
+          <div>
+            <span className="kpi-label">vs contrato (1ª previsão)</span>
+            <strong>
+              {ins.projecao1VsContrato != null
+                ? `${ins.projecao1VsContrato >= 0 ? '+' : ''}${num(ins.projecao1VsContrato)}`
+                : '—'}
+            </strong>
+          </div>
+        </div>
+        <p className="hint projecao-hint">{PROJECAO_METODO_RESUMO}</p>
+        <p className="hint">
+          Ajuste a janela em{' '}
+          <a href="/admin/metodologia">Admin → Metodologia</a>. Em{' '}
+          <a href="/distribuir-mes">Distribuir mês</a> use o mesmo total sugerido para dividir por
+          equipamento (soma dos equipamentos = total do mês).
+        </p>
       </section>
 
       <section className="panel chart-panel chart-hero">
-        <h2>Consumo observado e previsão até o fim do ano</h2>
+        <h2>Consumo total e previsão</h2>
         <p className="hint">
-          Barras: total mensal importado (vermelho/amarelo = ruptura/parcial, fora do modelo).
-          Linha roxa: previsão linear. Linha verde: contrato {num(contratoMensal)}/mês.
+          Barras = total mensal (soma dos equipamentos). Vermelho/amarelo = fora do modelo. Linha
+          roxa = regressão na janela ({janelaLabel}). Verde = contrato {num(contratoMensal)}/mês.
+          {meta && (
+            <>
+              {' '}
+              Meses na janela: {meta.mesesNaJanela.join(', ')}.
+            </>
+          )}
         </p>
-        <ResponsiveContainer width="100%" height={360}>
+        <ResponsiveContainer width="100%" height={380}>
           <ComposedChart data={consumoEPrevisao}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" height={70} />
+            <XAxis dataKey="mes" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" height={72} />
             <YAxis />
             <Tooltip />
             <Legend />
@@ -164,18 +163,11 @@ export default function DecisionDashboard({
               strokeDasharray="6 4"
               label={{ value: `Contrato ${contratoMensal}`, fontSize: 10 }}
             />
-            {ins.demandaReferenciaPreRuptura != null && (
-              <ReferenceLine
-                y={ins.demandaReferenciaPreRuptura}
-                stroke="#64748b"
-                strokeDasharray="4 4"
-              />
-            )}
             <Bar dataKey="observado" name="Observado" fill="#2563eb" radius={[3, 3, 0, 0]} />
             <Line
               type="monotone"
               dataKey="previsao"
-              name="Previsão (modelo)"
+              name="Previsão"
               stroke="#9333ea"
               strokeWidth={2.5}
               strokeDasharray="6 3"
@@ -188,12 +180,12 @@ export default function DecisionDashboard({
 
       <div className="charts-row">
         <section className="panel chart-panel">
-          <h2>Tendência — só meses válidos</h2>
+          <h2>Tendência na janela</h2>
           <p className="hint">
-            Série usada na regressão (sem 2022-Q1, 2023, Abr/Mai 2026). Linha amarela = média móvel
-            3 meses.
+            Ritmo {inclinacao >= 0 ? '+' : ''}
+            {num(inclinacao)} cestas/mês na reta ({janelaLabel}).
           </p>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={tendenciaValida}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="mes" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
@@ -223,65 +215,32 @@ export default function DecisionDashboard({
         </section>
 
         <section className="panel chart-panel">
-          <h2>Contrato {num(contratoMensal)}/mês vs ritmo de consumo</h2>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={comparativoContrato} layout="vertical" margin={{ left: 120 }}>
+          <h2>Histórico completo (cores)</h2>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={chartSerie}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis type="category" dataKey="nome" width={115} tick={{ fontSize: 11 }} />
+              <XAxis dataKey="mes" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
+              <YAxis />
               <Tooltip />
-              <Bar dataKey="valor" name="Cestas" fill="#2563eb" radius={[0, 4, 4, 0]} />
-            </BarChart>
+              <Legend />
+              <Bar dataKey="observado" name="Total do mês" radius={[3, 3, 0, 0]}>
+                {chartSerie.map((entry, i) => (
+                  <Cell key={i} fill={entry.fillObservado} />
+                ))}
+              </Bar>
+              <Line
+                type="monotone"
+                dataKey="ajustado"
+                name="Entra no modelo"
+                stroke="#16a34a"
+                strokeWidth={2}
+                dot={false}
+                connectNulls={false}
+              />
+            </ComposedChart>
           </ResponsiveContainer>
-          <p className="hint chart-footnote">
-            Utilização média vs contrato:{' '}
-            <strong>{ins.utilizacaoContratoPct.toFixed(0)}%</strong>
-            {ins.projecao1VsContrato != null && (
-              <>
-                {' '}
-                · 1ª previsão futura vs contrato:{' '}
-                <strong>
-                  {ins.projecao1VsContrato >= 0 ? '+' : ''}
-                  {num(ins.projecao1VsContrato)}
-                </strong>{' '}
-                cestas
-              </>
-            )}
-          </p>
         </section>
       </div>
-
-      <section className="panel chart-panel">
-        <h2>Contexto operacional no histórico</h2>
-        <p className="hint">
-          Meses excluídos do modelo continuam visíveis para não confundir ruptura com queda de
-          demanda.
-        </p>
-        <ResponsiveContainer width="100%" height={300}>
-          <ComposedChart data={chartSerie}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <ReferenceLine y={contratoMensal} stroke="#0d9488" strokeDasharray="4 4" />
-            <Bar dataKey="observado" name="Total do mês" radius={[3, 3, 0, 0]}>
-              {chartSerie.map((entry, i) => (
-                <Cell key={i} fill={entry.fillObservado} />
-              ))}
-            </Bar>
-            <Line
-              type="monotone"
-              dataKey="ajustado"
-              name="Entra no modelo"
-              stroke="#16a34a"
-              strokeWidth={2}
-              dot={false}
-              connectNulls={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </section>
     </div>
   );
 }

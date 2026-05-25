@@ -15,9 +15,17 @@ function parseQty(s: string): number {
 
 interface Props {
   data: ServicesPayload;
+  validMonthKeys?: number[];
+  janelaPadrao?: number | null;
+  previsaoProximoMes?: number | null;
 }
 
-export default function DistribuicaoMesPanel({ data }: Props) {
+export default function DistribuicaoMesPanel({
+  data,
+  validMonthKeys = [],
+  janelaPadrao = 8,
+  previsaoProximoMes = null,
+}: Props) {
   const mesesSugeridos = useMemo(
     () => suggestNextMonths(data.history, 6),
     [data.history],
@@ -25,18 +33,16 @@ export default function DistribuicaoMesPanel({ data }: Props) {
 
   const [mes, setMes] = useState('');
   const [totalStr, setTotalStr] = useState('');
-  const defaultJanela = String(
-    data.settings?.methodology.janelaMediaMeses ?? 8,
-  );
-  const [janelaMeses, setJanelaMeses] = useState<string>(defaultJanela);
+  const janelaStr =
+    janelaPadrao != null && janelaPadrao > 0 ? String(janelaPadrao) : 'all';
+  const [janelaMeses, setJanelaMeses] = useState<string>(janelaStr);
   const [resultado, setResultado] = useState<MonthAllocationResult | null>(null);
 
   const mesAtivo = mes.trim() || mesesSugeridos[0] || '';
   const total = parseQty(totalStr);
 
   const calcular = () => {
-    if (!mesAtivo) return;
-    if (total <= 0) return;
+    if (!mesAtivo || total <= 0) return;
     const janela = janelaMeses === 'all' ? null : parseInt(janelaMeses, 10) || null;
     setResultado(
       allocateMonth(
@@ -46,22 +52,20 @@ export default function DistribuicaoMesPanel({ data }: Props) {
         {
           mediaWindowMonths: janela,
           excluirMesDistribuicao: true,
+          validMonthKeys: validMonthKeys.length ? validMonthKeys : undefined,
         },
       ),
     );
   };
 
-  return (
-    <section className="panel distribuicao-mes-panel">
-      <h2>Distribuir cestas do mês (principal)</h2>
-      <p className="hint">
-        Informe o <strong>total de cestas do mês</strong>. O sistema divide entre os equipamentos
-        pela <strong>média histórica</strong> de cada um (você escolhe a janela abaixo).
-        Equipamentos marcados como{' '}
-        <strong>fixos</strong> (abaixo) recebem a cota ou a média antes; o restante é repartido
-        proporcionalmente.
-      </p>
+  const usarPrevisao = () => {
+    if (previsaoProximoMes != null && previsaoProximoMes > 0) {
+      setTotalStr(String(Math.round(previsaoProximoMes)));
+    }
+  };
 
+  return (
+    <div className="distribuicao-mes-panel">
       <div className="distribuicao-form">
         <label>
           Mês
@@ -77,16 +81,12 @@ export default function DistribuicaoMesPanel({ data }: Props) {
           </select>
         </label>
         <label>
-          Média baseada em
-          <select
-            value={janelaMeses}
-            onChange={(e) => setJanelaMeses(e.target.value)}
-          >
-            <option value="8">Últimos 8 meses</option>
-            <option value="6">Últimos 6 meses</option>
-            <option value="12">Últimos 12 meses</option>
-            <option value="3">Últimos 3 meses</option>
-            <option value="all">Todo o histórico importado</option>
+          Janela (média por equipamento)
+          <select value={janelaMeses} onChange={(e) => setJanelaMeses(e.target.value)}>
+            <option value="8">Últimos 8 meses válidos</option>
+            <option value="12">Últimos 12 meses válidos</option>
+            <option value="24">Últimos 24 meses válidos</option>
+            <option value="all">Todos os meses válidos</option>
           </select>
         </label>
         <label>
@@ -94,11 +94,20 @@ export default function DistribuicaoMesPanel({ data }: Props) {
           <input
             type="text"
             inputMode="numeric"
-            placeholder="Ex.: 1150"
+            placeholder={
+              previsaoProximoMes != null
+                ? `Previsão painel: ${num(previsaoProximoMes)}`
+                : 'Ex.: 1200'
+            }
             value={totalStr}
             onChange={(e) => setTotalStr(e.target.value)}
           />
         </label>
+        {previsaoProximoMes != null && previsaoProximoMes > 0 && (
+          <button type="button" className="secondary" onClick={usarPrevisao}>
+            Usar previsão ({num(previsaoProximoMes)})
+          </button>
+        )}
         <button
           type="button"
           className="primary-btn"
@@ -120,11 +129,7 @@ export default function DistribuicaoMesPanel({ data }: Props) {
           </h3>
           {resultado.mesesJanelaUsados.length > 0 && (
             <p className="meta janela-meses">
-              Meses usados na média:{' '}
-              <strong>{resultado.mesesJanelaUsados.join(' · ')}</strong>
-              {resultado.mediaJanelaMeses != null && (
-                <> (últimos {resultado.mediaJanelaMeses}, antes do mês distribuído)</>
-              )}
+              Meses na média: <strong>{resultado.mesesJanelaUsados.join(' · ')}</strong>
             </p>
           )}
           <AllocationResumoBox resultado={resultado} />
@@ -133,14 +138,9 @@ export default function DistribuicaoMesPanel({ data }: Props) {
               <thead>
                 <tr>
                   <th>Equipamento</th>
-                  <th>
-                    Média
-                    {resultado.mediaJanelaMeses
-                      ? ` (${resultado.mediaJanelaMeses}m)`
-                      : ' (tudo)'}
-                  </th>
-                  <th>% histórico</th>
-                  <th>Alocar (cestas)</th>
+                  <th>Média histórica</th>
+                  <th>%</th>
+                  <th>Alocar</th>
                   <th>Obs.</th>
                 </tr>
               </thead>
@@ -162,7 +162,7 @@ export default function DistribuicaoMesPanel({ data }: Props) {
               <tfoot>
                 <tr>
                   <td colSpan={3}>
-                    <strong>Total</strong>
+                    <strong>Soma alocada</strong>
                   </td>
                   <td>
                     <strong>{num(resultado.totalAlocado)}</strong>
@@ -176,23 +176,21 @@ export default function DistribuicaoMesPanel({ data }: Props) {
       )}
 
       <details className="distribuicao-ajuda">
-        <summary>Como funciona a conta</summary>
-        <ol>
+        <summary>O que cada número significa</summary>
+        <ul>
           <li>
-            <strong>Soma das médias</strong> (ex.: 1.825) = só a soma do que cada equipamento
-            consumia em média no passado. <em>Não</em> é projeção nem valor a entregar.
+            <strong>Total do mês</strong> = o que você informa; deve bater com a soma dos
+            equipamentos na planilha.
           </li>
           <li>
-            <strong>Total do mês</strong> (ex.: 1.150) = o que você tem hoje; é isso que será
-            dividido.
+            <strong>Previsão na Visão geral</strong> = regressão no total mensal (mesma janela).
           </li>
-          <li>Primeiro saem os fixos; o restante reparte entre os flexíveis pela média.</li>
           <li>
-            Gráficos em <strong>Visão geral</strong> (“Projeção +3 meses”) usam outra regra:
-            tendência dos meses <strong>completos</strong> — não esta divisão por equipamento.
+            <strong>Soma das médias por equipamento</strong> (ex. ~1.865) = só referência se cada
+            um recebesse sua média; não é previsão nem meta de entrega.
           </li>
-        </ol>
+        </ul>
       </details>
-    </section>
+    </div>
   );
 }
