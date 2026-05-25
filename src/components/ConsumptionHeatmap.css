@@ -1,18 +1,43 @@
+.heatmap-block {
+  margin-top: 0.5rem;
+}
+
+.heatmap-period {
+  margin: 0 0 0.65rem;
+}
+
 .heatmap-wrap {
   overflow-x: auto;
-  margin-top: 0.75rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
 }
 
 .heatmap-table {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   border-collapse: collapse;
+  width: max-content;
   min-width: 100%;
+}
+
+.heatmap-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.heatmap-corner {
+  left: 0;
+  z-index: 3 !important;
 }
 
 .heatmap-table th,
 .heatmap-table td {
   border: 1px solid var(--border, #e2e8f0);
-  padding: 0.25rem 0.35rem;
+  padding: 0.4rem 0.5rem;
   text-align: right;
   white-space: nowrap;
 }
@@ -20,12 +45,17 @@
 .heatmap-row-label {
   text-align: left !important;
   font-weight: 600;
+  font-size: 0.78rem;
   position: sticky;
   left: 0;
   background: #fff;
   z-index: 1;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .heatmap-cell {
-  min-width: 3.2rem;
+  min-width: 3.5rem;
+  font-variant-numeric: tabular-nums;
 }

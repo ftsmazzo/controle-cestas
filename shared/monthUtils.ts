@@ -90,3 +90,16 @@ export function formatMonthKeyPt(key: number): string {
   const label = NUM_TO_PT_LABEL[month];
   return label ? `${label}/${year}` : String(key);
 }
+
+/** Período padrão do mapa de calor (série recente legível). */
+export const HEATMAP_RANGE_FROM = 202503; // Mar/2025
+export const HEATMAP_RANGE_TO = 202603; // Mar/2026
+
+export function isMonthKeyInRange(
+  mes: string,
+  fromKey: number,
+  toKey: number,
+): boolean {
+  const k = parseMonthKey(mes);
+  return k > 0 && k >= fromKey && k <= toKey;
+}

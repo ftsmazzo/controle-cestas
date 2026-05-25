@@ -1,5 +1,11 @@
 import { useMemo } from 'react';
-import { parseMonthKey } from '@shared/monthUtils';
+import {
+  formatMonthKeyPt,
+  HEATMAP_RANGE_FROM,
+  HEATMAP_RANGE_TO,
+  isMonthKeyInRange,
+  parseMonthKey,
+} from '@shared/monthUtils';
 import type { ServiceMonthRecord } from '@shared/serviceTypes';
 import type { ServiceDef } from '@shared/serviceTypes';
 import './ConsumptionHeatmap.css';
@@ -12,13 +18,21 @@ interface Props {
   services: ServiceDef[];
   history: ServiceMonthRecord[];
   onlyEquipamento?: boolean;
+  /** YYYYMM inclusivo (padrão Mar/2025) */
+  rangeFrom?: number;
+  /** YYYYMM inclusivo (padrão Mar/2026) */
+  rangeTo?: number;
 }
 
 export default function ConsumptionHeatmap({
   services,
   history,
   onlyEquipamento = true,
+  rangeFrom = HEATMAP_RANGE_FROM,
+  rangeTo = HEATMAP_RANGE_TO,
 }: Props) {
+  const periodLabel = `${formatMonthKeyPt(rangeFrom)} a ${formatMonthKeyPt(rangeTo)}`;
+
   const units = useMemo(
     () =>
       services.filter(
@@ -31,6 +45,7 @@ export default function ConsumptionHeatmap({
     const monthSet = new Set<string>();
     const map = new Map<string, number>();
     for (const h of history) {
+      if (!isMonthKeyInRange(h.mes, rangeFrom, rangeTo)) continue;
       const u = services.find((s) => s.id === h.servicoId);
       if (onlyEquipamento && u && (u.level ?? 'equipamento') !== 'equipamento') {
         continue;
@@ -51,46 +66,55 @@ export default function ConsumptionHeatmap({
       }),
     );
     return { months, matrix, max };
-  }, [history, services, units, onlyEquipamento]);
+  }, [history, services, units, onlyEquipamento, rangeFrom, rangeTo]);
 
   if (!months.length || !units.length) {
-    return <p className="hint">Sem histórico para exibir o mapa de calor.</p>;
+    return (
+      <p className="hint">
+        Sem dados entre {periodLabel} para o mapa de calor.
+      </p>
+    );
   }
 
   return (
-    <div className="heatmap-wrap">
-      <table className="heatmap-table">
-        <thead>
-          <tr>
-            <th>Equipamento</th>
-            {months.map((m) => (
-              <th key={m}>{m}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {units.map((u, ri) => (
-            <tr key={u.id}>
-              <td className="heatmap-row-label">{u.nome}</td>
-              {matrix[ri].map((v, ci) => {
-                const intensity = max > 0 ? v / max : 0;
-                return (
-                  <td
-                    key={months[ci]}
-                    className="heatmap-cell"
-                    style={{
-                      background: `rgba(37, 99, 235, ${0.08 + intensity * 0.72})`,
-                    }}
-                    title={`${u.nome} · ${months[ci]}: ${num(v)}`}
-                  >
-                    {v > 0 ? num(v) : '—'}
-                  </td>
-                );
-              })}
+    <div className="heatmap-block">
+      <p className="hint heatmap-period">
+        Período: <strong>{periodLabel}</strong> ({months.length} meses)
+      </p>
+      <div className="heatmap-wrap">
+        <table className="heatmap-table">
+          <thead>
+            <tr>
+              <th className="heatmap-corner">Equipamento</th>
+              {months.map((m) => (
+                <th key={m}>{m}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {units.map((u, ri) => (
+              <tr key={u.id}>
+                <td className="heatmap-row-label">{u.nome}</td>
+                {matrix[ri].map((v, ci) => {
+                  const intensity = max > 0 ? v / max : 0;
+                  return (
+                    <td
+                      key={months[ci]}
+                      className="heatmap-cell"
+                      style={{
+                        background: `rgba(37, 99, 235, ${0.06 + intensity * 0.78})`,
+                      }}
+                      title={`${u.nome} · ${months[ci]}: ${num(v)}`}
+                    >
+                      {v > 0 ? num(v) : '—'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

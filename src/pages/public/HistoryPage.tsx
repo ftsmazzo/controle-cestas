@@ -159,6 +159,10 @@ export default function HistoryPage() {
 
       <section className="panel">
         <h3>Mapa de calor — equipamento × mês</h3>
+        <p className="hint">
+          Exibe <strong>Mar/2025 a Mar/2026</strong> (período da nota técnica). O histórico
+          completo permanece na tabela acima.
+        </p>
         <ConsumptionHeatmap
           services={payload.services}
           history={payload.history}
