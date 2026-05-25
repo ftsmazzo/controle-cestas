@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react';
-import { buildDashboard } from '@shared/buildDashboard';
 import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
-import { aggregateHistoryByMonth, analyzeRegular } from '@shared/processAnalysis';
+import { analyzeRegular } from '@shared/processAnalysis';
+import {
+  buildRegularPlanTable,
+  fillRegularPlansFromData,
+} from '@shared/regularPlanFill';
 import { contractScenarios } from '@shared/simulation';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { saveServices } from '../lib/servicesApi';
+import { useData } from '../context/DataContext';
 import SimulationPanel from './SimulationPanel';
 import './ProcessPanels.css';
 
@@ -26,41 +30,23 @@ interface Props {
 
 export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
+  const { dashboard } = useData();
   const cfg = data.regular;
   const janela = useMemo(
     () => resolveJanelaAnaliseMeses(data.settings?.methodology),
     [data.settings?.methodology],
   );
 
-  const historicoRows = useMemo(() => {
-    const fromPlans = cfg.plans.filter((p) => p.totalDisponivel > 0);
-    if (fromPlans.length >= 3) {
-      return fromPlans.map((p) => ({
-        mes: p.mes,
-        total: p.totalDisponivel,
-        status: 'Completo' as const,
-      }));
-    }
-    return aggregateHistoryByMonth(data.history);
-  }, [cfg.plans, data.history]);
+  const processedRows = dashboard?.rows ?? [];
+
+  const saldo = data.settings?.saldoEstoque ?? cfg.saldoAtual;
 
   const analise = useMemo(
-    () => analyzeRegular(cfg, data.history, historicoRows, data.settings),
-    [cfg, data.history, historicoRows, data.settings],
-  );
-
-  const dashboard = useMemo(
     () =>
-      historicoRows.length
-        ? buildDashboard(
-            historicoRows,
-            'Processo regular',
-            cfg.saldoAtual,
-            cfg.cestasContratoMensal,
-            janela,
-          )
+      processedRows.length
+        ? analyzeRegular(cfg, processedRows, data.settings, saldo)
         : null,
-    [historicoRows, cfg.saldoAtual, cfg.cestasContratoMensal, janela],
+    [cfg, processedRows, data.settings, saldo],
   );
 
   const simDashboard = useMemo(() => {
@@ -70,6 +56,12 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
       cenariosContrato: contractScenarios(cfg.totalContratoAnual),
     };
   }, [dashboard, cfg.totalContratoAnual]);
+
+  const planTable = useMemo(
+    () =>
+      buildRegularPlanTable(cfg.plans, data.history, processedRows, janela),
+    [cfg.plans, data.history, processedRows, janela],
+  );
 
   const persist = async (next: ServicesPayload) => {
     if (readOnly) return;
@@ -86,30 +78,42 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
     }
   };
 
-  const preencherDoHistorico = () => {
-    if (readOnly) return;
+  const preencherPlanos = () => {
     setSaveError(null);
-    const agg = aggregateHistoryByMonth(data.history);
-    const byMes = new Map(agg.map((r) => [r.mes, r.total]));
-    const plans = cfg.plans.map((p) => {
-      const hist = byMes.get(p.mes);
-      return {
-        ...p,
-        totalDisponivel: hist != null && hist > 0 ? hist : p.totalDisponivel,
-      };
-    });
+    if (!processedRows.length) {
+      setSaveError('Sem dados na Visão geral. Importe o histórico em Admin.');
+      return;
+    }
+    const plans = fillRegularPlansFromData(
+      cfg.plans,
+      data.history,
+      processedRows,
+      janela,
+    );
     onUpdate({ ...data, regular: { ...cfg, plans } });
   };
+
+  if (!dashboard || !processedRows.length) {
+    return (
+      <section className="panel empty">
+        <p className="hint">
+          Carregue o histórico e publique o painel em Admin → Importar para alinhar com a
+          Visão geral.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <div className="process-panel">
       <section className="panel">
         <h2>Processo regular (12 meses)</h2>
         <p className="hint">
-          Levantamento do <strong>total mensal</strong> para registro/contrato. Use totais
-          informados abaixo ou preencha com a soma dos equipamentos (meses com histórico).
-          Indicadores de risco usam <strong>previsão</strong>, não só média histórica.
-          {readOnly && ' Em modo consulta, valores exibidos não podem ser alterados.'}
+          Mesma base da <strong>Visão geral</strong> (metodologia + previsão). Os 12 campos são o
+          período do registro ({cfg.plans[0]?.mes} … {cfg.plans[cfg.plans.length - 1]?.mes}).
+          Preencher usa soma dos equipamentos quando o mês já existe no histórico; nos demais,
+          usa a <strong>previsão</strong> do painel.
+          {readOnly && ' Modo consulta: pode simular o preenchimento; salvar só em Admin.'}
         </p>
 
         <div className="config-grid">
@@ -169,13 +173,8 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
               }}
             />
           </label>
-          <button
-            type="button"
-            className="secondary"
-            disabled={readOnly}
-            onClick={preencherDoHistorico}
-          >
-            Preencher meses com soma dos equipamentos
+          <button type="button" className="secondary" onClick={preencherPlanos}>
+            Preencher 12 meses (histórico + previsão)
           </button>
           {saveError && <p className="error">{saveError}</p>}
           {!readOnly && (
@@ -213,78 +212,93 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
         </div>
       </section>
 
-      <section className="panel">
-        <h3>Indicadores e risco — regular</h3>
-        <div className="kpi-row">
-          <div className="kpi-mini kpi-mini--highlight">
-            <span>Previsão próximo mês</span>
-            <strong>{num(analise.previsaoProximoMes)}</strong>
-          </div>
-          <div className="kpi-mini kpi-mini--highlight">
-            <span>Média previsão futura</span>
-            <strong>{num(analise.mediaPrevisaoFutura)}</strong>
-          </div>
-          <div className="kpi-mini">
-            <span>Média histórica válida</span>
-            <strong>{num(analise.consumoMedioValido)}</strong>
-            <span className="hint-inline">referência passado</span>
-          </div>
-          <div className="kpi-mini">
-            <span>Previsão (+3 meses)</span>
-            <strong>
-              {analise.previsaoProximos3.map((v) => num(v)).join(' · ') || '—'}
-            </strong>
-          </div>
-          <div className="kpi-mini">
-            <span>Soma planejada 12m</span>
-            <strong>{num(analise.totalPlanejado12)}</strong>
-          </div>
-          <div className="kpi-mini">
-            <span>Contrato cobre (previsão)</span>
-            <strong>
-              {(analise.mesesCobertosPelaPrevisao ?? analise.mesesCobertosPeloContrato).toFixed(
-                1,
-              )}{' '}
-              meses
-            </strong>
-          </div>
-          <div className={`kpi-mini risco-${analise.riscoRuptura.toLowerCase()}`}>
-            <span>Autonomia / Risco</span>
-            <strong>
-              {analise.autonomiaMeses != null
-                ? `${analise.autonomiaMeses.toFixed(1)} m · ${analise.riscoRuptura}`
-                : analise.riscoRuptura}
-            </strong>
-          </div>
-        </div>
-        {analise.alertas.map((a, i) => (
-          <p key={i} className={`alerta-box alerta-nivel-${a.nivel}`}>
-            <strong>{a.titulo}</strong> — {a.descricao}
+      {analise && (
+        <section className="panel">
+          <h3>Indicadores e risco — regular</h3>
+          <p className="hint meta-line">
+            Alinhado à Visão geral · janela:{' '}
+            {janela != null && janela > 0
+              ? `últimos ${janela} meses válidos`
+              : 'todos os meses válidos'}
           </p>
-        ))}
-      </section>
+          <div className="kpi-row">
+            <div className="kpi-mini kpi-mini--highlight">
+              <span>Previsão próximo mês</span>
+              <strong>{num(analise.previsaoProximoMes)}</strong>
+            </div>
+            <div className="kpi-mini kpi-mini--highlight">
+              <span>Média previsão futura</span>
+              <strong>{num(analise.mediaPrevisaoFutura)}</strong>
+            </div>
+            <div className="kpi-mini">
+              <span>Média histórica válida</span>
+              <strong>{num(analise.consumoMedioValido)}</strong>
+              <span className="hint-inline">referência passado</span>
+            </div>
+            <div className="kpi-mini">
+              <span>Previsão (+3 meses)</span>
+              <strong>
+                {analise.previsaoProximos3.map((v) => num(v)).join(' · ') || '—'}
+              </strong>
+            </div>
+            <div className="kpi-mini">
+              <span>Soma planejada 12m</span>
+              <strong>{num(analise.totalPlanejado12)}</strong>
+            </div>
+            <div className="kpi-mini">
+              <span>Contrato cobre (previsão)</span>
+              <strong>
+                {(
+                  analise.mesesCobertosPelaPrevisao ?? analise.mesesCobertosPeloContrato
+                ).toFixed(1)}{' '}
+                meses
+              </strong>
+            </div>
+            <div className={`kpi-mini risco-${analise.riscoRuptura.toLowerCase()}`}>
+              <span>Autonomia / Risco</span>
+              <strong>
+                {analise.autonomiaMeses != null
+                  ? `${analise.autonomiaMeses.toFixed(1)} m · ${analise.riscoRuptura}`
+                  : analise.riscoRuptura}
+              </strong>
+            </div>
+          </div>
+          {analise.alertas.map((a, i) => (
+            <p key={i} className={`alerta-box alerta-nivel-${a.nivel}`}>
+              <strong>{a.titulo}</strong> — {a.descricao}
+            </p>
+          ))}
+        </section>
+      )}
 
       {simDashboard && (
         <>
           <section className="panel">
-            <h3>Série mensal (processo regular)</h3>
+            <h3>Plano 12 meses — histórico vs previsão</h3>
+            <p className="hint">
+              Referência para cada campo do registro (não é a lista completa do passado).
+            </p>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
                     <th>Mês</th>
-                    <th>Total</th>
-                    <th>Status</th>
-                    <th>No modelo</th>
+                    <th>Soma equipamentos</th>
+                    <th>Previsão (Visão geral)</th>
+                    <th>Planejado</th>
+                    <th>Fonte</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {simDashboard.rows.map((r) => (
+                  {planTable.map((r) => (
                     <tr key={r.mes}>
                       <td>{r.mes}</td>
-                      <td>{num(r.total)}</td>
-                      <td>{r.status}</td>
-                      <td>{r.usoNoModelo}</td>
+                      <td>{r.historico != null ? num(r.historico) : '—'}</td>
+                      <td>{r.previsao != null ? num(r.previsao) : '—'}</td>
+                      <td>
+                        <strong>{r.planejado > 0 ? num(r.planejado) : '—'}</strong>
+                      </td>
+                      <td>{r.fonte}</td>
                     </tr>
                   ))}
                 </tbody>

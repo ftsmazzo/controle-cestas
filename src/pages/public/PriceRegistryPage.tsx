@@ -2,7 +2,7 @@ import { useData } from '../../context/DataContext';
 import RegularPanel from '../../components/RegularPanel';
 
 export default function PriceRegistryPage() {
-  const { loading, payload } = useData();
+  const { loading, payload, setPayload } = useData();
 
   if (loading) return null;
 
@@ -22,7 +22,7 @@ export default function PriceRegistryPage() {
         Substitui o emergencial: revisão da quantidade mensal real, utilização vs
         contrato e risco de ruptura em 12 meses. Modo consulta.
       </p>
-      <RegularPanel data={payload} readOnly onUpdate={() => {}} />
+      <RegularPanel data={payload} readOnly onUpdate={setPayload} />
     </section>
   );
 }

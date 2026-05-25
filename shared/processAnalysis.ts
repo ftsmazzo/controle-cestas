@@ -6,7 +6,6 @@ import {
 } from './allocation.js';
 import { computeForecastUntilYearEnd, forecastNextMonth } from './forecastPlan.js';
 import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
-import { processedRowsFromPayload } from './payloadAnalysis.js';
 import { parseMonthKey } from './monthUtils.js';
 import type {
   ProcessoEmergencialAnalise,
@@ -16,7 +15,7 @@ import type {
   ProcessoRiscoItem,
 } from './processTypes.js';
 import { mergeAppSettings, type AppSettings } from './appSettings.js';
-import type { RawMonthRow } from './types.js';
+import type { ProcessedMonthRow, RawMonthRow } from './types.js';
 import type { ServiceDef, ServiceMonthRecord } from './serviceTypes.js';
 
 function riscoPorGap(gap: number, disponivel: number): ProcessoRiscoItem['nivel'] {
@@ -104,34 +103,32 @@ export function analyzeEmergencial(
 
 export function analyzeRegular(
   config: ProcessoRegularConfig,
-  history: ServiceMonthRecord[],
-  historicoMensal?: RawMonthRow[],
+  processedRows: ProcessedMonthRow[],
   settings?: AppSettings,
+  saldoAtual?: number | null,
 ): ProcessoRegularAnalise {
-  const rows =
-    historicoMensal && historicoMensal.length > 0
-      ? historicoMensal
-      : aggregateHistoryByMonth(history);
+  const janela = resolveJanelaAnaliseMeses(settings?.methodology);
+  const saldo =
+    saldoAtual ??
+    config.saldoAtual ??
+    mergeAppSettings(settings).saldoEstoque;
 
+  const raw = processedRows.map((r) => ({
+    mes: r.mes,
+    total: r.total,
+    status: r.status,
+    observacao: r.observacao,
+  }));
   const dash = buildDashboard(
-    rows,
+    raw,
     'Processo regular',
-    config.saldoAtual,
+    saldo,
     config.cestasContratoMensal,
-    resolveJanelaAnaliseMeses(settings?.methodology),
+    janela,
   );
 
-  const janela = resolveJanelaAnaliseMeses(settings?.methodology);
-  const processed =
-    historicoMensal && historicoMensal.length >= 3
-      ? dash.rows
-      : processedRowsFromPayload({
-          history,
-          settings: mergeAppSettings(settings),
-        });
-
-  const { valor: previsaoProximoMes } = forecastNextMonth(processed, janela);
-  const { pontos: previsaoPontos } = computeForecastUntilYearEnd(processed, {
+  const { valor: previsaoProximoMes } = forecastNextMonth(processedRows, janela);
+  const { pontos: previsaoPontos } = computeForecastUntilYearEnd(processedRows, {
     windowMonths: janela,
   });
   const futuros = previsaoPontos.filter((p) => p.tipo === 'projecao');

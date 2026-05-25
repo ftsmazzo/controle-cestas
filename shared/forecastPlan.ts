@@ -179,7 +179,12 @@ export function forecastNextMonth(
 /** Previsão mês a mês até dezembro do ano alvo. */
 export function computeForecastUntilYearEnd(
   rows: ProcessedMonthRow[],
-  options?: { endYear?: number; windowMonths?: number | null },
+  options?: {
+    endYear?: number;
+    /** Último YYYYMM a projetar (ex.: plano até Mai/2027) */
+    endMonthKey?: number;
+    windowMonths?: number | null;
+  },
 ): { pontos: ForecastPoint[]; meta: ProjecaoMeta | null } {
   const windowMonths = options?.windowMonths;
   const useNota = windowMonths == null || windowMonths <= 0;
@@ -202,7 +207,10 @@ export function computeForecastUntilYearEnd(
   const excluded = new Set(excludedMonthKeysFromRows(rows));
   const lastValid = Math.max(...validKeys);
   const targetYear = options?.endYear ?? Math.floor(lastValid / 100);
-  const endKey = targetYear * 100 + 12;
+  const endKey = Math.max(
+    targetYear * 100 + 12,
+    options?.endMonthKey ?? 0,
+  );
 
   const pontos: ForecastPoint[] = [];
   let cursor = incrementMonthKey(lastValid);
@@ -231,7 +239,7 @@ export function computeForecastUntilYearEnd(
       valorOtimista: useNota ? otimista : undefined,
     });
     cursor = incrementMonthKey(cursor);
-    if (pontos.length > 18) break;
+    if (!options?.endMonthKey && pontos.length > 18) break;
   }
 
   const { valor: proximo } = forecastNextMonth(rows, windowMonths);
