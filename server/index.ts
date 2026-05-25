@@ -98,7 +98,7 @@ async function start() {
         const hydrated = hydrateDashboardState(
           snapshot.state,
           snapshot.saldoEstoque,
-          payload.settings?.contratoMensal ?? 1500,
+          payload.settings?.contratoMensal ?? 1200,
         );
         snapshot = { state: hydrated, saldoEstoque: snapshot.saldoEstoque };
       }

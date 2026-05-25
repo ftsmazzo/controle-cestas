@@ -56,6 +56,8 @@ export interface DashboardState {
   insights: InsightsKpis;
   forecast: ForecastPoint[];
   tendenciaProximos: ForecastPoint[];
+  /** Previsão linear até dezembro do ano (meses nomeados, ex. Jun/2026…) */
+  previsaoAteFimAno?: ForecastPoint[];
   mediaMovelUltimos3: number | null;
   cenariosContrato: ContractScenario[];
   uploadedAt: string;

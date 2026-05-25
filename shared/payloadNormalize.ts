@@ -30,6 +30,10 @@ export function normalizeServicesPayload(
     settings.saldoEstoque = regular.saldoAtual;
   }
 
+  if (settings.contratoMensal === 1500 && settings.contratoAnual === 18000) {
+    settings.contratoMensal = 1200;
+    settings.contratoAnual = 14400;
+  }
   regular.cestasContratoMensal = settings.contratoMensal;
   regular.totalContratoAnual = settings.contratoAnual;
 

@@ -39,7 +39,7 @@ interface Props {
 
 export default function SimulationPanel({
   dashboard,
-  defaultTotalContrato = 18000,
+  defaultTotalContrato = 14400,
 }: Props) {
   const [totalContrato, setTotalContrato] = useState(String(defaultTotalContrato));
   const [consumoInput, setConsumoInput] = useState('');
@@ -52,7 +52,7 @@ export default function SimulationPanel({
     setPresets(presetsFromDashboard(dashboard));
   }, [dashboard]);
 
-  const totalNum = useMemo(() => parseInputInt(totalContrato) ?? 18000, [totalContrato]);
+  const totalNum = useMemo(() => parseInputInt(totalContrato) ?? 14400, [totalContrato]);
 
   const preview = useMemo(() => {
     const consumo = parseInputInt(consumoInput);

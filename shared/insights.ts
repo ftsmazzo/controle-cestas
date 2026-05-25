@@ -36,7 +36,7 @@ export function computeInsights(
   rows: ProcessedMonthRow[],
   kpis: Kpis,
   projecao1: number | null,
-  contratoMensal = 1500,
+  contratoMensal = 1200,
 ): InsightsKpis {
   const completos = rows.filter((r) => r.usoNoModelo === 'Sim');
   const excluidos = rows.filter((r) => r.usoNoModelo === 'Não');

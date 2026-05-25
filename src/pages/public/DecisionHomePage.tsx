@@ -48,7 +48,7 @@ export default function DecisionHomePage() {
 
       <DecisionDashboard
         dashboard={dashboard}
-        contratoMensal={payload?.settings?.contratoMensal ?? 1500}
+        contratoMensal={payload?.settings?.contratoMensal ?? 1200}
       />
 
       <section className="panel apresentacao">

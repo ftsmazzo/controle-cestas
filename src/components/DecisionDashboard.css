@@ -89,3 +89,28 @@
   font-size: 0.7rem;
   color: var(--muted);
 }
+
+.projecao-explicacao {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+.projecao-meta-list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.projecao-meta-list li {
+  margin-bottom: 0.35rem;
+}
+
+.chart-hero {
+  margin-bottom: 1rem;
+}
+
+.chart-footnote {
+  margin-top: 0.65rem;
+  font-size: 0.85rem;
+}

@@ -101,7 +101,7 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
                   ...data,
                   regular: {
                     ...cfg,
-                    cestasContratoMensal: parseQty(e.target.value) || 1500,
+                    cestasContratoMensal: parseQty(e.target.value) || 1200,
                   },
                 })
               }
@@ -119,7 +119,7 @@ export default function RegularPanel({ data, onUpdate, readOnly }: Props) {
                   ...data,
                   regular: {
                     ...cfg,
-                    totalContratoAnual: parseQty(e.target.value) || 18000,
+                    totalContratoAnual: parseQty(e.target.value) || 14400,
                   },
                 })
               }

@@ -14,8 +14,8 @@ export interface AppSettings {
 export function defaultAppSettings(): AppSettings {
   return {
     saldoEstoque: null,
-    contratoMensal: 1500,
-    contratoAnual: 18000,
+    contratoMensal: 1200,
+    contratoAnual: 14400,
     methodology: defaultMethodologySettings(),
   };
 }

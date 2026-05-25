@@ -21,7 +21,7 @@ function populationStdDev(values: number[]): number {
   return Math.sqrt(variance);
 }
 
-function linearRegression(
+export function linearRegression(
   xs: number[],
   ys: number[],
 ): { slope: number; intercept: number } {
@@ -38,7 +38,7 @@ function linearRegression(
   return { slope, intercept };
 }
 
-function forecastLinear(x: number, xs: number[], ys: number[]): number {
+export function forecastLinear(x: number, xs: number[], ys: number[]): number {
   const { slope, intercept } = linearRegression(xs, ys);
   return slope * x + intercept;
 }
@@ -219,4 +219,4 @@ export function mediaMovelUltimos3Validos(rows: ProcessedMonthRow[]): number | n
 export { contractScenarios } from './simulation.js';
 
 export const APRESENTACAO_TEXTO =
-  'A análise considera o histórico mensal de consumo, excluindo da modelagem Abr/2026 (parada no fornecimento — ruptura de estoque) e Mai/2026 (mês parcial, retorno gradual e racionamento), para que esses valores não sejam interpretados como queda real da demanda. A previsão utiliza apenas meses completos, tendência histórica, média móvel e controle de anomalias. O volume contratado de 18.000 cestas (1.500/mês) deve ser avaliado à luz da utilização média, picos e projeção, com acompanhamento mensal da autonomia de estoque.';
+  'A análise considera o histórico mensal de consumo, excluindo da modelagem períodos de COVID/2022-Q1, racionamento/2023, ruptura Abr/2026 e parcial Mai/2026. A previsão utiliza regressão linear apenas sobre meses válidos. O contrato de referência é 1.200 cestas/mês (14.400/ano), comparado à média válida, picos e projeção até o fim do ano.';

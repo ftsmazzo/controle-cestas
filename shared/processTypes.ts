@@ -71,8 +71,8 @@ export function defaultRegularConfig(
   return {
     ativo: true,
     duracaoMeses: 12,
-    cestasContratoMensal: 1500,
-    totalContratoAnual: 18000,
+    cestasContratoMensal: 1200,
+    totalContratoAnual: 14400,
     plans: months.map((mes) => ({ mes, totalDisponivel: 0 })),
     saldoAtual: null,
     observacao: 'Processo regular — levantamento mensal e análise de risco em 12 meses.',

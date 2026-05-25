@@ -26,12 +26,12 @@ export function evaluateContractScenario(
   let leitura: string;
 
   if (cobre12Meses) {
-    if (consumoMensal <= 1500) {
+    if (consumoMensal <= 1200) {
       risco = 'baixo';
-      leitura = `Cobre ${duracaoMeses.toFixed(1)} meses — no ritmo planejado de 1.500/mês.`;
+      leitura = `Cobre ${duracaoMeses.toFixed(1)} meses — no ritmo de até 1.200/mês.`;
     } else {
       risco = 'moderado';
-      leitura = `Cobre ${duracaoMeses.toFixed(1)} meses, acima de 1.500/mês — folga de ${margemMeses.toFixed(1)} mês(es).`;
+      leitura = `Cobre ${duracaoMeses.toFixed(1)} meses, acima de 1.200/mês — folga de ${margemMeses.toFixed(1)} mês(es).`;
     }
   } else if (duracaoMeses >= 10) {
     risco = 'moderado';
@@ -55,8 +55,12 @@ export function evaluateContractScenario(
   };
 }
 
-export function contractScenarios(totalContrato = 18000): ContractScenario[] {
-  return [1500, 1700, 1800, 2000]
+export function contractScenarios(
+  totalContrato = 14400,
+  contratoMensalRef = 1200,
+): ContractScenario[] {
+  const ref = contratoMensalRef;
+  return [ref, ref + 200, ref + 400, ref + 600]
     .map((c) => evaluateContractScenario(totalContrato, c))
     .filter((s): s is ContractScenarioResult => s !== null);
 }
@@ -75,7 +79,7 @@ export function presetsFromDashboard(d: DashboardState): ScenarioPreset[] {
     }
   };
 
-  add('planejado', 'Planejado (1.500)', 1500);
+  add('planejado', 'Contrato (1.200)', 1200);
   add('media', 'Média válida', d.kpis.mediaMensalValida);
   add('pico', 'Pico histórico', d.kpis.picoConsumo);
   add('mm3', 'Média móvel 3m', d.mediaMovelUltimos3);
