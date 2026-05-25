@@ -5,7 +5,7 @@ import './Shell.css';
 
 const NAV = [
   ['/', 'Painel de decisão'],
-  ['/historico', 'Histórico'],
+  ['/historico', 'Consumo'],
   ['/distribuir', 'Distribuir mês'],
   ['/contrato-emergencial', 'Contrato emergencial'],
   ['/registro-preco', 'Registro de Preço'],

@@ -29,6 +29,46 @@ export interface MethodologySettings {
   janelaMediaMeses: number | null;
   /** null = todos os meses válidos (nota técnica); N = últimos N válidos */
   janelaAnaliseMeses: number | null;
+  /** Período do mapa de calor e estudos (YYYYMM) */
+  periodoEstudoFrom: number;
+  periodoEstudoTo: number;
+}
+
+export interface PeriodoPreset {
+  id: string;
+  label: string;
+  from: number;
+  to: number;
+}
+
+export const PERIODO_ESTUDO_PRESETS: PeriodoPreset[] = [
+  { id: 'mar25_mar26', label: 'Mar/2025 – Mar/2026', from: 202503, to: 202603 },
+  { id: 'abr25_mai26', label: 'Abr/2025 – Mai/2026', from: 202504, to: 202605 },
+  { id: 'ano2025', label: 'Ano 2025', from: 202501, to: 202512 },
+  { id: 'ano2024', label: 'Ano 2024', from: 202401, to: 202412 },
+];
+
+export function periodoPresetById(id: string): PeriodoPreset {
+  return PERIODO_ESTUDO_PRESETS.find((p) => p.id === id) ?? PERIODO_ESTUDO_PRESETS[0];
+}
+
+export function detectPeriodoPresetId(
+  from: number,
+  to: number,
+): string {
+  const hit = PERIODO_ESTUDO_PRESETS.find((p) => p.from === from && p.to === to);
+  return hit?.id ?? 'custom';
+}
+
+export function resolvePeriodoEstudo(m: MethodologySettings | undefined | null): {
+  from: number;
+  to: number;
+} {
+  const def = PERIODO_ESTUDO_PRESETS[0];
+  if (!m) return { from: def.from, to: def.to };
+  const from = m.periodoEstudoFrom > 0 ? m.periodoEstudoFrom : def.from;
+  const to = m.periodoEstudoTo > 0 ? m.periodoEstudoTo : def.to;
+  return { from: Math.min(from, to), to: Math.max(from, to) };
 }
 
 /** Lê janela salva sem confundir null (todos) com ausência de valor. */
@@ -66,6 +106,12 @@ export function mergeMethodologySettings(
   if ('janelaMediaMeses' in partial) {
     merged.janelaMediaMeses = partial.janelaMediaMeses ?? null;
   }
+  if ('periodoEstudoFrom' in partial && partial.periodoEstudoFrom != null) {
+    merged.periodoEstudoFrom = partial.periodoEstudoFrom;
+  }
+  if ('periodoEstudoTo' in partial && partial.periodoEstudoTo != null) {
+    merged.periodoEstudoTo = partial.periodoEstudoTo;
+  }
   return merged;
 }
 
@@ -82,6 +128,8 @@ export function defaultMethodologySettings(): MethodologySettings {
     exclude2022Q1: true,
     janelaMediaMeses: null,
     janelaAnaliseMeses: null,
+    periodoEstudoFrom: PERIODO_ESTUDO_PRESETS[0].from,
+    periodoEstudoTo: PERIODO_ESTUDO_PRESETS[0].to,
   };
 }
 

@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   defaultMethodologySettings,
+  detectPeriodoPresetId,
+  mergeMethodologySettings,
+  PERIODO_ESTUDO_PRESETS,
+  periodoPresetById,
   resolveJanelaAnaliseMeses,
+  resolvePeriodoEstudo,
 } from '@shared/methodologyCalendar';
+import { formatMonthKeyPt } from '@shared/monthUtils';
 import { useData } from '../../context/DataContext';
 import { saveSettings } from '../../lib/snapshotApi';
 
@@ -17,22 +23,44 @@ export default function AdminMethodologyPage() {
   const { payload, reload, loading } = useData();
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [janelaDraft, setJanelaDraft] = useState('all');
+  const [periodoDraft, setPeriodoDraft] = useState(PERIODO_ESTUDO_PRESETS[0].id);
+  const [exclude2022, setExclude2022] = useState(true);
+  const [exclude2023, setExclude2023] = useState(true);
+
+  const m = payload?.settings?.methodology ?? defaultMethodologySettings();
+
+  useEffect(() => {
+    if (!payload) return;
+    const meth = payload.settings?.methodology ?? defaultMethodologySettings();
+    const janela = resolveJanelaAnaliseMeses(meth);
+    setJanelaDraft(janela == null ? 'all' : String(janela));
+    const per = resolvePeriodoEstudo(meth);
+    setPeriodoDraft(detectPeriodoPresetId(per.from, per.to));
+    setExclude2022(meth.exclude2022Q1);
+    setExclude2023(meth.excludeYear2023);
+  }, [payload]);
 
   if (loading || !payload) return null;
 
-  const m = payload.settings?.methodology ?? defaultMethodologySettings();
-  const janelaAtual = resolveJanelaAnaliseMeses(m);
-  const janelaSelect = janelaAtual == null ? 'all' : String(janelaAtual);
-
-  const save = async (patch: Partial<typeof m>) => {
+  const salvar = async () => {
     setSaving(true);
     setMsg(null);
+    const janelaOpt =
+      JANELA_OPCOES.find((o) => o.value === janelaDraft) ?? JANELA_OPCOES[3];
+    const periodoOpt = periodoPresetById(periodoDraft);
     try {
-      await saveSettings({
-        methodology: { ...m, ...patch },
+      const next = mergeMethodologySettings(m, {
+        janelaAnaliseMeses: janelaOpt.meses,
+        janelaMediaMeses: janelaOpt.meses,
+        periodoEstudoFrom: periodoOpt.from,
+        periodoEstudoTo: periodoOpt.to,
+        exclude2022Q1: exclude2022,
+        excludeYear2023: exclude2023,
       });
+      await saveSettings({ methodology: next });
       await reload();
-      setMsg('Salvo. Visão geral e Distribuir mês usam a mesma janela.');
+      setMsg('Configurações salvas.');
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Erro ao salvar.');
     } finally {
@@ -40,30 +68,37 @@ export default function AdminMethodologyPage() {
     }
   };
 
-  const setJanela = (value: string) => {
-    const opt = JANELA_OPCOES.find((o) => o.value === value) ?? JANELA_OPCOES[0];
-    void save({
-      janelaAnaliseMeses: opt.meses,
-      janelaMediaMeses: opt.meses,
-    });
-  };
+  const per = periodoPresetById(periodoDraft);
 
   return (
     <section className="panel">
-      <h2>Metodologia e janela de análise</h2>
+      <h2>Metodologia e períodos</h2>
       <p className="hint">
-        <strong>Todos os meses válidos</strong> usa a mesma lógica da nota técnica (regressão na
-        série limpa + sazonalidade 2025 + faixas ± desvio). <strong>8/12/24</strong> usa só os
-        últimos N meses na regressão. Meses excluídos (COVID, 2023, Abr/Mai 2026) permanecem visíveis
-        no histórico.
+        Ajuste abaixo e clique em <strong>Salvar</strong>. O período de estudo alimenta o mapa de
+        calor na consulta pública. A janela de análise define a previsão no painel de decisão.
       </p>
 
       <div className="config-grid">
         <label>
+          Período de estudo (mapa de calor)
+          <select
+            value={periodoDraft}
+            onChange={(e) => setPeriodoDraft(e.target.value)}
+            disabled={saving}
+          >
+            {PERIODO_ESTUDO_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
           Janela para tendência e previsão
           <select
-            value={janelaSelect}
-            onChange={(e) => setJanela(e.target.value)}
+            value={janelaDraft}
+            onChange={(e) => setJanelaDraft(e.target.value)}
             disabled={saving}
           >
             {JANELA_OPCOES.map((o) => (
@@ -77,8 +112,8 @@ export default function AdminMethodologyPage() {
         <label>
           <input
             type="checkbox"
-            checked={m.exclude2022Q1}
-            onChange={(e) => void save({ exclude2022Q1: e.target.checked })}
+            checked={exclude2022}
+            onChange={(e) => setExclude2022(e.target.checked)}
             disabled={saving}
           />
           Excluir Jan–Mar/2022 (legado COVID)
@@ -86,19 +121,37 @@ export default function AdminMethodologyPage() {
         <label>
           <input
             type="checkbox"
-            checked={m.excludeYear2023}
-            onChange={(e) => void save({ excludeYear2023: e.target.checked })}
+            checked={exclude2023}
+            onChange={(e) => setExclude2023(e.target.checked)}
             disabled={saving}
           />
           Excluir ano 2023 (racionamento)
         </label>
       </div>
 
-      <p className="hint">
-        Abr/2026 (ruptura) e Mai/2026 (parcial) são detectados automaticamente no histórico.
+      <p className="meta">
+        Período selecionado: {formatMonthKeyPt(per.from)} a {formatMonthKeyPt(per.to)} · Janela
+        previsão:{' '}
+        {janelaDraft === 'all'
+          ? 'todos os válidos'
+          : `últimos ${janelaDraft} meses`}
       </p>
 
-      {msg && <p className="meta">{msg}</p>}
+      <button
+        type="button"
+        className="primary-btn"
+        disabled={saving}
+        onClick={() => void salvar()}
+      >
+        {saving ? 'Salvando…' : 'Salvar metodologia'}
+      </button>
+
+      <p className="hint">
+        Abr/2026 (ruptura) e Mai/2026 (parcial) são detectados automaticamente quando existem no
+        histórico. Se você removeu esses meses da planilha, eles não aparecem.
+      </p>
+
+      {msg && <p className="meta sync-ok">{msg}</p>}
     </section>
   );
 }

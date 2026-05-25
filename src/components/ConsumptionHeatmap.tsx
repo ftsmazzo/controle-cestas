@@ -28,10 +28,12 @@ export default function ConsumptionHeatmap({
   services,
   history,
   onlyEquipamento = true,
-  rangeFrom = HEATMAP_RANGE_FROM,
-  rangeTo = HEATMAP_RANGE_TO,
+  rangeFrom,
+  rangeTo,
 }: Props) {
-  const periodLabel = `${formatMonthKeyPt(rangeFrom)} a ${formatMonthKeyPt(rangeTo)}`;
+  const from = rangeFrom ?? HEATMAP_RANGE_FROM;
+  const to = rangeTo ?? HEATMAP_RANGE_TO;
+  const periodLabel = `${formatMonthKeyPt(from)} a ${formatMonthKeyPt(to)}`;
 
   const units = useMemo(
     () =>
@@ -45,7 +47,7 @@ export default function ConsumptionHeatmap({
     const monthSet = new Set<string>();
     const map = new Map<string, number>();
     for (const h of history) {
-      if (!isMonthKeyInRange(h.mes, rangeFrom, rangeTo)) continue;
+      if (!isMonthKeyInRange(h.mes, from, to)) continue;
       const u = services.find((s) => s.id === h.servicoId);
       if (onlyEquipamento && u && (u.level ?? 'equipamento') !== 'equipamento') {
         continue;
@@ -66,7 +68,7 @@ export default function ConsumptionHeatmap({
       }),
     );
     return { months, matrix, max };
-  }, [history, services, units, onlyEquipamento, rangeFrom, rangeTo]);
+  }, [history, services, units, onlyEquipamento, from, to]);
 
   if (!months.length || !units.length) {
     return (

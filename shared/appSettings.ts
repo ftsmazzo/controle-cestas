@@ -21,9 +21,12 @@ export function defaultAppSettings(): AppSettings {
   };
 }
 
-export function mergeAppSettings(partial?: Partial<AppSettings> | null): AppSettings {
-  const base = defaultAppSettings();
-  if (!partial) return base;
+export function mergeAppSettings(
+  partial?: Partial<AppSettings> | null,
+  existing?: AppSettings | null,
+): AppSettings {
+  const base = existing ? { ...existing } : defaultAppSettings();
+  if (!partial) return { ...base };
   return {
     saldoEstoque:
       partial.saldoEstoque !== undefined
@@ -33,7 +36,7 @@ export function mergeAppSettings(partial?: Partial<AppSettings> | null): AppSett
     contratoAnual: partial.contratoAnual ?? base.contratoAnual,
     methodology: mergeMethodologySettings(
       base.methodology,
-      partial.methodology,
+      partial.methodology ?? undefined,
     ),
   };
 }

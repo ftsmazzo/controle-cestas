@@ -298,14 +298,7 @@ async function start() {
     try {
       const existing = await getServicesData();
       const body = req.body as Partial<AppSettings>;
-      const base = mergeAppSettings(existing.settings);
-      const settings = mergeAppSettings({
-        ...base,
-        ...body,
-        methodology: body.methodology
-          ? mergeMethodologySettings(base.methodology, body.methodology)
-          : base.methodology,
-      });
+      const settings = mergeAppSettings(body, mergeAppSettings(existing.settings));
       const { payload } = await persistAndRecalculate({
         ...existing,
         settings,
