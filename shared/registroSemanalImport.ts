@@ -42,11 +42,19 @@ export function applyRegistroSemanalImport(
   let linhasAplicadas = 0;
   let totalSemana = 0;
 
+  const porServico = new Map<string, number>();
   for (const row of rows) {
     if (!row.servicoId || row.match !== 'ok') continue;
-    mon = upsertWeeklyQty(mon, mes, semana, row.servicoId, row.quantidade);
+    porServico.set(
+      row.servicoId,
+      (porServico.get(row.servicoId) ?? 0) + row.quantidade,
+    );
+  }
+
+  for (const [servicoId, quantidade] of porServico) {
+    mon = upsertWeeklyQty(mon, mes, semana, servicoId, quantidade);
     linhasAplicadas += 1;
-    totalSemana += row.quantidade;
+    totalSemana += quantidade;
   }
 
   return {

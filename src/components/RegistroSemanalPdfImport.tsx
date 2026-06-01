@@ -82,11 +82,10 @@ export default function RegistroSemanalPdfImport({
     <section className="panel registro-semanal-import">
       <h3>Registro real da semana — PDF operacional</h3>
       <p className="hint">
-        Documento do <strong>Banco</strong> com envios por equipamento (modelo{' '}
-        <em>Março a Setembro</em> com várias semanas, ou PDF de{' '}
-        <strong>uma semana</strong> ex. CESTAS 18-24.05.26). Isso
-        preenche o <strong>envio real</strong> da semana selecionada — não altera metas
-        nem histórico Coderp.
+        PDF padrão: relatório <strong>RME Coderp</strong> da semana (ex.{' '}
+        <em>CESTAS 18.05.26 A 24.05.26.pdf</em> — Consumo por requisitante, período
+        18/05–24/05). Cada setor (CRAS 1…12, CREAS I–V, NAEM…) vira envio real da
+        semana. <strong>Não</strong> altera metas (use o Coderp longo só para histórico).
       </p>
       <p className="hint">
         Destino: <strong>{mes}</strong> · <strong>Semana {semana}</strong> ({rangeLabel}
@@ -112,12 +111,20 @@ export default function RegistroSemanalPdfImport({
           {preview.mesDetectado && (
             <p className="hint">
               Mês no PDF: <strong>{preview.mesDetectado}</strong>
-              {preview.modo === 'semana_unica' ? (
+              {preview.modo === 'rme_semanal' ? (
                 <>
                   {' '}
-                  · <strong>semana única</strong>
+                  · <strong>RME semanal</strong>
                   {preview.semanaAplicada != null && (
-                    <> → aplicada como S{preview.semanaAplicada}</>
+                    <> → S{preview.semanaAplicada}</>
+                  )}
+                </>
+              ) : preview.modo === 'semana_unica' ? (
+                <>
+                  {' '}
+                  · <strong>planilha · semana única</strong>
+                  {preview.semanaAplicada != null && (
+                    <> → S{preview.semanaAplicada}</>
                   )}
                 </>
               ) : (

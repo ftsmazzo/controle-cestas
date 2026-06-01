@@ -1,3 +1,4 @@
+import { parseCoderpPdfText, parseCoderpPeriod } from './coderpPdfParser.js';
 import {
   calendarWeekRangesInMonth,
   dayToWeekNumber,
@@ -20,7 +21,7 @@ export interface RegistroSemanalRow {
   match: 'ok' | 'unmatched';
 }
 
-export type RegistroModoPdf = 'colunas_mes' | 'semana_unica';
+export type RegistroModoPdf = 'rme_semanal' | 'colunas_mes' | 'semana_unica';
 
 export interface RegistroParseOptions {
   mesAlvo?: string | null;
@@ -139,12 +140,111 @@ function parseEquipmentLine(line: string): { unit: string; qtys: number[] } | nu
   return { unit, qtys };
 }
 
-/** Ex.: CESTAS 18-24.05.26.pdf → semana civil do mês */
+function parseBrDateParts(ddmmyyyy: string): {
+  day: number;
+  month: number;
+  year: number;
+} | null {
+  const m = ddmmyyyy.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return null;
+  return {
+    day: parseInt(m[1], 10),
+    month: parseInt(m[2], 10),
+    year: parseInt(m[3], 10),
+  };
+}
+
+/** PDF padrão: RME Coderp “Consumo por requisitante” da semana (18/05–24/05…) */
+export function isRmeSemanalPdf(text: string): boolean {
+  return (
+    /Per[ií]odo\s*\(Movimenta[cç][aã]o\)/i.test(text) &&
+    /Consumo de Materiais\s*\(Requisitante/i.test(text) &&
+    /SETOR\s+CRAS|SETOR\s+CREAS|SECAO DE SERVICOS/i.test(text)
+  );
+}
+
+function parseRmeSemanalRegistro(
+  text: string,
+  services: ServiceDef[],
+  opts: RegistroParseOptions,
+): RegistroSemanalParseResult {
+  const warnings: string[] = [];
+  const period = parseCoderpPeriod(text);
+  const coderp = parseCoderpPdfText(text, services);
+
+  let mesDetectado = opts.mesAlvo ?? null;
+  let semanaAplicada = opts.semanaAlvo ?? null;
+
+  if (period.inicio) {
+    const parts = parseBrDateParts(period.inicio);
+    if (parts) {
+      if (!mesDetectado) {
+        mesDetectado = formatMonthKeyPt(parts.year * 100 + parts.month);
+      }
+      if (semanaAplicada == null) {
+        semanaAplicada = dayToWeekNumber(parts.year, parts.month, parts.day);
+      }
+    }
+  }
+
+  if (semanaAplicada == null && opts.fileName) {
+    semanaAplicada = detectSemanaFromFileName(opts.fileName, mesDetectado);
+  }
+
+  const semanaFinal = semanaAplicada ?? 1;
+
+  const rows: RegistroSemanalRow[] = coderp.rows.map((r) => ({
+    unidade: r.canonicalNome ?? r.requisitante,
+    canonicalNome: r.canonicalNome ?? r.requisitante,
+    servicoId: r.servicoId,
+    servicoNome: r.servicoNome,
+    semana: semanaFinal,
+    quantidade: r.quantidade,
+    match: r.match === 'ok' ? 'ok' : 'unmatched',
+  }));
+
+  if (period.label) {
+    warnings.push(
+      `Formato RME semanal (${period.label}) — ${rows.length} requisitante(s) no PDF.`,
+    );
+  }
+
+  const unmatched = rows.filter((r) => r.match === 'unmatched');
+  if (unmatched.length) {
+    warnings.push(
+      `${unmatched.length} requisitante(s) sem cadastro: ${[...new Set(unmatched.map((r) => r.unidade))].slice(0, 4).join(', ')}${unmatched.length > 4 ? '…' : ''}.`,
+    );
+  }
+
+  warnings.push(...coderp.warnings.slice(0, 2));
+
+  return {
+    mesDetectado,
+    semanasDetectadas: [semanaFinal],
+    semanaAplicada: semanaFinal,
+    modo: 'rme_semanal',
+    rows,
+    warnings,
+  };
+}
+
+/** Ex.: CESTAS 18.05.26 A 24.05.26.pdf → semana civil do mês */
 export function detectSemanaFromFileName(
   fileName: string,
   mesAlvo?: string | null,
 ): number | null {
   const ym = mesAlvo ? getYearMonth(mesAlvo) : null;
+
+  const m0 = fileName.match(
+    /(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s+A\s+(\d{1,2})\.(\d{1,2})\.(\d{2,4})/i,
+  );
+  if (m0) {
+    const d1 = parseInt(m0[1], 10);
+    let yr = parseInt(m0[3], 10);
+    const mo = parseInt(m0[2], 10);
+    if (yr < 100) yr += 2000;
+    return dayToWeekNumber(yr, mo, d1);
+  }
 
   const m1 = fileName.match(/(\d{1,2})\D+(\d{1,2})\.(\d{1,2})\.(\d{2,4})/i);
   if (m1) {
@@ -332,6 +432,23 @@ export function parseRegistroSemanalPdfText(
   services: ServiceDef[] = [],
   opts: RegistroParseOptions = {},
 ): RegistroSemanalParseResult {
+  if (isRmeSemanalPdf(text)) {
+    const rme = parseRmeSemanalRegistro(text, services, opts);
+    if (
+      opts.semanaAlvo != null &&
+      opts.semanaAlvo > 0 &&
+      rme.rows.length
+    ) {
+      return {
+        ...rme,
+        semanaAplicada: opts.semanaAlvo,
+        semanasDetectadas: [opts.semanaAlvo],
+        rows: rme.rows.map((row) => ({ ...row, semana: opts.semanaAlvo! })),
+      };
+    }
+    return rme;
+  }
+
   const warnings: string[] = [];
   const sections = splitMonthSections(text);
   let allRows: RegistroSemanalRow[] = [];
