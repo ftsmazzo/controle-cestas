@@ -1,4 +1,8 @@
-import type { CoderpParseResult, CoderpRequisitanteRow } from './coderpPdfParser.js';
+import type { CoderpParseResult } from './coderpPdfParser.js';
+import {
+  cotaFixaPorUnidade,
+  normalizeCoderpImportRows,
+} from './coderpRequisitanteRules.js';
 import {
   detectFamiliaFromName,
   enrichServiceDef,
@@ -34,29 +38,37 @@ export const TOTAL_MENSAL_EMERGENCIAL_PADRAO = 1150;
 /** Meses da carga incorreta (planilha operacional Mar–Set/2025) */
 export const MESES_CARGA_PLANILHA_REMOVER = { from: 202503, to: 202509 };
 
-function ensureService(
+function ensureServiceByUnitName(
   services: ServiceDef[],
-  row: CoderpRequisitanteRow,
-): { services: ServiceDef[]; id: string; nome: string } {
-  if (row.servicoId) {
-    const found = services.find((s) => s.id === row.servicoId);
-    if (found) return { services, id: found.id, nome: found.nome };
+  unidadeNome: string,
+): { services: ServiceDef[]; id: string; nome: string; criado: boolean } {
+  const found = matchServiceByCanonicalName(services, unidadeNome);
+  const cota = cotaFixaPorUnidade(unidadeNome);
+  if (found) {
+    let next = services;
+    if (cota != null && (!found.fixo || found.cotaFixa !== cota)) {
+      next = services.map((s) =>
+        s.id === found.id ? { ...s, fixo: true, cotaFixa: cota } : s,
+      );
+    }
+    return { services: next, id: found.id, nome: found.nome, criado: false };
   }
-  const nome = row.canonicalNome ?? row.requisitante.slice(0, 80);
-  const id = slugServiceId(nome);
+  const id = slugServiceId(unidadeNome);
   const existing = services.find((s) => s.id === id);
-  if (existing) return { services, id, nome: existing.nome };
-  const fam = row.familia ?? detectFamiliaFromName(nome);
+  if (existing) {
+    return { services, id, nome: existing.nome, criado: false };
+  }
+  const fam = detectFamiliaFromName(unidadeNome);
   const def = enrichServiceDef({
     id,
-    nome,
-    fixo: false,
-    cotaFixa: null,
+    nome: unidadeNome,
+    fixo: cota != null,
+    cotaFixa: cota,
     level: 'unidade',
     parentId: fam ? familiaId(fam) : null,
     familiaCodigo: fam,
   });
-  return { services: [...services, def], id, nome };
+  return { services: [...services, def], id, nome: unidadeNome, criado: true };
 }
 
 function distributePeriodToMonths(totalPeriodo: number, meses: readonly string[]): Map<string, number> {
@@ -99,6 +111,8 @@ export interface CoderpHistoricoImportResult {
   linhasAplicadas: number;
   novosEquipamentos: string[];
   mesesPreenchidos: string[];
+  notasRedistribuicao: string[];
+  avisos: string[];
 }
 
 /**
@@ -121,16 +135,19 @@ export function applyCoderpHistoricoImport(
     history = history.filter((h) => !mesKeys.has(parseMonthKey(h.mes)));
   }
 
+  const { unidades, warnings, notas } = normalizeCoderpImportRows(parsed.rows);
+  const avisos = [...parsed.warnings, ...warnings];
+
   const novosEquipamentos: string[] = [];
   let linhasAplicadas = 0;
 
-  for (const row of parsed.rows) {
-    if (row.quantidade <= 0) continue;
-    const ensured = ensureService(services, row);
+  for (const agg of unidades) {
+    if (agg.quantidadePeriodo <= 0) continue;
+    const ensured = ensureServiceByUnitName(services, agg.unidade);
     services = ensureFamiliaHierarchy(ensured.services);
-    if (row.match === 'criar') novosEquipamentos.push(ensured.nome);
+    if (ensured.criado) novosEquipamentos.push(ensured.nome);
 
-    const porMes = distributePeriodToMonths(row.quantidade, meses);
+    const porMes = distributePeriodToMonths(agg.quantidadePeriodo, meses);
     for (const [mes, total] of porMes) {
       if (total <= 0) continue;
       history.push({
@@ -169,8 +186,12 @@ export function applyCoderpHistoricoImport(
     linhasAplicadas,
     novosEquipamentos,
     mesesPreenchidos: meses,
+    notasRedistribuicao: notas,
+    avisos,
   };
 }
+
+export { normalizeCoderpImportRows } from './coderpRequisitanteRules.js';
 
 /** Limpa monitoramento + histórico da carga planilha (Mar–Set/2025) */
 export function revertCargaPlanilhaIncorreta(

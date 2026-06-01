@@ -587,7 +587,7 @@ export function demoServiceData(): ParseServiceResult {
     { nome: 'NAEM', fixo: false, cotaFixa: null, valores: [12, 15, 18, 14, 10, 8, 16, 12, 11, 14, 13, 15] },
     { nome: 'CREPD', fixo: false, cotaFixa: null, valores: [2, 0, 4, 2, 0, 2, 0, 4, 2, 0, 2, 4] },
     { nome: 'Núcleos Mãos Dadas', fixo: false, cotaFixa: null, valores: [6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { nome: 'SAICA', fixo: true, cotaFixa: 40, valores: [38, 40, 42, 39, 41, 40, 38, 42, 40, 39, 41, 40] },
+    { nome: 'SAICA', fixo: true, cotaFixa: 25, valores: [25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25] },
     { nome: 'Gabinete', fixo: false, cotaFixa: null, valores: [18, 20, 22, 19, 21, 20, 18, 22, 20, 19, 21, 20] },
     { nome: 'Defesa Civil', fixo: false, cotaFixa: null, valores: [1, 2, 0, 3, 1, 0, 2, 1, 0, 2, 1, 0] },
     { nome: 'Avarias', fixo: false, cotaFixa: null, valores: [26, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0] },

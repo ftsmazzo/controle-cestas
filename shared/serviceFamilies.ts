@@ -8,6 +8,7 @@ export const FAMILIAS_CONHECIDAS = [
   'CREPD',
   'IDOSO',
   'MÃOS DADAS',
+  'WARAOS',
   'DEFESA CIVIL',
   'GABINETE',
   'AVARIAS',
@@ -69,6 +70,7 @@ export function detectFamiliaFromName(nome: string): FamiliaCodigo | null {
   if (/crepd|deficiencia/.test(n)) return 'CREPD';
   if (/idoso|acolhim/.test(n)) return 'IDOSO';
   if (/maos dadas|m\.?\s*dadas/.test(n)) return 'MÃOS DADAS';
+  if (/waraos/.test(n)) return 'WARAOS';
   if (/defesa civil|d\.?\s*civil/.test(n)) return 'DEFESA CIVIL';
   if (/gabinete/.test(n)) return 'GABINETE';
   if (/avarias/.test(n)) return 'AVARIAS';
@@ -129,6 +131,7 @@ export function canonicalUnitNameFromCoderp(requisitante: string): string | null
   if (m) return `CREAS ${m[1].toUpperCase()}`;
 
   if (/saica|acolhimento institucional/.test(n)) return 'SAICA';
+  if (/protecao social especial|ss\s*protecao|waraos/.test(n)) return 'WARAOS';
   if (/mulher|naem/.test(n)) return 'NAEM';
   if (/deficiencia|crepd/.test(n)) return 'CREPD';
   if (/idoso|acolhim/.test(n)) return 'IDOSO';
@@ -136,7 +139,10 @@ export function canonicalUnitNameFromCoderp(requisitante: string): string | null
   if (/defesa civil/.test(n)) return 'DEFESA CIVIL';
   if (/gabinete/.test(n)) return 'GABINETE';
   if (/avarias/.test(n)) return 'AVARIAS';
-  if (/nutricao|banco de alimentos/.test(n)) return 'BANCO DE ALIMENTOS';
+  /* Banco/Nutrição: redistribuído em coderpRequisitanteRules — não é unidade de consumo */
+  if (/nutricao|seguranca alimentar|banco de alimentos|subalmoxarifado.*semas/.test(n)) {
+    return null;
+  }
 
   return null;
 }

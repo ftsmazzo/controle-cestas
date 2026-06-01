@@ -4,6 +4,7 @@ import {
   entradasFromBadImportRange,
   MESES_REQUISICAO_HISTORICO,
   MES_REFERENCIA_SEGURO,
+  normalizeCoderpImportRows,
   revertCargaPlanilhaIncorreta,
   TOTAL_MENSAL_EMERGENCIAL_PADRAO,
 } from '@shared/requisicaoHistorico';
@@ -62,12 +63,20 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
 
   const aplicar = () => {
     if (!preview?.rows.length) return;
-    const { payload, linhasAplicadas, novosEquipamentos, mesesPreenchidos } =
-      applyCoderpHistoricoImport(data, preview);
+    const {
+      payload,
+      linhasAplicadas,
+      novosEquipamentos,
+      mesesPreenchidos,
+      notasRedistribuicao,
+    } = applyCoderpHistoricoImport(data, preview);
     onApply(payload);
     setMsg(
       `Histórico de requisição: ${linhasAplicadas} unidade(s), meses ${mesesPreenchidos.join(', ')} (total do período ÷ 6). ` +
         `Meta emergencial: ${TOTAL_MENSAL_EMERGENCIAL_PADRAO}/mês · referência ${MES_REFERENCIA_SEGURO}. ` +
+        (notasRedistribuicao.length
+          ? `${notasRedistribuicao[0]} `
+          : '') +
         (novosEquipamentos.length
           ? `Novos: ${novosEquipamentos.slice(0, 4).join(', ')}. `
           : '') +
@@ -94,8 +103,10 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
       <p className="hint">
         PDF <strong>Consumo por requisitante</strong> (ex. Out/2025–Abr/2026). O sistema
         distribui o <strong>total do período em 6 meses</strong> ({MESES_REQUISICAO_HISTORICO.join(', ')}
-        ) — <strong>sem Abr/2026</strong>. Isso alimenta as <strong>proporções</strong> junto com
-        o histórico longo da planilha pivot. Não preenche envios semanais.
+        ) — <strong>sem Abr/2026</strong>. Requisitante <strong>Banco/Nutrição</strong> é
+        redistribuído para <strong>Mãos Dadas</strong> (40/mês), <strong>SAICA</strong> (25/mês) e{' '}
+        <strong>WARAOS</strong> (29/mês); <strong>SS Proteção Social</strong> vai para WARAOS.
+        Não preenche envios semanais.
       </p>
       <div className="config-grid">
         <label>
@@ -112,7 +123,9 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
       {parsing && <p className="hint">Lendo PDF…</p>}
       {msg && <p className="hint">{msg}</p>}
 
-      {preview && (
+      {preview && (() => {
+        const norm = normalizeCoderpImportRows(preview.rows);
+        return (
         <>
           {preview.periodoLabel && (
             <p className="hint">
@@ -121,38 +134,70 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
               <strong>{MES_REFERENCIA_SEGURO}</strong>.
             </p>
           )}
-          {preview.warnings.slice(0, 3).map((w, i) => (
+          {[...preview.warnings, ...norm.warnings].slice(0, 4).map((w, i) => (
             <p key={i} className="alerta-box alerta-nivel-moderado">
               {w}
             </p>
           ))}
+          {norm.notas.map((n, i) => (
+            <p key={`n-${i}`} className="hint">
+              {n}
+            </p>
+          ))}
+          <p className="hint">
+            <strong>Após redistribuição</strong> (o que será gravado):
+          </p>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Requisitante</th>
                   <th>Unidade</th>
                   <th>Total período</th>
                   <th>≈ / mês (÷6)</th>
+                  <th>Origens</th>
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.map((r) => (
-                  <tr key={r.codigo}>
-                    <td title={r.requisitante}>{r.requisitante.slice(0, 40)}…</td>
-                    <td>{r.canonicalNome ?? '—'}</td>
-                    <td>{r.quantidade.toLocaleString('pt-BR')}</td>
-                    <td>{Math.round(r.quantidade / 6).toLocaleString('pt-BR')}</td>
+                {norm.unidades.map((u) => (
+                  <tr key={u.unidade}>
+                    <td>{u.unidade}</td>
+                    <td>{u.quantidadePeriodo.toLocaleString('pt-BR')}</td>
+                    <td>{Math.round(u.quantidadePeriodo / 6).toLocaleString('pt-BR')}</td>
+                    <td title={u.origens.join(' · ')}>{u.origens.slice(0, 2).join(' · ')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <details className="hint" style={{ marginTop: '0.75rem' }}>
+            <summary>Linhas brutas do PDF</summary>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Requisitante</th>
+                    <th>Unidade (parser)</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.rows.map((r) => (
+                    <tr key={r.codigo}>
+                      <td title={r.requisitante}>{r.requisitante.slice(0, 40)}…</td>
+                      <td>{r.canonicalNome ?? '—'}</td>
+                      <td>{r.quantidade.toLocaleString('pt-BR')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
           <button type="button" className="primary-btn" onClick={aplicar}>
             Importar histórico de requisição
           </button>
         </>
-      )}
+        );
+      })()}
     </section>
   );
 }
