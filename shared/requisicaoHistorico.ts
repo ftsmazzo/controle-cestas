@@ -33,8 +33,9 @@ import type {
   ServicesPayload,
 } from './serviceTypes.js';
 
-/** Período oficial da requisição inicial (sem Abr/2026 — mês instável) */
+/** Período oficial da requisição (média sem racionamento — ref. rateio) */
 export const MESES_REQUISICAO_HISTORICO = [
+  'Set/2025',
   'Out/2025',
   'Nov/2025',
   'Dez/2025',

@@ -3,11 +3,11 @@ import { useData } from '../context/DataContext';
 import './Shell.css';
 
 const ADMIN_NAV = [
+  ['/admin/monitoramento', 'Monitor'],
   ['/admin/importar', 'Importar'],
   ['/admin/equipamentos', 'Equipamentos'],
-  ['/admin/metodologia', 'Metodologia'],
   ['/admin/contratos', 'Contratos'],
-  ['/admin/monitoramento', 'Monitor emergencial'],
+  ['/admin/metodologia', 'Metodologia (legado)'],
   ['/admin/sincronizar', 'Sincronizar'],
   ['/admin/atendimentos', 'Atendimentos (futuro)'],
 ] as const;
@@ -21,7 +21,7 @@ export default function AdminLayout() {
         <header className="header">
           <div>
             <h1>Administração — Cestas Básicas</h1>
-            <p className="subtitle">Carga de dados, metodologia e parâmetros</p>
+            <p className="subtitle">Monitoramento emergencial e configuração</p>
           </div>
           <div className="header-badges">
             <span className="mode-badge mode-admin">Administração</span>

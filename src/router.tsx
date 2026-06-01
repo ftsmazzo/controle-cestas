@@ -41,7 +41,7 @@ export default function AppRouter() {
               </AdminGate>
             }
           >
-            <Route index element={<Navigate to="importar" replace />} />
+            <Route index element={<Navigate to="monitoramento" replace />} />
             <Route path="importar" element={<AdminImportPage />} />
             <Route path="equipamentos" element={<AdminEquipmentsPage />} />
             <Route path="metodologia" element={<AdminMethodologyPage />} />

@@ -1,0 +1,31 @@
+.monitor-saldo-evolucao {
+  margin-top: 0.5rem;
+}
+
+.monitor-saldo-track {
+  height: 12px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.monitor-saldo-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.monitor-saldo-resumo {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.monitor-saldo-table td:last-child {
+  color: #1e40af;
+}
+
+.monitor-saldo-empty {
+  margin: 0;
+}

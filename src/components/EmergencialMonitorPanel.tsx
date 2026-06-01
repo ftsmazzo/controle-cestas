@@ -15,8 +15,10 @@ import { getYearMonth, parseMonthKey } from '@shared/monthUtils';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import CoderpPdfImport from './CoderpPdfImport';
 import MonitorSaudePanel from './MonitorSaudePanel';
+import MonitorSaldoEvolucao from './MonitorSaldoEvolucao';
 import RegistroSemanalPdfImport from './RegistroSemanalPdfImport';
 import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from '@shared/requisicaoHistorico';
+import { TETO_MENSAL_OPERACIONAL } from '@shared/processoEmergencial';
 import type { DashboardState } from '@shared/types';
 import './EmergencialMonitorPanel.css';
 
@@ -264,8 +266,11 @@ export default function EmergencialMonitorPanel({
 
   return (
     <div className="emerg-monitor">
-      <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass}`}>
-        <h2>Monitoramento semanal — {resumo.mes}</h2>
+      {/* —— 1 · Situação agora —— */}
+      <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass} monitor-section`}>
+        <h2 className="monitor-section-title">
+          <span>1 ·</span> Situação agora — {resumo.mes}
+        </h2>
         {resumo.ultimaSemanaComDados === 0 && resumo.enviadoMesTotal === 0 && (
           <p className="alerta-box alerta-nivel-alto">
             Nenhum envio lançado em <strong>{resumo.mes}</strong>. Importe o PDF RME da semana ou
@@ -281,26 +286,11 @@ export default function EmergencialMonitorPanel({
           </p>
         )}
         <p className="hint">
-          <strong>Teto do mês:</strong>{' '}
-          {num(resumo.metaMesTotal || TOTAL_MENSAL_EMERGENCIAL_PADRAO)} cestas (não ultrapassar).{' '}
-          <strong>Teto/semana (total):</strong> ~{num(resumo.limiteSemanal)}. Cotas por unidade =
-          rateio do teto (Coderp + planilha).{' '}
-          {readOnly
-            ? 'Consulta pública.'
-            : 'Envios reais via PDF RME semanal. Acima do teto = alerta crítico.'}{' '}
-          <strong>Ponto zero:</strong> semana {resumo.semanaInicioControle} de{' '}
-          {data.emergencial.monitoramento.mesInicioControle ??
-            MONITOR_CONTROLE_MES_INICIO}{' '}
-          ({weekDateRangeLabel(
-            year,
-            month,
-            resumo.semanaInicioControle,
-          )}
-          ). Semanas seg–dom variam por mês
-          {diasAntesPrimeiraSemana
-            ? ` (dias ${diasAntesPrimeiraSemana.start}–${diasAntesPrimeiraSemana.end} ficam fora da S1)`
-            : ''}
-          . Anteriores ao ponto zero: só registro, não entram no ritmo.
+          Teto <strong>{num(TETO_MENSAL_OPERACIONAL)}</strong>/mês · empenho{' '}
+          <strong>{num(data.emergencial.empenhoTotalCestas ?? 4800)}</strong> · ponto zero S
+          {resumo.semanaInicioControle} (
+          {weekDateRangeLabel(year, month, resumo.semanaInicioControle)}).{' '}
+          {readOnly ? 'Consulta.' : 'Importe o PDF da semana abaixo e salve.'}
         </p>
 
         <div className="emerg-monitor-toolbar">
@@ -392,6 +382,14 @@ export default function EmergencialMonitorPanel({
           )}
         </div>
 
+        <RegistroSemanalPdfImport
+          data={data}
+          mes={resumo.mes}
+          semana={semanaEdit}
+          readOnly={readOnly}
+          onApply={(next) => onUpdate(next)}
+        />
+
         <div className="emerg-kpi-grid">
           <article className="emerg-kpi">
             <span className="emerg-kpi-label">Semana no mês</span>
@@ -471,71 +469,28 @@ export default function EmergencialMonitorPanel({
             </span>
           </article>
         </div>
+
+        <MonitorSaudePanel
+          data={data}
+          resumo={resumo}
+          dashboard={decisionDashboard}
+        />
       </section>
 
-      <RegistroSemanalPdfImport
-        data={data}
-        mes={resumo.mes}
-        semana={semanaEdit}
-        readOnly={readOnly}
-        onApply={(next) => onUpdate(next)}
-      />
+      {/* —— 2 · Evolução do saldo —— */}
+      <section className="panel monitor-section">
+        <h2 className="monitor-section-title">
+          <span>2 ·</span> Evolução do empenho (saldo caindo)
+        </h2>
+        <MonitorSaldoEvolucao data={data} />
+      </section>
 
-      <MonitorSaudePanel
-        data={data}
-        resumo={resumo}
-        dashboard={decisionDashboard}
-      />
-
-      {!readOnly && (
-        <CoderpPdfImport data={data} onApply={(next) => onUpdate(next)} />
-      )}
-
-      {resumo.historicoSaldo.length > 0 && (
-        <section className="panel">
-          <h3>Histórico de saldo (semana a semana)</h3>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Mês</th>
-                  <th>Semana</th>
-                  <th>Saldo</th>
-                  <th>Registrado em</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...resumo.historicoSaldo]
-                  .reverse()
-                  .slice(0, 24)
-                  .map((h, i) => {
-                    const hym = getYearMonth(h.mes);
-                    const hy = hym?.year ?? year;
-                    const hm = hym?.month ?? month;
-                    return (
-                    <tr key={`${h.mes}-${h.semana}-${i}`}>
-                      <td>{h.mes}</td>
-                      <td>
-                        S{h.semana} ({weekDateRangeLabel(hy, hm, h.semana)})
-                      </td>
-                      <td>
-                        <strong>{num(h.saldo)}</strong>
-                      </td>
-                      <td>
-                        {new Date(h.registradoEm).toLocaleString('pt-BR')}
-                      </td>
-                    </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
+      {/* —— 3 · Distribuição e correção —— */}
       {resumo.alertas.length > 0 && (
-        <section className="panel">
-          <h3>Alertas</h3>
+        <section className="panel monitor-section">
+          <h2 className="monitor-section-title">
+            <span>3 ·</span> Correção de rota
+          </h2>
           {resumo.alertas.map((a, i) => (
             <p key={i} className={`alerta-box alerta-nivel-${a.nivel}`}>
               <strong>{a.titulo}</strong> — {a.descricao}
@@ -544,16 +499,16 @@ export default function EmergencialMonitorPanel({
         </section>
       )}
 
-      <section className="panel">
-        <h3>
-          Tetos e envios por unidade — {resumo.mes}
+      <section className="panel monitor-section">
+        <h2 className="monitor-section-title">
+          <span>3 ·</span> Distribuição por setor — {resumo.mes}
           {!readOnly && (
             <span className="hint-inline">
               {' '}
               (envio real via PDF · semana {semanaEdit})
             </span>
           )}
-        </h3>
+        </h2>
         {!resumo.allocation && (
           <p className="alerta-box alerta-nivel-moderado">
             Importe a <strong>requisição Coderp</strong> abaixo e/ou a planilha pivot em Admin →
@@ -681,28 +636,30 @@ export default function EmergencialMonitorPanel({
       </section>
 
       {resumo.allocation && (
-        <section className="panel emerg-meta-ref">
-          <h3>Referência — meta projetada ({resumo.mes})</h3>
+        <details className="panel emerg-meta-ref">
+          <summary>Referência rateio (histórico Set/25–Mar/26)</summary>
+          {!readOnly && (
+            <CoderpPdfImport data={data} onApply={(next) => onUpdate(next)} />
+          )}
           <p className="hint">
-            Valores calculados pela divisão proporcional ao histórico (fixos
-            reservados primeiro). Use como guia semanal: meta ÷ {resumo.semanasNoMes}{' '}
-            semanas.
+            Cotas por setor a partir do histórico sem racionamento — só orienta o rateio do teto{' '}
+            {num(TETO_MENSAL_OPERACIONAL)}/mês.
           </p>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Equipamento</th>
-                  <th>Alocado mês</th>
+                  <th>Setor</th>
+                  <th>Cota mês</th>
                   <th>Enviado</th>
                   <th>Falta</th>
                 </tr>
               </thead>
               <tbody>
                 {resumo.allocation.linhas.map((l) => {
-                  const env = resumo.equipamentos.find(
-                    (e) => e.servicoId === l.servicoId,
-                  )?.totalEnviado ?? 0;
+                  const env =
+                    resumo.equipamentos.find((e) => e.servicoId === l.servicoId)
+                      ?.totalEnviado ?? 0;
                   const falta = Math.max(0, l.alocado - env);
                   return (
                     <tr key={l.servicoId}>
@@ -718,8 +675,9 @@ export default function EmergencialMonitorPanel({
               </tbody>
             </table>
           </div>
-        </section>
+        </details>
       )}
+
     </div>
   );
 }
