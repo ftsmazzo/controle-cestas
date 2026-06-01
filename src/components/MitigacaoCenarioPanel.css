@@ -51,6 +51,26 @@
   margin: 0;
 }
 
+.mit-formula-box {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.mit-formula-box p {
+  margin: 0;
+}
+
+.mit-formula-warn {
+  margin-top: 0.5rem !important;
+  color: #b45309;
+  font-size: 0.85rem;
+}
+
 .mit-empty-box {
   padding: 0.85rem 1rem;
   border-radius: 10px;

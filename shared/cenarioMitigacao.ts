@@ -12,7 +12,7 @@ import {
   EMPENHO_DURACAO_MESES_PADRAO,
   suggestEmpenhoMeses,
 } from './empenhoControle.js';
-import { margemAteLimite, projecaoFimMes } from './limitesControle.js';
+import { margemAteLimite } from './limitesControle.js';
 import { getYearMonth, parseMonthKey } from './monthUtils.js';
 import {
   MARGEM_MITIGACAO_MENSAL,
@@ -42,11 +42,14 @@ export interface MitigacaoEquipamentoRow {
   fixo: boolean;
   enviadoAteAgora: number;
   cotaMensal: number;
-  cotaRestante: number;
+  /** Espaço até a cota mensal (quem já estourou = 0) */
+  espacoAteCota: number;
   mediaHistorica: number;
   participacaoPct: number;
   ritmoSemanal: number;
+  /** Se mantivesse o ritmo nas próximas semanas (referência) */
   demandaInercial2sem: number;
+  /** Quanto enviar nas próximas semanas (parte do orçamento restante) */
   proposta2sem: number;
   corte2sem: number;
   propostasSemana: MitigacaoSemanaProposta[];
@@ -58,16 +61,23 @@ export interface MitigacaoEquipamentoRow {
 }
 
 export interface CenarioMitigacao {
-  mes: string;
+  /** Mês que estamos fechando (onde já houve gasto) */
+  mesFechamento: string;
   semanasPlanejadas: number[];
   periodosSemana: string[];
   enviadoMesAteAgora: number;
   tetoOperacional: number;
   tetoComGordura: number;
+  /** 1.150 − já gasto no mês */
+  saldoRestante1150: number;
   gorduraMesDisponivel: number;
   gorduraPeriodoTotal: number;
   gorduraPeriodoUsada: number;
   gorduraPeriodoRestante: number;
+  /** Gordura que entra neste plano (mês + período, respeitando 1.200) */
+  gorduraNoPlano: number;
+  /** Total a distribuir nas próximas semanas = saldo1150 + gorduraNoPlano */
+  orcamentoDistribuir: number;
   orcamentoRestanteOperacional: number;
   orcamentoRestanteComGordura: number;
   demandaInercialTotal: number;
@@ -79,6 +89,7 @@ export interface CenarioMitigacao {
   saldoEmpenhoRestante: number;
   saldoEmpenhoPosPlano: number;
   semanaBaseRitmo: number;
+  semanaInicioControle: number;
   semanasHorizonte: number;
   equipamentos: MitigacaoEquipamentoRow[];
   familias: FamiliaGroup<MitigacaoEquipamentoRow>[];
@@ -89,6 +100,8 @@ export interface CenarioMitigacao {
   mensagemAjuda: string;
   ultimoLancamentoLabel: string | null;
   proximoMesSugerido: string | null;
+  /** @deprecated use mesFechamento */
+  mes: string;
 }
 
 function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
@@ -127,9 +140,10 @@ interface AlvoSemanaMitigacao {
   semana: number;
 }
 
+/** Próximas semanas civis — prioriza concluir o mês do fechamento antes de avançar */
 function planejarProximasSemanas(
   payload: ServicesPayload,
-  mes: string,
+  mesFechamento: string,
   aposSemana: number,
   horizonte: number,
 ): AlvoSemanaMitigacao[] {
@@ -139,10 +153,12 @@ function planejarProximasSemanas(
       : suggestEmpenhoMeses(
           payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO,
         );
-  let idx = meses.findIndex((m) => parseMonthKey(m) === parseMonthKey(mes));
-  if (idx < 0) idx = 0;
+  const idxFech = meses.findIndex(
+    (m) => parseMonthKey(m) === parseMonthKey(mesFechamento),
+  );
+  const idx = idxFech >= 0 ? idxFech : 0;
   const out: AlvoSemanaMitigacao[] = [];
-  let curMes = meses[idx] ?? mes;
+  let curMes = meses[idx] ?? mesFechamento;
   let w = aposSemana + 1;
 
   while (out.length < horizonte && idx < meses.length) {
@@ -153,9 +169,11 @@ function planejarProximasSemanas(
       out.push({ mes: curMes, semana: w });
       w++;
     }
-    idx += 1;
-    if (idx >= meses.length) break;
-    curMes = meses[idx];
+    const nextIdx = meses.findIndex(
+      (m) => parseMonthKey(m) > parseMonthKey(curMes),
+    );
+    if (nextIdx < 0) break;
+    curMes = meses[nextIdx];
     w = 1;
   }
   return out;
@@ -169,8 +187,7 @@ function proximoMesEmpenho(payload: ServicesPayload, mes: string): string | null
           payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO,
         );
   const k = parseMonthKey(mes);
-  const next = meses.find((m) => parseMonthKey(m) > k);
-  return next ?? null;
+  return meses.find((m) => parseMonthKey(m) > k) ?? null;
 }
 
 function gorduraUsadaNoMes(enviado: number): number {
@@ -187,8 +204,7 @@ function gorduraUsadaPeriodo(payload: ServicesPayload, mesAtual: string): number
   for (const mes of meses) {
     const k = parseMonthKey(mes);
     if (k <= 0 || k > kAtual) continue;
-    const enviado = enviadoMesMonitoramento(mes, mon);
-    total += gorduraUsadaNoMes(enviado);
+    total += gorduraUsadaNoMes(enviadoMesMonitoramento(mes, mon));
   }
   return total;
 }
@@ -200,86 +216,77 @@ interface DraftUnit {
   fixo: boolean;
   enviado: number;
   cotaMes: number;
-  cotaRestante: number;
+  espacoAteCota: number;
   mediaHistorica: number;
   participacaoPct: number;
   ritmo: number;
   demanda: number;
 }
 
-/** Rateio proporcional com tetos — corta primeiro quem já estourou a cota mensal */
-function alocarComMenorImpacto(units: DraftUnit[], budget: number): Map<string, number> {
+/**
+ * Distribui o orçamento restante do mês para reequilibrar:
+ * quem já estourou a cota não recebe mais; o restante rateia por déficit até a cota.
+ */
+function alocarReequilibrio(units: DraftUnit[], budget: number): Map<string, number> {
   const out = new Map<string, number>();
   if (budget <= 0 || !units.length) {
     for (const u of units) out.set(u.servicoId, 0);
     return out;
   }
 
-  const under = units.filter((u) => u.enviado < u.cotaMes);
-  const over = units.filter((u) => u.enviado >= u.cotaMes);
+  const elegiveis = units.filter((u) => u.espacoAteCota > 0);
+  for (const u of units.filter((u) => u.espacoAteCota <= 0)) {
+    out.set(u.servicoId, 0);
+  }
 
-  for (const u of over) out.set(u.servicoId, 0);
+  if (!elegiveis.length) {
+    return out;
+  }
 
+  const totalEspaco = elegiveis.reduce((s, u) => s + u.espacoAteCota, 0);
   let restante = budget;
-  const caps = new Map<string, number>();
-  for (const u of under) {
-    caps.set(u.servicoId, Math.max(0, u.cotaRestante));
-  }
 
-  const pesoTotal = under.reduce(
-    (s, u) => s + (u.participacaoPct > 0 ? u.participacaoPct : u.cotaRestante),
-    0,
-  );
-
-  for (const u of under) {
-    const cap = caps.get(u.servicoId) ?? 0;
-    const peso = u.participacaoPct > 0 ? u.participacaoPct : u.cotaRestante;
-    const bruto =
-      pesoTotal > 0
-        ? (budget * peso) / pesoTotal
-        : cap / Math.max(1, under.length);
-    const alocado = Math.min(cap, Math.round(bruto));
-    out.set(u.servicoId, alocado);
-    restante -= alocado;
-  }
-
-  if (restante > 0) {
-    const ordenados = [...under].sort((a, b) => {
-      const roomA = (caps.get(a.servicoId) ?? 0) - (out.get(a.servicoId) ?? 0);
-      const roomB = (caps.get(b.servicoId) ?? 0) - (out.get(b.servicoId) ?? 0);
-      return roomB - roomA;
-    });
-    for (const u of ordenados) {
-      if (restante <= 0) break;
-      const cur = out.get(u.servicoId) ?? 0;
-      const cap = caps.get(u.servicoId) ?? 0;
-      const add = Math.min(restante, cap - cur);
-      if (add > 0) {
-        out.set(u.servicoId, cur + add);
-        restante -= add;
+  if (totalEspaco <= budget) {
+    for (const u of elegiveis) {
+      out.set(u.servicoId, u.espacoAteCota);
+      restante -= u.espacoAteCota;
+    }
+  } else {
+    const pesoTotal = elegiveis.reduce(
+      (s, u) => s + (u.participacaoPct > 0 ? u.participacaoPct : u.espacoAteCota),
+      0,
+    );
+    for (const u of elegiveis) {
+      const peso = u.participacaoPct > 0 ? u.participacaoPct : u.espacoAteCota;
+      const bruto =
+        pesoTotal > 0
+          ? (budget * peso) / pesoTotal
+          : budget / elegiveis.length;
+      const alocado = Math.min(u.espacoAteCota, Math.round(bruto));
+      out.set(u.servicoId, alocado);
+      restante -= alocado;
+    }
+    if (restante > 0) {
+      const ordenados = [...elegiveis].sort(
+        (a, b) =>
+          b.espacoAteCota - (out.get(b.servicoId) ?? 0) -
+          (a.espacoAteCota - (out.get(a.servicoId) ?? 0)),
+      );
+      for (const u of ordenados) {
+        if (restante <= 0) break;
+        const cur = out.get(u.servicoId) ?? 0;
+        const add = Math.min(restante, u.espacoAteCota - cur);
+        if (add > 0) {
+          out.set(u.servicoId, cur + add);
+          restante -= add;
+        }
       }
     }
-  }
-
-  if (restante < 0) {
-    let excesso = -restante;
-    const ordenadosCorte = [...under]
-      .filter((u) => (out.get(u.servicoId) ?? 0) > 0)
-      .sort((a, b) => {
-        const pressA = a.enviado / Math.max(1, a.cotaMes);
-        const pressB = b.enviado / Math.max(1, b.cotaMes);
-        return pressB - pressA;
-      });
-    for (const u of ordenadosCorte) {
-      if (excesso <= 0) break;
-      if (u.fixo) continue;
-      const cur = out.get(u.servicoId) ?? 0;
-      const cut = Math.min(excesso, cur);
-      out.set(u.servicoId, cur - cut);
-      excesso -= cut;
-    }
-    if (excesso > 0) {
-      for (const u of ordenadosCorte) {
+    if (restante < 0) {
+      let excesso = -restante;
+      for (const u of [...elegiveis].sort(
+        (a, b) => (out.get(b.servicoId) ?? 0) - (out.get(a.servicoId) ?? 0),
+      )) {
         if (excesso <= 0) break;
         const cur = out.get(u.servicoId) ?? 0;
         const cut = Math.min(excesso, cur);
@@ -297,33 +304,26 @@ export function buildCenarioMitigacao(
   semanasHorizonte = 2,
 ): CenarioMitigacao {
   const ctx = resolveContextoPainelPublico(payload.emergencial);
-  const resumoRitmo = buildMonitoramentoResumo(payload, {
+  const resumo = buildMonitoramentoResumo(payload, {
     mesReferencia: ctx.mes,
     semanaReferencia: ctx.semanaReferencia,
   });
 
+  const mesFechamento = resumo.mes;
   const alvos = planejarProximasSemanas(
     payload,
-    resumoRitmo.mes,
-    resumoRitmo.semanaBaseRitmo,
+    mesFechamento,
+    resumo.semanaBaseRitmo,
     semanasHorizonte,
   );
-  const mesOrcamento = alvos[0]?.mes ?? resumoRitmo.mes;
-  const resumo =
-    parseMonthKey(mesOrcamento) === parseMonthKey(resumoRitmo.mes)
-      ? resumoRitmo
-      : buildMonitoramentoResumo(payload, {
-          mesReferencia: mesOrcamento,
-          semanaReferencia: 1,
-        });
 
   const empenho = buildEmpenhoControle(payload);
   const autonomia = computeAutonomiaOperacional(
     payload,
-    resumoRitmo.ritmoSemanalMedio,
-    resumoRitmo.enviadoSemanaAtual,
-    resumoRitmo.mes,
-    resumoRitmo.semanaAnalise,
+    resumo.ritmoSemanalMedio,
+    resumo.enviadoSemanaAtual,
+    resumo.mes,
+    resumo.semanaAnalise,
   );
   const tabela = buildTabelaCessaoEmergencial(payload);
   const mediaMap = new Map(tabela.rows.map((r) => [r.servicoId, r.mediaHistorica]));
@@ -342,63 +342,61 @@ export function buildCenarioMitigacao(
       if (ym) yearByMes.set(a.mes, ym);
     }
   }
-  if (!yearByMes.has(resumo.mes)) {
-    const ym = getYearMonth(resumo.mes);
-    if (ym) yearByMes.set(resumo.mes, ym);
+  const ymFech = getYearMonth(mesFechamento);
+  if (ymFech && !yearByMes.has(mesFechamento)) {
+    yearByMes.set(mesFechamento, ymFech);
   }
 
   const semanasPlanejadas = alvos.map((a) => a.semana);
   const enviadoMes = resumo.enviadoMesTotal;
-  const orcOp = margemAteLimite(enviadoMes, TETO_MENSAL_OPERACIONAL);
-  const orcGordura = margemAteLimite(enviadoMes, TETO_CONTRATUAL_MENSAL);
+  const saldoRestante1150 = margemAteLimite(enviadoMes, TETO_MENSAL_OPERACIONAL);
+  const margemAte1200 = margemAteLimite(enviadoMes, TETO_CONTRATUAL_MENSAL);
   const gorduraMesDisponivel = Math.min(
     MARGEM_MITIGACAO_MENSAL,
-    Math.max(0, orcGordura - orcOp),
+    Math.max(0, margemAte1200 - saldoRestante1150),
   );
-  const gorduraPeriodoUsada = gorduraUsadaPeriodo(payload, resumo.mes);
+  const gorduraPeriodoUsada = gorduraUsadaPeriodo(payload, mesFechamento);
   const gorduraPeriodoRestante = Math.max(
     0,
     GORDURA_PERIODO_TOTAL - gorduraPeriodoUsada,
   );
 
-  const orcamentoMax = Math.min(
-    orcGordura,
-    orcOp + Math.min(gorduraMesDisponivel, gorduraPeriodoRestante),
+  const gorduraNoPlano = Math.min(
+    gorduraMesDisponivel,
+    gorduraPeriodoRestante,
+    Math.max(0, margemAte1200 - saldoRestante1150),
+  );
+  const orcamentoDistribuir = Math.min(
+    saldoRestante1150 + gorduraNoPlano,
+    margemAte1200,
     autonomia.cestasDisponiveis,
   );
 
   const units = consumptionUnits(payload.services);
   const drafts: DraftUnit[] = units.map((s) => {
-    const eqRitmo = resumoRitmo.equipamentos.find((e) => e.servicoId === s.id);
-    const eqOrc = resumo.equipamentos.find((e) => e.servicoId === s.id);
-    const cotaMes = eqOrc?.metaMensal ?? cotaMap.get(s.id) ?? 0;
-    const enviadoRitmo = eqRitmo
+    const eq = resumo.equipamentos.find((e) => e.servicoId === s.id);
+    const cotaMes = eq?.metaMensal ?? cotaMap.get(s.id) ?? 0;
+    const enviado = eq
       ? somaEnviosSemanas(
-          eqRitmo.semanas,
-          resumoRitmo.semanaInicioControle,
-          resumoRitmo.semanaBaseRitmo,
-        )
-      : 0;
-    const enviadoOrc = eqOrc
-      ? somaEnviosSemanas(
-          eqOrc.semanas,
+          eq.semanas,
           resumo.semanaInicioControle,
           resumo.semanaBaseRitmo,
         )
       : 0;
     const ritmo =
-      resumoRitmo.semanasNoPeriodoControle > 0
-        ? enviadoRitmo / resumoRitmo.semanasNoPeriodoControle
-        : eqRitmo?.enviadoSemanaAtual ?? 0;
+      resumo.semanasNoPeriodoControle > 0
+        ? enviado / resumo.semanasNoPeriodoControle
+        : eq?.enviadoSemanaAtual ?? 0;
     const demanda = Math.round(ritmo * alvos.length);
+    const espacoAteCota = Math.max(0, cotaMes - enviado);
     return {
       servicoId: s.id,
       servicoNome: s.nome,
       familiaCodigo: s.familiaCodigo ?? undefined,
       fixo: s.fixo,
-      enviado: enviadoOrc,
+      enviado,
       cotaMes,
-      cotaRestante: Math.max(0, cotaMes - enviadoOrc),
+      espacoAteCota,
       mediaHistorica: mediaMap.get(s.id) ?? 0,
       participacaoPct: pctMap.get(s.id) ?? 0,
       ritmo,
@@ -407,12 +405,7 @@ export function buildCenarioMitigacao(
   });
 
   const demandaInercialTotal = drafts.reduce((s, d) => s + d.demanda, 0);
-  const budgetFinal =
-    demandaInercialTotal <= orcamentoMax
-      ? demandaInercialTotal
-      : orcamentoMax;
-
-  const aloc = alocarComMenorImpacto(drafts, budgetFinal);
+  const aloc = alocarReequilibrio(drafts, orcamentoDistribuir);
 
   const equipamentos: MitigacaoEquipamentoRow[] = drafts
     .map((d) => {
@@ -429,7 +422,7 @@ export function buildCenarioMitigacao(
         fixo: d.fixo,
         enviadoAteAgora: d.enviado,
         cotaMensal: d.cotaMes,
-        cotaRestante: d.cotaRestante,
+        espacoAteCota: d.espacoAteCota,
         mediaHistorica: d.mediaHistorica,
         participacaoPct: d.participacaoPct,
         ritmoSemanal: d.ritmo,
@@ -457,45 +450,52 @@ export function buildCenarioMitigacao(
 
   const temLancamentos = (ctx.ultimoLancamento?.totalCestas ?? 0) > 0;
   const temDadosRitmo =
-    resumoRitmo.ultimaSemanaComDados >= resumoRitmo.semanaInicioControle;
+    resumo.ultimaSemanaComDados >= resumo.semanaInicioControle;
   const temSemanasFuturas = alvos.length > 0;
   const temDados = temLancamentos && temDadosRitmo && temSemanasFuturas;
-  const proximoMesSugerido = proximoMesEmpenho(payload, resumoRitmo.mes);
+  const proximoMesSugerido = proximoMesEmpenho(payload, mesFechamento);
 
   let motivoVazio: CenarioMitigacao['motivoVazio'] = null;
   let mensagemAjuda = '';
   if (!temLancamentos) {
     motivoVazio = 'sem_lancamentos';
     mensagemAjuda =
-      'No Admin → Monitor, importe o PDF da semana e clique em **Salvar** (botão no topo). Depois atualize esta página (F5). O painel público só lê o que está gravado no banco.';
+      'Importe o PDF no Admin → Monitor, clique em **Salvar** e atualize esta página (F5).';
   } else if (!temDadosRitmo) {
     motivoVazio = 'sem_lancamentos';
-    mensagemAjuda = `Há rascunho no mês ${ctx.mes}, mas nada no período de controle (desde S${resumoRitmo.semanaInicioControle}). Confira mês/semana no Monitor e salve.`;
+    mensagemAjuda = `Nada no período de controle desde S${resumo.semanaInicioControle} em ${mesFechamento}.`;
   } else if (!temSemanasFuturas) {
     motivoVazio = 'mes_fechado';
     mensagemAjuda = proximoMesSugerido
-      ? `Semanas futuras esgotadas em ${resumoRitmo.mes}. Selecione **${proximoMesSugerido}** no Monitor para planejar S1–S2.`
-      : `Sem semanas futuras no mês ${resumoRitmo.mes}.`;
+      ? `Sem semanas civis restantes em ${mesFechamento}. Próximo: ${proximoMesSugerido}.`
+      : `Sem semanas futuras em ${mesFechamento}.`;
   }
 
   const ultimoLancamentoLabel = ctx.ultimoLancamento
-    ? `${ctx.ultimoLancamento.mes} S${ctx.ultimoLancamento.semana} (${num(ctx.ultimoLancamento.totalCestas)} cestas)`
+    ? `${ctx.ultimoLancamento.mes} S${ctx.ultimoLancamento.semana} (${fmt(ctx.ultimoLancamento.totalCestas)} cestas)`
     : null;
 
   const precisaMitigacao =
-    demandaInercialTotal > orcOp || fechamentoInercial > TETO_MENSAL_OPERACIONAL;
+    demandaInercialTotal > orcamentoDistribuir ||
+    fechamentoInercial > TETO_MENSAL_OPERACIONAL;
 
   let resumoCurto = '';
   if (!temDados) {
-    resumoCurto = mensagemAjuda || 'Aguardando lançamentos salvos no Monitor.';
-  } else if (!precisaMitigacao && corteTotal === 0) {
-    resumoCurto = `Ritmo atual cabe no teto de ${TETO_MENSAL_OPERACIONAL}/mês — proposta mantém ${propostaTotal} cestas nas próximas ${alvos.length} semana(s).`;
+    resumoCurto = mensagemAjuda || 'Aguardando lançamentos salvos.';
   } else {
-    resumoCurto = `Corte de ${corteTotal} cestas vs ritmo inercial (${demandaInercialTotal}) para fechar ${mesOrcamento} em ${fechamentoMesProjetado} (teto ${TETO_MENSAL_OPERACIONAL}${gorduraUsadaNoPlano > 0 ? `, gordura +${gorduraUsadaNoPlano}` : ''}).`;
+    resumoCurto =
+      `Já gastou ${fmt(enviadoMes)} em ${mesFechamento}. Restam ${fmt(saldoRestante1150)} até 1.150` +
+      (gorduraNoPlano > 0 ? ` + ${fmt(gorduraNoPlano)} gordura` : '') +
+      ` → distribuir ${fmt(orcamentoDistribuir)} nas próximas ${alvos.length} semana(s)` +
+      (demandaInercialTotal > orcamentoDistribuir
+        ? ` (ritmo pediria ${fmt(demandaInercialTotal)} — corte ${fmt(corteTotal)})`
+        : '') +
+      `. Fecha o mês em ${fmt(fechamentoMesProjetado)}.`;
   }
 
   return {
-    mes: mesOrcamento,
+    mesFechamento,
+    mes: mesFechamento,
     semanasPlanejadas,
     periodosSemana: alvos.map((a) => {
       const ym = yearByMes.get(a.mes);
@@ -506,12 +506,15 @@ export function buildCenarioMitigacao(
     enviadoMesAteAgora: enviadoMes,
     tetoOperacional: TETO_MENSAL_OPERACIONAL,
     tetoComGordura: TETO_CONTRATUAL_MENSAL,
+    saldoRestante1150,
     gorduraMesDisponivel,
     gorduraPeriodoTotal: GORDURA_PERIODO_TOTAL,
     gorduraPeriodoUsada,
     gorduraPeriodoRestante,
-    orcamentoRestanteOperacional: orcOp,
-    orcamentoRestanteComGordura: orcGordura,
+    gorduraNoPlano,
+    orcamentoDistribuir,
+    orcamentoRestanteOperacional: saldoRestante1150,
+    orcamentoRestanteComGordura: margemAte1200,
     demandaInercialTotal,
     propostaTotal,
     corteTotal,
@@ -520,7 +523,8 @@ export function buildCenarioMitigacao(
     fechamentoInercial,
     saldoEmpenhoRestante: empenho.restante,
     saldoEmpenhoPosPlano,
-    semanaBaseRitmo: resumoRitmo.semanaBaseRitmo,
+    semanaBaseRitmo: resumo.semanaBaseRitmo,
+    semanaInicioControle: resumo.semanaInicioControle,
     semanasHorizonte,
     equipamentos,
     familias,
@@ -534,7 +538,7 @@ export function buildCenarioMitigacao(
   };
 }
 
-function num(n: number): string {
+function fmt(n: number): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 }
 
@@ -549,23 +553,4 @@ export function totaisPorSemana(
       0,
     ),
   }));
-}
-
-export function projecaoInercialFimMes(cenario: CenarioMitigacao): number {
-  const semRestantesMes = Math.max(
-    0,
-    cenario.semanasPlanejadas.length > 0
-      ? cenario.semanasPlanejadas[cenario.semanasPlanejadas.length - 1] -
-        cenario.semanaBaseRitmo
-      : 0,
-  );
-  const ritmo =
-    cenario.semanasHorizonte > 0
-      ? cenario.demandaInercialTotal / cenario.semanasHorizonte
-      : 0;
-  return projecaoFimMes(
-    cenario.enviadoMesAteAgora,
-    ritmo,
-    Math.max(0, semRestantesMes - cenario.semanasHorizonte),
-  );
 }

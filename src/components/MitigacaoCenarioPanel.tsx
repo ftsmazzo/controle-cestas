@@ -29,21 +29,19 @@ function barPct(value: number, max: number): number {
   return Math.min(100, (value / max) * 100);
 }
 
-function renderUnitRow(r: MitigacaoEquipamentoRow, semanas: number[]) {
+function renderUnitRow(r: MitigacaoEquipamentoRow, semanaCount: number) {
   return (
     <tr key={r.servicoId} className={`mit-row mit-row--${r.impacto}`}>
       <td className="mit-cell-nome mit-cell-unidade">{r.servicoNome}</td>
       <td>{num(r.enviadoAteAgora)}</td>
-      <td className="mit-cell-muted">{num(r.ritmoSemanal)}</td>
-      {semanas.map((s) => {
-        const p = r.propostasSemana.find((x) => x.semana === s);
-        return (
-          <td key={s}>
-            <strong>{num(p?.cestas ?? 0)}</strong>
-          </td>
-        );
-      })}
-      <td>{num(r.demandaInercial2sem)}</td>
+      <td>{num(r.cotaMensal)}</td>
+      <td className="mit-cell-muted">{num(r.espacoAteCota)}</td>
+      {Array.from({ length: semanaCount }, (_, i) => (
+        <td key={i}>
+          <strong>{num(r.propostasSemana[i]?.cestas ?? 0)}</strong>
+        </td>
+      ))}
+      <td className="mit-cell-muted">{num(r.demandaInercial2sem)}</td>
       <td>
         <strong className="mit-proposta">{num(r.proposta2sem)}</strong>
       </td>
@@ -86,7 +84,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
         </div>
         <div className="mit-badges">
           <span className="mit-badge">
-            {cenario.mes} · base S{cenario.semanaBaseRitmo}
+            Fechando {cenario.mesFechamento} · base S{cenario.semanaBaseRitmo}
           </span>
           <span className="mit-badge mit-badge--gordura">
             Gordura período:{' '}
@@ -116,40 +114,60 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
         </div>
       ) : (
         <>
+          <div className="mit-formula-box">
+            <p>
+              <strong>{num(cenario.tetoOperacional)}</strong> teto −{' '}
+              <strong>{num(cenario.enviadoMesAteAgora)}</strong> já gasto ={' '}
+              <strong>{num(cenario.saldoRestante1150)}</strong> restantes
+              {cenario.gorduraNoPlano > 0 && (
+                <>
+                  {' '}
+                  + <strong>{num(cenario.gorduraNoPlano)}</strong> gordura
+                </>
+              )}{' '}
+              → <strong>{num(cenario.orcamentoDistribuir)}</strong> a distribuir nas
+              próximas {cenario.semanasPlanejadas.length} semana(s)
+            </p>
+            {cenario.demandaInercialTotal > cenario.orcamentoDistribuir && (
+              <p className="mit-formula-warn">
+                Ritmo atual pediria {num(cenario.demandaInercialTotal)} a mais — por
+                isso há corte de {num(cenario.corteTotal)} vs continuar no mesmo ritmo.
+              </p>
+            )}
+          </div>
+
           <div className="mit-summary-grid">
             <article className="mit-summary-card mit-summary-card--inercial">
-              <span className="mit-summary-label">Ritmo inercial (2 sem.)</span>
-              <p className="mit-summary-value">{num(cenario.demandaInercialTotal)}</p>
+              <span className="mit-summary-label">Já gasto ({cenario.mesFechamento})</span>
+              <p className="mit-summary-value">{num(cenario.enviadoMesAteAgora)}</p>
               <span className="mit-summary-hint">
-                Fecharia em {num(cenario.fechamentoInercial)}
+                Desde S{cenario.semanaInicioControle} no controle
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--proposta">
               <span className="mit-summary-label">
-                <Sparkles size={14} aria-hidden /> Proposta mitigada
+                <Sparkles size={14} aria-hidden /> A distribuir (2 sem.)
               </span>
-              <p className="mit-summary-value">{num(cenario.propostaTotal)}</p>
+              <p className="mit-summary-value">{num(cenario.orcamentoDistribuir)}</p>
               <span className="mit-summary-hint">
-                {cenario.corteTotal > 0
-                  ? `Corte −${num(cenario.corteTotal)} vs inercial`
-                  : 'Sem corte necessário'}
+                {num(cenario.saldoRestante1150)} + {num(cenario.gorduraNoPlano)} gordura
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--fechamento">
               <span className="mit-summary-label">Fechamento do mês</span>
               <p className="mit-summary-value">{num(cenario.fechamentoMesProjetado)}</p>
               <span className="mit-summary-hint">
-                Teto {num(cenario.tetoOperacional)}
+                {num(cenario.enviadoMesAteAgora)} + {num(cenario.propostaTotal)} nas 2 sem.
                 {cenario.gorduraUsadaNoPlano > 0
                   ? ` · gordura +${num(cenario.gorduraUsadaNoPlano)}`
                   : ''}
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--saldo">
-              <span className="mit-summary-label">Saldo empenho pós-plano</span>
-              <p className="mit-summary-value">{num(cenario.saldoEmpenhoPosPlano)}</p>
+              <span className="mit-summary-label">Ritmo continuaria pedindo</span>
+              <p className="mit-summary-value">{num(cenario.demandaInercialTotal)}</p>
               <span className="mit-summary-hint">
-                de {num(cenario.saldoEmpenhoRestante)} restantes
+                Fecharia em {num(cenario.fechamentoInercial)} — referência
               </span>
             </article>
           </div>
@@ -233,16 +251,14 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                 <tr>
                   <th>Equipamento</th>
                   <th>Enviado</th>
-                  <th>Ritmo/sem</th>
-                  {cenario.semanasPlanejadas.map((s) => (
-                    <th key={s}>
-                      S{s}
-                      <span className="mit-th-range">
-                        {cenario.periodosSemana[cenario.semanasPlanejadas.indexOf(s)]}
-                      </span>
+                  <th>Cota mês</th>
+                  <th>Espaço cota</th>
+                  {cenario.periodosSemana.map((p, i) => (
+                    <th key={i}>
+                      {p}
                     </th>
                   ))}
-                  <th>Inercial</th>
+                  <th>Ritmo pediria</th>
                   <th>Proposta</th>
                   <th>Corte</th>
                   <th>Fecha mês</th>
@@ -272,16 +288,14 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                         <td>
                           <strong>{num(envFam)}</strong>
                         </td>
-                        <td />
-                        {cenario.semanasPlanejadas.map((s) => {
+                        <td colSpan={2} />
+                        {cenario.periodosSemana.map((_, i) => {
                           const t = fam.itens.reduce(
-                            (sum, r) =>
-                              sum +
-                              (r.propostasSemana.find((p) => p.semana === s)?.cestas ?? 0),
+                            (sum, r) => sum + (r.propostasSemana[i]?.cestas ?? 0),
                             0,
                           );
                           return (
-                            <td key={s}>
+                            <td key={i}>
                               <strong>{num(t)}</strong>
                             </td>
                           );
@@ -298,7 +312,9 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                       {showChildren
                         ? fam.itens
                             .sort((a, b) => b.corte2sem - a.corte2sem)
-                            .map((r) => renderUnitRow(r, cenario.semanasPlanejadas))
+                            .map((r) =>
+                              renderUnitRow(r, cenario.periodosSemana.length),
+                            )
                         : null}
                     </Fragment>
                   );
@@ -312,9 +328,9 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                   <td>
                     <strong>{num(cenario.enviadoMesAteAgora)}</strong>
                   </td>
-                  <td />
-                  {totaisSem.map((t) => (
-                    <td key={t.semana}>
+                  <td colSpan={2} />
+                  {totaisSem.map((t, i) => (
+                    <td key={i}>
                       <strong>{num(t.total)}</strong>
                     </td>
                   ))}
@@ -341,10 +357,9 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           </div>
 
           <p className="hint mit-foot">
-            Proposta prioriza cortes em quem já estourou a cota mensal; unidades abaixo
-            do teto recebem rateio proporcional ao histórico. Gordura de até{' '}
-            {num(cenario.gorduraMesDisponivel)}/mês ({num(cenario.gorduraPeriodoTotal)}{' '}
-            no período) só entra se necessário para reduzir impacto.
+            O orçamento das próximas semanas é o que ainda cabe em 1.150 (+ gordura até
+            1.200), não um novo mês cheio. Quem já estourou a cota não recebe mais; o
+            restante reequilibra proporcionalmente quem ainda tem espaço na cota mensal.
           </p>
         </>
       )}
