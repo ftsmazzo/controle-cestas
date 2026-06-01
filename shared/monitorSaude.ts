@@ -89,6 +89,11 @@ export type MonitorResumoSaude = Pick<
   MonitoramentoResumoShape,
   | 'mes'
   | 'semanaAtual'
+  | 'semanaAnalise'
+  | 'semanaBaseRitmo'
+  | 'ultimaSemanaComDados'
+  | 'modoPlanejamento'
+  | 'enviadoAteBaseRitmo'
   | 'semanasNoMes'
   | 'semanasNoPeriodoControle'
   | 'semanaInicioControle'
@@ -122,6 +127,11 @@ export type MonitorResumoSaude = Pick<
 interface MonitoramentoResumoShape {
   mes: string;
   semanaAtual: number;
+  semanaAnalise: number;
+  semanaBaseRitmo: number;
+  ultimaSemanaComDados: number;
+  modoPlanejamento: boolean;
+  enviadoAteBaseRitmo: number;
   semanasNoMes: number;
   semanasNoPeriodoControle: number;
   semanaInicioControle: number;
@@ -222,7 +232,7 @@ export function buildSaudeDistribuicao(
     resumo.ritmoSemanalMedio,
     resumo.enviadoSemanaAtual,
     resumo.mes,
-    resumo.semanaAtual,
+    resumo.semanaAnalise,
   );
 
   const saldo = resumo.saldoAtual;
@@ -323,11 +333,11 @@ export function buildSaudeDistribuicao(
 
   if (estouroSemana > 0) {
     acoesSemana.push(
-      `Crítico — semana ${resumo.semanaAtual}: ${num(estouroSemana)} acima do teto ~${num(limiteSemanal)} (${pctUsoLimiteSemana.toFixed(0)}%).`,
+      `Crítico — semana ${resumo.semanaAnalise}: ${num(estouroSemana)} acima do teto ~${num(limiteSemanal)} (${pctUsoLimiteSemana.toFixed(0)}%).`,
     );
   } else if (pctUsoLimiteSemana > 90) {
     acoesSemana.push(
-      `Semana ${resumo.semanaAtual} perto do teto: margem ${num(margemSemana)} de ~${num(limiteSemanal)}.`,
+      `Semana ${resumo.semanaAnalise} perto do teto: margem ${num(margemSemana)} de ~${num(limiteSemanal)}.`,
     );
   }
 
@@ -357,13 +367,13 @@ export function buildSaudeDistribuicao(
   );
   if (verdesPerigosos.length) {
     acoesSemana.push(
-      `${verdesPerigosos.length} unidade(s) com semana ok mas projeção de mês alta — não repetir o volume da S${resumo.semanaAtual}.`,
+      `${verdesPerigosos.length} unidade(s) com semana ok mas projeção de mês alta — não repetir o volume da S${resumo.semanaBaseRitmo}.`,
     );
   }
 
   if (!acoesSemana.length) {
     acoesSemana.push(
-      `Dentro dos limites: ${pctUsoLimiteMes.toFixed(0)}% do mês · ${pctUsoLimiteSemana.toFixed(0)}% da semana ${resumo.semanaAtual}.`,
+      `Dentro dos limites: ${pctUsoLimiteMes.toFixed(0)}% do mês · ${pctUsoLimiteSemana.toFixed(0)}% da semana ${resumo.semanaAnalise}.`,
     );
   }
 
@@ -382,7 +392,7 @@ export function buildSaudeDistribuicao(
   ) {
     resumoDecisao = `Controle estável: ${pctUsoLimiteMes.toFixed(0)}% do teto mensal · ${pctUsoLimiteSemana.toFixed(0)}% da semana · empenho dura ~${autonomiaMeses.toFixed(1)} mês(es) ao ritmo atual.`;
   } else {
-    resumoDecisao = `Uso ${pctUsoLimiteMes.toFixed(0)}% do teto ${num(limiteMensal)} · S${resumo.semanaAtual} ${pctUsoLimiteSemana.toFixed(0)}% · margem ${num(margemMes)} no mês · empenho ${num(empenho.restante)} restantes.`;
+    resumoDecisao = `Uso ${pctUsoLimiteMes.toFixed(0)}% do teto ${num(limiteMensal)} · S${resumo.semanaAnalise} ${pctUsoLimiteSemana.toFixed(0)}% · margem ${num(margemMes)} no mês · empenho ${num(empenho.restante)} restantes.`;
   }
 
   return {

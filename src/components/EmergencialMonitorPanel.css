@@ -40,6 +40,16 @@
   background: #f8fafc;
 }
 
+.cell-week-filled {
+  background: #f0fdf4;
+  font-weight: 600;
+}
+
+.cell-week-analise {
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 2px #3b82f6;
+}
+
 .emerg-saldo-ts {
   font-size: 0.8rem;
   color: var(--muted);

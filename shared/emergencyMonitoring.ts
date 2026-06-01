@@ -88,7 +88,17 @@ export interface EquipamentoMonitorRow {
 
 export interface MonitoramentoResumo {
   mes: string;
+  /** Semana civil de hoje no mês monitorado */
   semanaAtual: number;
+  /** Semana escolhida no painel (registro / análise) */
+  semanaAnalise: number;
+  /** Última semana do mês com envio lançado */
+  ultimaSemanaComDados: number;
+  /** Semana usada no ritmo e projeção (histórico até aqui) */
+  semanaBaseRitmo: number;
+  /** Analisando semana futura em relação ao histórico */
+  modoPlanejamento: boolean;
+  enviadoAteBaseRitmo: number;
   semanasNoMes: number;
   /** Primeira semana do mês considerada no ritmo (ponto zero) */
   semanaInicioControle: number;
@@ -334,6 +344,44 @@ export function getWeeklyQty(
     .reduce((s, e) => s + (e.quantidade || 0), 0);
 }
 
+/** Total enviado na semana (todos os equipamentos) */
+export function totalEnviadoNaSemana(
+  mon: EmergencialMonitoramento,
+  mes: string,
+  semana: number,
+): number {
+  const mesKey = parseMonthKey(mes);
+  return mon.entradasSemanais
+    .filter(
+      (e) => parseMonthKey(e.mes) === mesKey && e.semana === semana,
+    )
+    .reduce((s, e) => s + (e.quantidade || 0), 0);
+}
+
+/** Maior número de semana com quantidade > 0 no mês */
+export function ultimaSemanaComDadosNoMes(
+  mon: EmergencialMonitoramento,
+  mes: string,
+  desdeSemana: number = 1,
+): number {
+  const mesKey = parseMonthKey(mes);
+  let max = 0;
+  for (const e of mon.entradasSemanais) {
+    if (
+      parseMonthKey(e.mes) === mesKey &&
+      e.semana >= desdeSemana &&
+      (e.quantidade || 0) > 0
+    ) {
+      max = Math.max(max, e.semana);
+    }
+  }
+  return max;
+}
+
+export function clampSemanaMes(semana: number, semanasNoMes: number): number {
+  return Math.max(1, Math.min(semana, Math.max(1, semanasNoMes)));
+}
+
 export function upsertWeeklyQty(
   mon: EmergencialMonitoramento,
   mes: string,
@@ -394,6 +442,8 @@ function statusFromLimites(
 
 export interface BuildMonitorOptions {
   now?: Date;
+  /** Semana selecionada no painel (importação / leitura); mantém histórico nas projeções */
+  semanaReferencia?: number;
   allocateOptions?: Parameters<typeof allocatePlans>[3];
 }
 
@@ -411,9 +461,29 @@ export function buildMonitoramentoResumo(
   const semanasNoMes =
     year > 0 && month > 0 ? weeksInCalendarMonth(year, month) : 4;
   const semanaAtual = semanaAtualParaMes(mes, now);
+  const semanaAnalise = clampSemanaMes(
+    options?.semanaReferencia ?? semanaAtual,
+    semanasNoMes,
+  );
   const semanaInicioControle = semanaInicioControleEfetiva(mes, mon);
+  const ultimaSemanaComDados = ultimaSemanaComDadosNoMes(
+    mon,
+    mes,
+    semanaInicioControle,
+  );
+  const analiseTemDados = totalEnviadoNaSemana(mon, mes, semanaAnalise) > 0;
+  const semanaBaseRitmo =
+    analiseTemDados
+      ? semanaAnalise
+      : ultimaSemanaComDados > 0
+        ? ultimaSemanaComDados
+        : semanaAnalise;
+  const modoPlanejamento =
+    ultimaSemanaComDados > 0 &&
+    semanaAnalise > ultimaSemanaComDados &&
+    !analiseTemDados;
   const semanasNoPeriodoControleVal = semanasNoPeriodoControle(
-    semanaAtual,
+    semanaBaseRitmo,
     semanaInicioControle,
   );
 
@@ -445,7 +515,7 @@ export function buildMonitoramentoResumo(
     }
   }
 
-  const semanasRestantesNoMes = Math.max(0, semanasNoMes - semanaAtual);
+  const semanasRestantesNoMes = Math.max(0, semanasNoMes - semanaBaseRitmo);
 
   const units = consumptionUnits(payload.services);
   const equipamentos: EquipamentoMonitorRow[] = units.map((s) => {
@@ -467,9 +537,9 @@ export function buildMonitoramentoResumo(
     const enviadoRitmo = somaEnviosSemanas(
       semanas,
       semanaInicioControle,
-      semanaAtual,
+      semanaBaseRitmo,
     );
-    const enviadoSemanaAtual = semanas[semanaAtual] ?? 0;
+    const enviadoSemanaAtual = semanas[semanaAnalise] ?? 0;
     const metaAcumEquip =
       metaSemanal * semanasNoPeriodoControleVal;
     const pctMes = pctUsoLimite(enviadoNoControle, metaMensal);
@@ -530,15 +600,16 @@ export function buildMonitoramentoResumo(
   const metaAcumuladaEsperada = Math.round(
     (metaMesTotal / semanasNoMes) * semanasNoPeriodoControleVal,
   );
-  const enviadoAcumulado = equipamentos.reduce(
+  const enviadoAteBaseRitmo = equipamentos.reduce(
     (s, e) =>
-      s + somaEnviosSemanas(e.semanas, semanaInicioControle, semanaAtual),
+      s + somaEnviosSemanas(e.semanas, semanaInicioControle, semanaBaseRitmo),
     0,
   );
+  const enviadoAcumulado = enviadoAteBaseRitmo;
   const limiteSemanal =
     semanasNoMes > 0 ? Math.round(metaMesTotal / semanasNoMes) : 0;
   const enviadoSemanaAtual = equipamentos.reduce(
-    (s, e) => s + (e.semanas[semanaAtual] ?? 0),
+    (s, e) => s + (e.semanas[semanaAnalise] ?? 0),
     0,
   );
   const pctMes = pctUsoLimite(enviadoMesTotal, metaMesTotal);
@@ -559,7 +630,7 @@ export function buildMonitoramentoResumo(
         ? enviadoSemanaAtual
         : 0;
   const projecaoMesTotal = projecaoFimMes(
-    enviadoMesTotal,
+    enviadoAteBaseRitmo,
     ritmoSemanalMedio,
     semanasRestantesNoMes,
   );
@@ -570,7 +641,7 @@ export function buildMonitoramentoResumo(
     semanasAteTeto != null && semanasAteTeto < semanasRestantesNoMes + 0.5
       ? Math.min(
           semanasNoMes,
-          semanaAtual + Math.max(1, Math.ceil(semanasAteTeto)),
+          semanaBaseRitmo + Math.max(1, Math.ceil(semanasAteTeto)),
         )
       : null;
 
@@ -581,7 +652,7 @@ export function buildMonitoramentoResumo(
     ritmoSemanalMedio,
     enviadoSemanaAtual,
     mes,
-    semanaAtual,
+    semanaAnalise,
   );
   const autonomiaSemanasSaldo = autonomiaOp.autonomiaSemanas;
   const autonomiaDiasSaldo = autonomiaOp.autonomiaDias;
@@ -612,16 +683,24 @@ export function buildMonitoramentoResumo(
     });
   }
 
+  if (modoPlanejamento && ultimaSemanaComDados > 0) {
+    alertas.push({
+      nivel: 'moderado',
+      titulo: `Planejando S${semanaAnalise} (sem lançamento ainda)`,
+      descricao: `Projeções e ritmo com base no histórico até S${ultimaSemanaComDados} (${enviadoAteBaseRitmo} cestas no mês). Importe o PDF ou lance os envios da S${semanaAnalise}.`,
+    });
+  }
+
   if (estouroSemana > 0) {
     alertas.push({
       nivel: 'critico',
-      titulo: `Estouro na semana ${semanaAtual}`,
-      descricao: `S${semanaAtual}: ${enviadoSemanaAtual} cestas — ${estouroSemana} acima do teto semanal (~${limiteSemanal}, ${pctLimiteSemana.toFixed(0)}%).`,
+      titulo: `Estouro na semana ${semanaAnalise}`,
+      descricao: `S${semanaAnalise}: ${enviadoSemanaAtual} cestas — ${estouroSemana} acima do teto semanal (~${limiteSemanal}, ${pctLimiteSemana.toFixed(0)}%).`,
     });
   } else if (pctLimiteSemana > 90 && limiteSemanal > 0) {
     alertas.push({
       nivel: 'alto',
-      titulo: `Semana ${semanaAtual} perto do teto`,
+      titulo: `Semana ${semanaAnalise} perto do teto`,
       descricao: `${enviadoSemanaAtual}/${limiteSemanal} cestas (${pctLimiteSemana.toFixed(0)}%). Margem semanal: ${margemSemana}.`,
     });
   }
@@ -681,7 +760,7 @@ export function buildMonitoramentoResumo(
         .map((e) => {
           const partes: string[] = [];
           if (e.pctMes > 100) partes.push(`mês ${e.pctMes.toFixed(0)}%`);
-          if (e.pctSemana > 100) partes.push(`S${semanaAtual} ${e.pctSemana.toFixed(0)}%`);
+          if (e.pctSemana > 100) partes.push(`S${semanaAnalise} ${e.pctSemana.toFixed(0)}%`);
           return `${e.servicoNome} (${partes.join(', ')})`;
         })
         .join('; '),
@@ -706,7 +785,7 @@ export function buildMonitoramentoResumo(
       });
     } else if (
       autonomiaSemanasSaldo != null &&
-      autonomiaSemanasSaldo < semanasNoMes - semanaAtual + 1 &&
+      autonomiaSemanasSaldo < semanasNoMes - semanaBaseRitmo + 1 &&
       pctMes > 70
     ) {
       alertas.push({
@@ -725,7 +804,7 @@ export function buildMonitoramentoResumo(
 
   if (
     projecaoSemanasAteMeta != null &&
-    projecaoSemanasAteMeta < semanasNoMes - semanaAtual &&
+    projecaoSemanasAteMeta < semanasNoMes - semanaBaseRitmo &&
     pctMes < 100
   ) {
     alertas.push({
@@ -740,6 +819,11 @@ export function buildMonitoramentoResumo(
   return {
     mes,
     semanaAtual,
+    semanaAnalise,
+    ultimaSemanaComDados,
+    semanaBaseRitmo,
+    modoPlanejamento,
+    enviadoAteBaseRitmo,
     semanasNoMes,
     semanaInicioControle,
     semanasNoPeriodoControle: semanasNoPeriodoControleVal,

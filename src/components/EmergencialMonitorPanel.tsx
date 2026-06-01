@@ -43,7 +43,12 @@ export default function EmergencialMonitorPanel({
   readOnly,
   decisionDashboard,
 }: Props) {
-  const resumo = useMemo(() => buildMonitoramentoResumo(data), [data]);
+  const [semanaEdit, setSemanaEdit] = useState(MONITOR_CONTROLE_SEMANA_INICIO);
+
+  const resumo = useMemo(
+    () => buildMonitoramentoResumo(data, { semanaReferencia: semanaEdit }),
+    [data, semanaEdit],
+  );
 
   const mesesMonitor = useMemo(() => {
     const fromEmpenho = data.emergencial.empenhoMeses?.length
@@ -64,8 +69,6 @@ export default function EmergencialMonitorPanel({
       (a, b) => parseMonthKey(a.mes) - parseMonthKey(b.mes),
     );
   }, [data]);
-
-  const [semanaEdit, setSemanaEdit] = useState(MONITOR_CONTROLE_SEMANA_INICIO);
 
   const ym = getYearMonth(resumo.mes);
   const year = ym?.year ?? new Date().getFullYear();
@@ -142,15 +145,21 @@ export default function EmergencialMonitorPanel({
         const val = eq.semanas[w] ?? 0;
         const isEdit = !readOnly && w === semanaEdit;
         const preControle = w < resumo.semanaInicioControle;
+        const isAnalise = w === resumo.semanaAnalise;
+        const hasDados = val > 0;
         return (
           <td
             key={w}
             className={
               isEdit
                 ? 'cell-edit-week'
-                : preControle
-                  ? 'cell-pre-controle'
-                  : ''
+                : isAnalise
+                  ? 'cell-week-analise'
+                  : hasDados
+                    ? 'cell-week-filled'
+                    : preControle
+                      ? 'cell-pre-controle'
+                      : ''
             }
             title={
               preControle
@@ -257,6 +266,20 @@ export default function EmergencialMonitorPanel({
     <div className="emerg-monitor">
       <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass}`}>
         <h2>Monitoramento semanal — {resumo.mes}</h2>
+        {resumo.ultimaSemanaComDados === 0 && resumo.enviadoMesTotal === 0 && (
+          <p className="alerta-box alerta-nivel-alto">
+            Nenhum envio lançado em <strong>{resumo.mes}</strong>. Importe o PDF RME da semana ou
+            confira se o <strong>mês monitorado</strong> está correto.
+          </p>
+        )}
+        {resumo.modoPlanejamento && (
+          <p className="alerta-box alerta-nivel-moderado">
+            Monitorando <strong>S{resumo.semanaAnalise}</strong> (sem lançamento ainda). Histórico
+            até <strong>S{resumo.ultimaSemanaComDados}</strong>:{' '}
+            <strong>{num(resumo.enviadoAteBaseRitmo)}</strong> cestas no mês — projeções e ritmo
+            usam esse histórico para orientar a próxima semana.
+          </p>
+        )}
         <p className="hint">
           <strong>Teto do mês:</strong>{' '}
           {num(resumo.metaMesTotal || TOTAL_MENSAL_EMERGENCIAL_PADRAO)} cestas (não ultrapassar).{' '}
@@ -306,7 +329,10 @@ export default function EmergencialMonitorPanel({
                   <option key={w} value={w}>
                     Semana {w} ({weekDateRangeLabel(year, month, w)})
                     {w < resumo.semanaInicioControle ? ' — pré-controle' : ''}
-                    {w === resumo.semanaAtual ? ' — atual' : ''}
+                    {w === resumo.semanaAnalise ? ' — em análise' : ''}
+                    {w === resumo.semanaAtual && w !== resumo.semanaAnalise
+                      ? ' — civil hoje'
+                      : ''}
                   </option>
                 ),
               )}
@@ -370,10 +396,12 @@ export default function EmergencialMonitorPanel({
           <article className="emerg-kpi">
             <span className="emerg-kpi-label">Semana no mês</span>
             <strong>
-              S{resumo.semanaAtual} / {resumo.semanasNoMes}
+              S{resumo.semanaAnalise} / {resumo.semanasNoMes}
             </strong>
             <span className="emerg-kpi-sub">
-              {weekDateRangeLabel(year, month, resumo.semanaAtual)} ({resumo.mes})
+              {weekDateRangeLabel(year, month, resumo.semanaAnalise)} ({resumo.mes})
+              {resumo.modoPlanejamento &&
+                ` · histórico até S${resumo.ultimaSemanaComDados}`}
             </span>
           </article>
           <article className={`emerg-kpi${resumo.estouroMes > 0 ? ' emerg-kpi--over' : ''}`}>
@@ -391,7 +419,7 @@ export default function EmergencialMonitorPanel({
           <article
             className={`emerg-kpi${resumo.estouroSemana > 0 ? ' emerg-kpi--over' : ''}`}
           >
-            <span className="emerg-kpi-label">Semana {resumo.semanaAtual}</span>
+            <span className="emerg-kpi-label">Semana {resumo.semanaAnalise}</span>
             <strong>
               {num(resumo.enviadoSemanaAtual)} / {num(resumo.limiteSemanal)}
             </strong>
@@ -561,7 +589,7 @@ export default function EmergencialMonitorPanel({
                 )}
                 <th rowSpan={2}>Total</th>
                 <th rowSpan={2}>% mês</th>
-                <th rowSpan={2}>% sem. {resumo.semanaAtual}</th>
+                <th rowSpan={2}>% sem. {resumo.semanaAnalise}</th>
                 <th rowSpan={2} title="Se o ritmo das semanas de controle continuar">
                   % proj. mês
                 </th>
@@ -645,10 +673,10 @@ export default function EmergencialMonitorPanel({
           </table>
         </div>
         <p className="hint">
-          Envios reais por semana. <strong>% sem.</strong> = uso do teto na semana{' '}
-          {resumo.semanaAtual}. <strong>% proj. mês</strong> = se o ritmo do período de
-          controle continuar até o fim do mês (verde na semana pode ainda estourar o teto).
-          Badge <em>Ritmo</em> = semana ok, mas projeção alta — ajustar na próxima semana.
+          Envios reais por semana (colunas verdes = já lançadas). Ao mudar a semana no seletor, o
+          histórico permanece. <strong>% sem.</strong> = teto na S{resumo.semanaAnalise}.{' '}
+          <strong>% proj. mês</strong> = ritmo até S{resumo.semanaBaseRitmo} projetado até o fim do
+          mês. Badge <em>Ritmo</em> = semana ok, mas projeção alta.
         </p>
       </section>
 

@@ -179,7 +179,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           className={`monitor-saude-card${saude.estouroSemana > 0 ? ' monitor-saude-card--over' : ''}`}
         >
           <span className="monitor-saude-card-label">
-            Teto semana {resumo.semanaAtual}
+            Teto semana {resumo.semanaAnalise}
           </span>
           <strong>{num(saude.limiteSemanal, 0)}</strong>
           <span className="monitor-saude-card-sub">
@@ -263,7 +263,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
         </span>
         <span>
           <i className="dot dot-ritmo" /> Teto mês (25%) · projeção (15%) · semana S
-          {resumo.semanaAtual} (15%) · empenho (10%)
+          {resumo.semanaAnalise} (15%) · empenho (10%)
         </span>
       </div>
     </section>
