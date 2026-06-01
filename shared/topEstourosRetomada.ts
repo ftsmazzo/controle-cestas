@@ -1,4 +1,4 @@
-import { buildMonitoramentoResumo } from './emergencyMonitoring.js';
+import { buildMonitoramentoResumo, resolveContextoPainelPublico } from './emergencyMonitoring.js';
 import { groupByFamilia, type FamiliaGroup } from './serviceFamilies.js';
 import { buildTabelaCessaoEmergencial } from './tabelaCessaoEmergencial.js';
 import type { ServicesPayload } from './serviceTypes.js';
@@ -42,7 +42,11 @@ export function buildTopEstourosRetomada(
   payload: ServicesPayload,
   limit = 4,
 ): TopEstourosRetomada {
-  const resumo = buildMonitoramentoResumo(payload);
+  const ctx = resolveContextoPainelPublico(payload.emergencial);
+  const resumo = buildMonitoramentoResumo(payload, {
+    mesReferencia: ctx.mes,
+    semanaReferencia: ctx.semanaReferencia,
+  });
   const tabela = buildTabelaCessaoEmergencial(payload);
   const mediaMap = new Map(
     tabela.rows.map((r) => [r.servicoId, r.mediaHistorica]),
@@ -81,14 +85,7 @@ export function buildTopEstourosRetomada(
     .filter((e) => e.enviadoRetomada > 0 && e.excessoCota > 0 && e.excessoMedia > 0)
     .sort((a, b) => b.score - a.score || b.pctCota - a.pctCota);
 
-  const temDados = resumo.equipamentos.some(
-    (e) =>
-      enviadoNoPeriodoControle(
-        e.semanas,
-        resumo.semanaInicioControle,
-        resumo.semanaBaseRitmo,
-      ) > 0,
-  );
+  const temDados = (ctx.ultimoLancamento?.totalCestas ?? 0) > 0;
 
   return {
     items: candidatos.slice(0, limit),

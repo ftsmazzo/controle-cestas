@@ -1,5 +1,17 @@
-import { buildMonitoramentoResumo, somaEnviosSemanas, weekDateRangeLabel } from './emergencyMonitoring.js';
-import { computeAutonomiaOperacional, buildEmpenhoControle, enviadoMesMonitoramento, EMPENHO_DURACAO_MESES_PADRAO } from './empenhoControle.js';
+import {
+  buildMonitoramentoResumo,
+  resolveContextoPainelPublico,
+  somaEnviosSemanas,
+  weekDateRangeLabel,
+  weeksInCalendarMonth,
+} from './emergencyMonitoring.js';
+import {
+  computeAutonomiaOperacional,
+  buildEmpenhoControle,
+  enviadoMesMonitoramento,
+  EMPENHO_DURACAO_MESES_PADRAO,
+  suggestEmpenhoMeses,
+} from './empenhoControle.js';
 import { margemAteLimite, projecaoFimMes } from './limitesControle.js';
 import { getYearMonth, parseMonthKey } from './monthUtils.js';
 import {
@@ -15,6 +27,7 @@ export const GORDURA_PERIODO_TOTAL =
   MARGEM_MITIGACAO_MENSAL * EMPENHO_DURACAO_MESES_PADRAO;
 
 export interface MitigacaoSemanaProposta {
+  mes: string;
   semana: number;
   periodo: string;
   cestas: number;
@@ -72,6 +85,10 @@ export interface CenarioMitigacao {
   resumoCurto: string;
   temDados: boolean;
   precisaMitigacao: boolean;
+  motivoVazio: 'sem_lancamentos' | 'mes_fechado' | 'sem_semanas_futuras' | null;
+  mensagemAjuda: string;
+  ultimoLancamentoLabel: string | null;
+  proximoMesSugerido: string | null;
 }
 
 function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
@@ -83,23 +100,77 @@ function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
 
 function splitSemanas(
   total: number,
-  semanas: number[],
-  year: number,
-  month: number,
+  alvos: { mes: string; semana: number }[],
+  yearByMes: Map<string, { year: number; month: number }>,
 ): MitigacaoSemanaProposta[] {
-  if (!semanas.length) return [];
-  const base = Math.floor(total / semanas.length);
-  let resto = total - base * semanas.length;
-  return semanas.map((semana) => {
+  if (!alvos.length) return [];
+  const base = Math.floor(total / alvos.length);
+  let resto = total - base * alvos.length;
+  return alvos.map(({ mes, semana }) => {
     const extra = resto > 0 ? 1 : 0;
     if (resto > 0) resto--;
     const cestas = base + extra;
+    const ym = yearByMes.get(mes);
     return {
+      mes,
       semana,
-      periodo: weekDateRangeLabel(year, month, semana),
+      periodo: ym
+        ? weekDateRangeLabel(ym.year, ym.month, semana)
+        : `S${semana}`,
       cestas,
     };
   });
+}
+
+interface AlvoSemanaMitigacao {
+  mes: string;
+  semana: number;
+}
+
+function planejarProximasSemanas(
+  payload: ServicesPayload,
+  mes: string,
+  aposSemana: number,
+  horizonte: number,
+): AlvoSemanaMitigacao[] {
+  const meses =
+    payload.emergencial.empenhoMeses?.length
+      ? payload.emergencial.empenhoMeses
+      : suggestEmpenhoMeses(
+          payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO,
+        );
+  let idx = meses.findIndex((m) => parseMonthKey(m) === parseMonthKey(mes));
+  if (idx < 0) idx = 0;
+  const out: AlvoSemanaMitigacao[] = [];
+  let curMes = meses[idx] ?? mes;
+  let w = aposSemana + 1;
+
+  while (out.length < horizonte && idx < meses.length) {
+    const ym = getYearMonth(curMes);
+    if (!ym) break;
+    const maxW = weeksInCalendarMonth(ym.year, ym.month);
+    while (w <= maxW && out.length < horizonte) {
+      out.push({ mes: curMes, semana: w });
+      w++;
+    }
+    idx += 1;
+    if (idx >= meses.length) break;
+    curMes = meses[idx];
+    w = 1;
+  }
+  return out;
+}
+
+function proximoMesEmpenho(payload: ServicesPayload, mes: string): string | null {
+  const meses =
+    payload.emergencial.empenhoMeses?.length
+      ? payload.emergencial.empenhoMeses
+      : suggestEmpenhoMeses(
+          payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO,
+        );
+  const k = parseMonthKey(mes);
+  const next = meses.find((m) => parseMonthKey(m) > k);
+  return next ?? null;
 }
 
 function gorduraUsadaNoMes(enviado: number): number {
@@ -225,14 +296,34 @@ export function buildCenarioMitigacao(
   payload: ServicesPayload,
   semanasHorizonte = 2,
 ): CenarioMitigacao {
-  const resumo = buildMonitoramentoResumo(payload);
+  const ctx = resolveContextoPainelPublico(payload.emergencial);
+  const resumoRitmo = buildMonitoramentoResumo(payload, {
+    mesReferencia: ctx.mes,
+    semanaReferencia: ctx.semanaReferencia,
+  });
+
+  const alvos = planejarProximasSemanas(
+    payload,
+    resumoRitmo.mes,
+    resumoRitmo.semanaBaseRitmo,
+    semanasHorizonte,
+  );
+  const mesOrcamento = alvos[0]?.mes ?? resumoRitmo.mes;
+  const resumo =
+    parseMonthKey(mesOrcamento) === parseMonthKey(resumoRitmo.mes)
+      ? resumoRitmo
+      : buildMonitoramentoResumo(payload, {
+          mesReferencia: mesOrcamento,
+          semanaReferencia: 1,
+        });
+
   const empenho = buildEmpenhoControle(payload);
   const autonomia = computeAutonomiaOperacional(
     payload,
-    resumo.ritmoSemanalMedio,
-    resumo.enviadoSemanaAtual,
-    resumo.mes,
-    resumo.semanaAnalise,
+    resumoRitmo.ritmoSemanalMedio,
+    resumoRitmo.enviadoSemanaAtual,
+    resumoRitmo.mes,
+    resumoRitmo.semanaAnalise,
   );
   const tabela = buildTabelaCessaoEmergencial(payload);
   const mediaMap = new Map(tabela.rows.map((r) => [r.servicoId, r.mediaHistorica]));
@@ -244,19 +335,19 @@ export function buildCenarioMitigacao(
     ]),
   );
 
-  const ym = getYearMonth(resumo.mes);
-  const year = ym?.year ?? 0;
-  const month = ym?.month ?? 0;
-
-  const semanasPlanejadas: number[] = [];
-  for (
-    let w = resumo.semanaBaseRitmo + 1;
-    w <= resumo.semanasNoMes && semanasPlanejadas.length < semanasHorizonte;
-    w++
-  ) {
-    semanasPlanejadas.push(w);
+  const yearByMes = new Map<string, { year: number; month: number }>();
+  for (const a of alvos) {
+    if (!yearByMes.has(a.mes)) {
+      const ym = getYearMonth(a.mes);
+      if (ym) yearByMes.set(a.mes, ym);
+    }
+  }
+  if (!yearByMes.has(resumo.mes)) {
+    const ym = getYearMonth(resumo.mes);
+    if (ym) yearByMes.set(resumo.mes, ym);
   }
 
+  const semanasPlanejadas = alvos.map((a) => a.semana);
   const enviadoMes = resumo.enviadoMesTotal;
   const orcOp = margemAteLimite(enviadoMes, TETO_MENSAL_OPERACIONAL);
   const orcGordura = margemAteLimite(enviadoMes, TETO_CONTRATUAL_MENSAL);
@@ -278,28 +369,36 @@ export function buildCenarioMitigacao(
 
   const units = consumptionUnits(payload.services);
   const drafts: DraftUnit[] = units.map((s) => {
-    const eq = resumo.equipamentos.find((e) => e.servicoId === s.id);
-    const cotaMes = eq?.metaMensal ?? cotaMap.get(s.id) ?? 0;
-    const enviado = eq
+    const eqRitmo = resumoRitmo.equipamentos.find((e) => e.servicoId === s.id);
+    const eqOrc = resumo.equipamentos.find((e) => e.servicoId === s.id);
+    const cotaMes = eqOrc?.metaMensal ?? cotaMap.get(s.id) ?? 0;
+    const enviadoRitmo = eqRitmo
       ? somaEnviosSemanas(
-          eq.semanas,
+          eqRitmo.semanas,
+          resumoRitmo.semanaInicioControle,
+          resumoRitmo.semanaBaseRitmo,
+        )
+      : 0;
+    const enviadoOrc = eqOrc
+      ? somaEnviosSemanas(
+          eqOrc.semanas,
           resumo.semanaInicioControle,
           resumo.semanaBaseRitmo,
         )
       : 0;
     const ritmo =
-      resumo.semanasNoPeriodoControle > 0
-        ? enviado / resumo.semanasNoPeriodoControle
-        : eq?.enviadoSemanaAtual ?? 0;
-    const demanda = Math.round(ritmo * semanasPlanejadas.length);
+      resumoRitmo.semanasNoPeriodoControle > 0
+        ? enviadoRitmo / resumoRitmo.semanasNoPeriodoControle
+        : eqRitmo?.enviadoSemanaAtual ?? 0;
+    const demanda = Math.round(ritmo * alvos.length);
     return {
       servicoId: s.id,
       servicoNome: s.nome,
       familiaCodigo: s.familiaCodigo ?? undefined,
       fixo: s.fixo,
-      enviado,
+      enviado: enviadoOrc,
       cotaMes,
-      cotaRestante: Math.max(0, cotaMes - enviado),
+      cotaRestante: Math.max(0, cotaMes - enviadoOrc),
       mediaHistorica: mediaMap.get(s.id) ?? 0,
       participacaoPct: pctMap.get(s.id) ?? 0,
       ritmo,
@@ -337,7 +436,7 @@ export function buildCenarioMitigacao(
         demandaInercial2sem: d.demanda,
         proposta2sem,
         corte2sem,
-        propostasSemana: splitSemanas(proposta2sem, semanasPlanejadas, year, month),
+        propostasSemana: splitSemanas(proposta2sem, alvos, yearByMes),
         fechamentoMes,
         fechamentoInercial,
         vsCotaMesPct: d.cotaMes > 0 ? (fechamentoMes / d.cotaMes) * 100 : 0,
@@ -356,28 +455,54 @@ export function buildCenarioMitigacao(
 
   const familias = groupByFamilia(equipamentos, payload.services);
 
-  const temDados =
-    resumo.ultimaSemanaComDados >= resumo.semanaInicioControle &&
-    semanasPlanejadas.length > 0;
+  const temLancamentos = (ctx.ultimoLancamento?.totalCestas ?? 0) > 0;
+  const temDadosRitmo =
+    resumoRitmo.ultimaSemanaComDados >= resumoRitmo.semanaInicioControle;
+  const temSemanasFuturas = alvos.length > 0;
+  const temDados = temLancamentos && temDadosRitmo && temSemanasFuturas;
+  const proximoMesSugerido = proximoMesEmpenho(payload, resumoRitmo.mes);
+
+  let motivoVazio: CenarioMitigacao['motivoVazio'] = null;
+  let mensagemAjuda = '';
+  if (!temLancamentos) {
+    motivoVazio = 'sem_lancamentos';
+    mensagemAjuda =
+      'No Admin → Monitor, importe o PDF da semana e clique em **Salvar** (botão no topo). Depois atualize esta página (F5). O painel público só lê o que está gravado no banco.';
+  } else if (!temDadosRitmo) {
+    motivoVazio = 'sem_lancamentos';
+    mensagemAjuda = `Há rascunho no mês ${ctx.mes}, mas nada no período de controle (desde S${resumoRitmo.semanaInicioControle}). Confira mês/semana no Monitor e salve.`;
+  } else if (!temSemanasFuturas) {
+    motivoVazio = 'mes_fechado';
+    mensagemAjuda = proximoMesSugerido
+      ? `Semanas futuras esgotadas em ${resumoRitmo.mes}. Selecione **${proximoMesSugerido}** no Monitor para planejar S1–S2.`
+      : `Sem semanas futuras no mês ${resumoRitmo.mes}.`;
+  }
+
+  const ultimoLancamentoLabel = ctx.ultimoLancamento
+    ? `${ctx.ultimoLancamento.mes} S${ctx.ultimoLancamento.semana} (${num(ctx.ultimoLancamento.totalCestas)} cestas)`
+    : null;
+
   const precisaMitigacao =
     demandaInercialTotal > orcOp || fechamentoInercial > TETO_MENSAL_OPERACIONAL;
 
   let resumoCurto = '';
   if (!temDados) {
-    resumoCurto =
-      'Lance semanas no Monitor para calcular a proposta das próximas entregas.';
+    resumoCurto = mensagemAjuda || 'Aguardando lançamentos salvos no Monitor.';
   } else if (!precisaMitigacao && corteTotal === 0) {
-    resumoCurto = `Ritmo atual cabe no teto de ${TETO_MENSAL_OPERACIONAL}/mês — proposta mantém ${propostaTotal} cestas nas próximas ${semanasPlanejadas.length} semana(s).`;
+    resumoCurto = `Ritmo atual cabe no teto de ${TETO_MENSAL_OPERACIONAL}/mês — proposta mantém ${propostaTotal} cestas nas próximas ${alvos.length} semana(s).`;
   } else {
-    resumoCurto = `Corte de ${corteTotal} cestas vs ritmo inercial (${demandaInercialTotal}) para fechar o mês em ${fechamentoMesProjetado} (teto operacional ${TETO_MENSAL_OPERACIONAL}${gorduraUsadaNoPlano > 0 ? `, gordura +${gorduraUsadaNoPlano}` : ''}).`;
+    resumoCurto = `Corte de ${corteTotal} cestas vs ritmo inercial (${demandaInercialTotal}) para fechar ${mesOrcamento} em ${fechamentoMesProjetado} (teto ${TETO_MENSAL_OPERACIONAL}${gorduraUsadaNoPlano > 0 ? `, gordura +${gorduraUsadaNoPlano}` : ''}).`;
   }
 
   return {
-    mes: resumo.mes,
+    mes: mesOrcamento,
     semanasPlanejadas,
-    periodosSemana: semanasPlanejadas.map((w) =>
-      weekDateRangeLabel(year, month, w),
-    ),
+    periodosSemana: alvos.map((a) => {
+      const ym = yearByMes.get(a.mes);
+      return ym
+        ? `${a.mes} S${a.semana} (${weekDateRangeLabel(ym.year, ym.month, a.semana)})`
+        : `S${a.semana}`;
+    }),
     enviadoMesAteAgora: enviadoMes,
     tetoOperacional: TETO_MENSAL_OPERACIONAL,
     tetoComGordura: TETO_CONTRATUAL_MENSAL,
@@ -395,24 +520,32 @@ export function buildCenarioMitigacao(
     fechamentoInercial,
     saldoEmpenhoRestante: empenho.restante,
     saldoEmpenhoPosPlano,
-    semanaBaseRitmo: resumo.semanaBaseRitmo,
+    semanaBaseRitmo: resumoRitmo.semanaBaseRitmo,
     semanasHorizonte,
     equipamentos,
     familias,
     resumoCurto,
     temDados,
     precisaMitigacao,
+    motivoVazio,
+    mensagemAjuda,
+    ultimoLancamentoLabel,
+    proximoMesSugerido,
   };
+}
+
+function num(n: number): string {
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 }
 
 export function totaisPorSemana(
   cenario: CenarioMitigacao,
 ): { semana: number; periodo: string; total: number }[] {
-  return cenario.semanasPlanejadas.map((semana, i) => ({
-    semana,
-    periodo: cenario.periodosSemana[i] ?? `S${semana}`,
+  return cenario.periodosSemana.map((periodo, i) => ({
+    semana: cenario.semanasPlanejadas[i] ?? i + 1,
+    periodo,
     total: cenario.equipamentos.reduce(
-      (s, e) => s + (e.propostasSemana.find((p) => p.semana === semana)?.cestas ?? 0),
+      (s, e) => s + (e.propostasSemana[i]?.cestas ?? 0),
       0,
     ),
   }));

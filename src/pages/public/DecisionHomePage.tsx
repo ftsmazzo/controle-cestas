@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { buildMonitoramentoResumo } from '@shared/emergencyMonitoring';
+import { buildMonitoramentoResumo, resolveContextoPainelPublico } from '@shared/emergencyMonitoring';
 import { buildEmpenhoControle } from '@shared/empenhoControle';
 import { computeAutonomiaOperacional } from '@shared/empenhoControle';
 import {
@@ -41,7 +41,11 @@ export default function DecisionHomePage() {
 
   const emergencial = useMemo(() => {
     if (!payload) return null;
-    const resumo = buildMonitoramentoResumo(payload);
+    const ctx = resolveContextoPainelPublico(payload.emergencial);
+    const resumo = buildMonitoramentoResumo(payload, {
+      mesReferencia: ctx.mes,
+      semanaReferencia: ctx.semanaReferencia,
+    });
     const empenho = buildEmpenhoControle(payload);
     const autonomia = computeAutonomiaOperacional(
       payload,
@@ -55,7 +59,7 @@ export default function DecisionHomePage() {
       autonomia.mesesPeriodoRestantes,
       autonomia.empenhoAcabaAntesDoPeriodo,
     );
-    return { resumo, empenho, autonomia, pill };
+    return { resumo, empenho, autonomia, pill, ctx };
   }, [payload]);
 
   if (loading) return null;
@@ -72,7 +76,7 @@ export default function DecisionHomePage() {
     );
   }
 
-  const { empenho, autonomia, pill } = emergencial;
+  const { empenho, autonomia, pill, ctx } = emergencial;
 
   return (
     <>
@@ -90,7 +94,11 @@ export default function DecisionHomePage() {
           ) : (
             <p className="home-kpi-value-line home-kpi-value-line--muted">
               <span className="home-kpi-number">—</span>
-              <span className="home-kpi-hint">Lance semanas no Monitor</span>
+              <span className="home-kpi-hint">
+                {ctx.ultimoLancamento
+                  ? 'Salve no Monitor e atualize (F5)'
+                  : 'Lance semanas no Monitor'}
+              </span>
             </p>
           )}
           <span className={`home-kpi-pill home-kpi-pill--${pill.mod}`}>{pill.label}</span>

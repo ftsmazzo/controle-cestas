@@ -98,10 +98,22 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
       </header>
 
       {!cenario.temDados ? (
-        <p className="hint mit-empty">
-          Importe PDFs semanais em{' '}
-          <a href="/admin/monitoramento">Admin → Monitor</a> para montar a proposta.
-        </p>
+        <div className="mit-empty-box">
+          <p className="hint mit-empty">
+            {cenario.mensagemAjuda || cenario.resumoCurto}
+          </p>
+          {cenario.ultimoLancamentoLabel && (
+            <p className="hint mit-empty-meta">
+              Último lançamento no banco: <strong>{cenario.ultimoLancamentoLabel}</strong>
+            </p>
+          )}
+          {cenario.motivoVazio === 'sem_lancamentos' && (
+            <p className="hint mit-empty-meta">
+              Admin → <a href="/admin/monitoramento">Monitor</a> → importar PDF →{' '}
+              <strong>Salvar</strong> → voltar aqui e pressionar F5.
+            </p>
+          )}
+        </div>
       ) : (
         <>
           <div className="mit-summary-grid">

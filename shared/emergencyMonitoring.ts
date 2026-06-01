@@ -440,8 +440,73 @@ function statusFromLimites(
   return 'ok';
 }
 
+export interface UltimoLancamentoSemanal {
+  mes: string;
+  semana: number;
+  totalCestas: number;
+}
+
+/** Último par mês+semana com envio lançado (qualquer quantidade > 0). */
+export function ultimoLancamentoSemanal(
+  mon: EmergencialMonitoramento,
+): UltimoLancamentoSemanal | null {
+  let bestKey = -1;
+  let bestSem = 0;
+  let bestMes = '';
+  for (const e of mon.entradasSemanais) {
+    if ((e.quantidade || 0) <= 0) continue;
+    const mk = parseMonthKey(e.mes);
+    if (mk <= 0) continue;
+    if (mk > bestKey || (mk === bestKey && e.semana > bestSem)) {
+      bestKey = mk;
+      bestSem = e.semana;
+      bestMes = e.mes;
+    }
+  }
+  if (!bestMes) return null;
+  const totalCestas = mon.entradasSemanais
+    .filter(
+      (e) => parseMonthKey(e.mes) === bestKey && e.semana === bestSem,
+    )
+    .reduce((s, e) => s + (e.quantidade || 0), 0);
+  return { mes: bestMes, semana: bestSem, totalCestas };
+}
+
+/** Painel público: usa mês/semana do último lançamento salvo quando o mês ativo está vazio. */
+export function resolveContextoPainelPublico(
+  cfg: ProcessoEmergencialConfig,
+  now: Date = new Date(),
+): { mes: string; semanaReferencia?: number; ultimoLancamento: UltimoLancamentoSemanal | null } {
+  const mon = mergeEmergencialMonitoring(cfg.monitoramento);
+  const ultimo = ultimoLancamentoSemanal(mon);
+  const mesAtivo = resolveMesMonitoramento(cfg, now);
+  const semIni = semanaInicioControleEfetiva(mesAtivo, mon);
+  const temDadosMesAtivo =
+    ultimaSemanaComDadosNoMes(mon, mesAtivo, semIni) >= semIni;
+
+  if (temDadosMesAtivo) {
+    const semRef =
+      ultimo && parseMonthKey(ultimo.mes) === parseMonthKey(mesAtivo)
+        ? ultimo.semana
+        : undefined;
+    return { mes: mesAtivo, semanaReferencia: semRef, ultimoLancamento: ultimo };
+  }
+
+  if (ultimo) {
+    return {
+      mes: ultimo.mes,
+      semanaReferencia: ultimo.semana,
+      ultimoLancamento: ultimo,
+    };
+  }
+
+  return { mes: mesAtivo, ultimoLancamento: null };
+}
+
 export interface BuildMonitorOptions {
   now?: Date;
+  /** Força mês monitorado (ex.: último lançamento salvo no painel público) */
+  mesReferencia?: string;
   /** Semana selecionada no painel (importação / leitura); mantém histórico nas projeções */
   semanaReferencia?: number;
   allocateOptions?: Parameters<typeof allocatePlans>[3];
@@ -454,7 +519,8 @@ export function buildMonitoramentoResumo(
   const now = options?.now ?? new Date();
   const cfg = payload.emergencial;
   const mon = mergeEmergencialMonitoring(cfg.monitoramento);
-  const mes = resolveMesMonitoramento(cfg, now);
+  const mes =
+    options?.mesReferencia?.trim() || resolveMesMonitoramento(cfg, now);
   const ym = parseMonthKey(mes);
   const year = Math.floor(ym / 100);
   const month = ym % 100;

@@ -33,9 +33,9 @@ export default function TopEstourosRetomadaCard({ payload }: Props) {
 
       {!top.temDados ? (
         <p className="hint top-estouros-empty">
-          Lance as semanas no{' '}
-          <a href="/admin/monitoramento">Monitor emergencial</a> para ver quem
-          estourou o teto na retomada.
+          Importe o PDF semanal em{' '}
+          <a href="/admin/monitoramento">Admin → Monitor</a>, clique em{' '}
+          <strong>Salvar</strong> e atualize esta página (F5).
         </p>
       ) : !top.items.length ? (
         <p className="hint top-estouros-empty">
