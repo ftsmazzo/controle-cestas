@@ -49,6 +49,7 @@ export default function RegistroSemanalPdfImport({
         file,
         data.services,
         mes,
+        semana,
       );
       setPreview(result);
       const n = result.rows.filter((r) => r.semana === semana).length;
@@ -82,7 +83,8 @@ export default function RegistroSemanalPdfImport({
       <h3>Registro real da semana — PDF operacional</h3>
       <p className="hint">
         Documento do <strong>Banco</strong> com envios por equipamento (modelo{' '}
-        <em>Março a Setembro</em>: CRAS 1…12, CREAS I–V, SAICA… por semana). Isso
+        <em>Março a Setembro</em> com várias semanas, ou PDF de{' '}
+        <strong>uma semana</strong> ex. CESTAS 18-24.05.26). Isso
         preenche o <strong>envio real</strong> da semana selecionada — não altera metas
         nem histórico Coderp.
       </p>
@@ -110,12 +112,22 @@ export default function RegistroSemanalPdfImport({
           {preview.mesDetectado && (
             <p className="hint">
               Mês no PDF: <strong>{preview.mesDetectado}</strong>
-              {preview.semanasDetectadas.length > 0 && (
+              {preview.modo === 'semana_unica' ? (
                 <>
                   {' '}
-                  · semanas encontradas: S
-                  {preview.semanasDetectadas.join(', S')}
+                  · <strong>semana única</strong>
+                  {preview.semanaAplicada != null && (
+                    <> → aplicada como S{preview.semanaAplicada}</>
+                  )}
                 </>
+              ) : (
+                preview.semanasDetectadas.length > 0 && (
+                  <>
+                    {' '}
+                    · colunas: S
+                    {preview.semanasDetectadas.join(', S')}
+                  </>
+                )
               )}
             </p>
           )}
