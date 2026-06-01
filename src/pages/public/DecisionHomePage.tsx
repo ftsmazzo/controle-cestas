@@ -17,6 +17,7 @@ import {
 import { useData } from '../../context/DataContext';
 import CessaoEquipamentosTable from '../../components/CessaoEquipamentosTable';
 import TopEstourosRetomadaCard from '../../components/TopEstourosRetomadaCard';
+import MitigacaoCenarioPanel from '../../components/MitigacaoCenarioPanel';
 
 function num(n: number | null | undefined, dec = 1): string {
   if (n == null || Number.isNaN(n)) return '—';
@@ -137,6 +138,8 @@ export default function DecisionHomePage() {
       </section>
 
       <TopEstourosRetomadaCard payload={payload} />
+
+      <MitigacaoCenarioPanel payload={payload} />
 
       <CessaoEquipamentosTable payload={payload} />
 

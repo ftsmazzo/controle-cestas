@@ -1,0 +1,381 @@
+.mit-panel {
+  margin-top: 1.25rem;
+  background: linear-gradient(180deg, #faf5ff 0%, #fff 120px);
+  border: 1px solid #e9d5ff;
+}
+
+.mit-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.mit-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  color: #5b21b6;
+}
+
+.mit-sub {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  max-width: 44rem;
+}
+
+.mit-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.mit-badge {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: var(--text);
+}
+
+.mit-badge--gordura {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.mit-empty {
+  margin: 0;
+}
+
+.mit-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.mit-summary-card {
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.mit-summary-card--inercial {
+  border-color: #fecaca;
+  background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+}
+
+.mit-summary-card--proposta {
+  border-color: #c4b5fd;
+  background: linear-gradient(135deg, #f5f3ff 0%, #fff 100%);
+}
+
+.mit-summary-card--fechamento {
+  border-color: #bbf7d0;
+  background: linear-gradient(135deg, #f0fdf4 0%, #fff 100%);
+}
+
+.mit-summary-card--saldo {
+  border-color: #bfdbfe;
+  background: linear-gradient(135deg, #eff6ff 0%, #fff 100%);
+}
+
+.mit-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.mit-summary-value {
+  margin: 0.35rem 0 0.15rem;
+  font-size: 1.65rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.mit-summary-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.mit-bar-chart {
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem 0.65rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+.mit-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.mit-bar-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  overflow: visible;
+}
+
+.mit-bar-zone--operacional {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #86efac 0%, #4ade80 100%);
+  border-radius: 999px 0 0 999px;
+}
+
+.mit-bar-zone--gordura {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #fde68a 0%, #fbbf24 100%);
+  border-radius: 0 999px 999px 0;
+}
+
+.mit-bar-marker {
+  position: absolute;
+  top: -4px;
+  width: 3px;
+  height: 22px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.mit-bar-marker--atual {
+  background: #2563eb;
+}
+
+.mit-bar-marker--proposta {
+  background: #7c3aed;
+  height: 26px;
+  top: -6px;
+  width: 4px;
+}
+
+.mit-bar-marker--inercial {
+  background: #dc2626;
+  opacity: 0.85;
+}
+
+.mit-bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.65rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.mit-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.mit-dot--atual {
+  background: #2563eb;
+}
+
+.mit-dot--proposta {
+  background: #7c3aed;
+}
+
+.mit-dot--inercial {
+  background: #dc2626;
+}
+
+.mit-dot--gordura {
+  background: #fbbf24;
+}
+
+.mit-week-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+.mit-week-card {
+  text-align: center;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #ddd6fe;
+}
+
+.mit-week-card--corte {
+  border-color: #fecaca;
+  background: #fff7ed;
+}
+
+.mit-week-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.mit-week-value {
+  margin: 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.mit-week-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.mit-table-wrap {
+  border-radius: 10px;
+  overflow: auto;
+  border: 1px solid var(--border);
+}
+
+.mit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 920px;
+}
+
+.mit-table thead {
+  background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%);
+}
+
+.mit-table th {
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b21a8;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mit-th-range {
+  display: block;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.mit-table td {
+  padding: 0.45rem 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.mit-row-familia td {
+  background: #f1f5f9;
+}
+
+.mit-familia-sub {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.mit-cell-nome {
+  font-weight: 600;
+}
+
+.mit-cell-unidade {
+  padding-left: 1.25rem;
+  font-weight: 500;
+}
+
+.mit-cell-muted {
+  color: var(--muted);
+}
+
+.mit-proposta {
+  color: #5b21b6;
+}
+
+.mit-corte {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.mit-over {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.mit-impact {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.mit-impact--leve {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.mit-impact--moderado {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.mit-impact--forte {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.mit-row--leve td {
+  background: #fffef5;
+}
+
+.mit-row--moderado td {
+  background: #fff7ed;
+}
+
+.mit-row--forte td {
+  background: #fef2f2;
+}
+
+.mit-table tfoot td {
+  background: #f8fafc;
+  font-weight: 600;
+  border-top: 2px solid var(--border);
+}
+
+.mit-foot {
+  margin: 0.85rem 0 0;
+  font-size: 0.82rem;
+}
