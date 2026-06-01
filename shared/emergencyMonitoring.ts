@@ -1,6 +1,6 @@
 import { allocatePlans } from './allocation.js';
 import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
-import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
+import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
 import { validMonthKeysForPayload } from './payloadAnalysis.js';
 import {
   consumptionUnits,
@@ -199,6 +199,18 @@ export function weekOfMonth(date: Date = new Date()): number {
   return 5;
 }
 
+/** Semana civil dentro do mês monitorado (não usa semana do mês corrente se estiver editando outro mês) */
+export function semanaAtualParaMes(mes: string, now: Date = new Date()): number {
+  const ym = getYearMonth(mes);
+  if (!ym) return weekOfMonth(now);
+  const mesKey = ym.year * 100 + ym.month;
+  const nowKey = now.getFullYear() * 100 + (now.getMonth() + 1);
+  const semanasNoMes = weeksInCalendarMonth(ym.year, ym.month);
+  if (mesKey < nowKey) return semanasNoMes;
+  if (mesKey > nowKey) return 1;
+  return Math.min(weekOfMonth(now), semanasNoMes);
+}
+
 export function weeksInCalendarMonth(year: number, month: number): number {
   const last = new Date(year, month, 0).getDate();
   return last > 28 ? 5 : 4;
@@ -288,7 +300,7 @@ export function buildMonitoramentoResumo(
   const month = ym % 100;
   const semanasNoMes =
     year > 0 && month > 0 ? weeksInCalendarMonth(year, month) : 4;
-  const semanaAtual = Math.min(weekOfMonth(now), semanasNoMes);
+  const semanaAtual = semanaAtualParaMes(mes, now);
   const semanaInicioControle = semanaInicioControleEfetiva(mes, mon);
   const semanasNoPeriodoControleVal = semanasNoPeriodoControle(
     semanaAtual,

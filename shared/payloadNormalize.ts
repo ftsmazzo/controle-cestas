@@ -1,6 +1,12 @@
 import { mergeAppSettings } from './appSettings.js';
 import { mergeEmergencialMonitoring } from './emergencyMonitoring.js';
 import { ensureFamiliaHierarchy, enrichServiceDef } from './serviceFamilies.js';
+import {
+  EMPENHO_CESTAS_TOTAL_PADRAO,
+  ensureEmpenhoPlans,
+  suggestEmpenhoMeses,
+} from './empenhoControle.js';
+import { MONITOR_CONTROLE_MES_INICIO } from './emergencyMonitoring.js';
 import { repairServiceCatalog } from './serviceRepair.js';
 import { defaultEmergencialConfig, defaultRegularConfig } from './processTypes.js';
 import { sanitizeProcessPlans } from './processSanitize.js';
@@ -22,10 +28,29 @@ export function normalizeServicesPayload(
   const history = repaired.history;
   const settings = mergeAppSettings(raw.settings);
   const base = { history, settings };
+  const empenhoMesesDefault = suggestEmpenhoMeses(
+    raw.emergencial?.duracaoMeses ?? 4,
+    MONITOR_CONTROLE_MES_INICIO,
+  );
   let emergencial: ProcessoEmergencialConfig = {
     ...defaultEmergencialConfig(base),
     ...(raw.emergencial ?? {}),
+    empenhoTotalCestas:
+      raw.emergencial?.empenhoTotalCestas ?? EMPENHO_CESTAS_TOTAL_PADRAO,
+    empenhoMeses: raw.emergencial?.empenhoMeses?.length
+      ? raw.emergencial.empenhoMeses
+      : empenhoMesesDefault,
   };
+  if (emergencial.plans.length !== emergencial.empenhoMeses!.length) {
+    emergencial = {
+      ...emergencial,
+      plans: ensureEmpenhoPlans(
+        emergencial.plans,
+        emergencial.empenhoMeses!,
+        emergencial.cestasPorMes,
+      ),
+    };
+  }
   emergencial.monitoramento = mergeEmergencialMonitoring(
     raw.emergencial?.monitoramento,
     emergencial.monitoramento,

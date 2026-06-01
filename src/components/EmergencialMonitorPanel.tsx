@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
+import { suggestEmpenhoMeses } from '@shared/empenhoControle';
 import {
   MONITOR_CONTROLE_MES_INICIO,
   MONITOR_CONTROLE_SEMANA_INICIO,
@@ -42,6 +43,26 @@ export default function EmergencialMonitorPanel({
   decisionDashboard,
 }: Props) {
   const resumo = useMemo(() => buildMonitoramentoResumo(data), [data]);
+
+  const mesesMonitor = useMemo(() => {
+    const fromEmpenho = data.emergencial.empenhoMeses?.length
+      ? data.emergencial.empenhoMeses
+      : suggestEmpenhoMeses(data.emergencial.duracaoMeses, MONITOR_CONTROLE_MES_INICIO);
+    const merged = new Map<string, { mes: string; total: number }>();
+    for (const m of fromEmpenho) {
+      const plan = data.emergencial.plans.find((p) => p.mes === m);
+      merged.set(m, {
+        mes: m,
+        total: plan?.totalDisponivel ?? data.emergencial.cestasPorMes,
+      });
+    }
+    for (const p of data.emergencial.plans) {
+      if (!merged.has(p.mes)) merged.set(p.mes, { mes: p.mes, total: p.totalDisponivel });
+    }
+    return [...merged.values()].sort(
+      (a, b) => parseMonthKey(a.mes) - parseMonthKey(b.mes),
+    );
+  }, [data]);
 
   const [semanaEdit, setSemanaEdit] = useState(MONITOR_CONTROLE_SEMANA_INICIO);
 
@@ -210,14 +231,11 @@ export default function EmergencialMonitorPanel({
               disabled={readOnly}
               onChange={(e) => setMesAtivo(e.target.value)}
             >
-              {data.emergencial.plans.map((p) => (
+              {mesesMonitor.map((p) => (
                 <option key={p.mes} value={p.mes}>
-                  {p.mes} — meta {num(p.totalDisponivel)}
+                  {p.mes} — meta {num(p.total)}
                 </option>
               ))}
-              {!data.emergencial.plans.some(
-                (p) => parseMonthKey(p.mes) === parseMonthKey(resumo.mes),
-              ) && <option value={resumo.mes}>{resumo.mes}</option>}
             </select>
           </label>
           <label>
@@ -293,10 +311,13 @@ export default function EmergencialMonitorPanel({
 
         <div className="emerg-kpi-grid">
           <article className="emerg-kpi">
-            <span className="emerg-kpi-label">Semana civil</span>
+            <span className="emerg-kpi-label">Semana no mês</span>
             <strong>
-              {resumo.semanaAtual} / {resumo.semanasNoMes}
+              S{resumo.semanaAtual} / {resumo.semanasNoMes}
             </strong>
+            <span className="emerg-kpi-sub">
+              {weekDateRangeLabel(year, month, resumo.semanaAtual)} ({resumo.mes})
+            </span>
           </article>
           <article className="emerg-kpi">
             <span className="emerg-kpi-label">Enviado no mês</span>

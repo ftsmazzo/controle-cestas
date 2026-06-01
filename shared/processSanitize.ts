@@ -1,10 +1,15 @@
 import { parseMonthKey } from './monthUtils.js';
 import {
+  ensureEmpenhoPlans,
+  suggestEmpenhoMeses,
+} from './empenhoControle.js';
+import {
   excludedMonthKeysFromRows,
   isExcludedPlanningMonth,
   PLANNING_BLOCKED_MONTH_KEYS,
   suggestPlanningMonths,
 } from './planningMonths.js';
+import { MONITOR_CONTROLE_MES_INICIO } from './emergencyMonitoring.js';
 import {
   processedRowsFromPayload,
   validMonthKeysForPayload,
@@ -56,24 +61,31 @@ export function sanitizeProcessPlans(
   const valid = validMonthKeysForPayload(payload);
   const excluded = excludedMonthKeysFromRows(rows);
 
-  const emergPlanning = suggestPlanningMonths(
-    valid,
+  const empenhoMeses = suggestEmpenhoMeses(
     emergencial.duracaoMeses,
-    excluded,
+    emergencial.monitoramento?.mesInicioControle ??
+      emergencial.empenhoMeses?.[0] ??
+      MONITOR_CONTROLE_MES_INICIO,
   );
   let nextEmerg = emergencial;
-  const emergHasBlocked = emergencial.plans.some((p) =>
-    PLANNING_BLOCKED_MONTH_KEYS.includes(parseMonthKey(p.mes)),
-  );
-  if (emergHasBlocked || planNeedsRefresh(emergencial.plans, emergPlanning, excluded)) {
+  const emergPlanning = empenhoMeses;
+  const emergPlansMismatch =
+    emergencial.plans.length !== empenhoMeses.length ||
+    empenhoMeses.some(
+      (m) => !emergencial.plans.some((p) => p.mes === m),
+    );
+  if (emergPlansMismatch) {
     nextEmerg = {
       ...emergencial,
-      plans: rebuildPlans(
-        emergPlanning,
+      empenhoMeses,
+      plans: ensureEmpenhoPlans(
         emergencial.plans,
+        empenhoMeses,
         emergencial.cestasPorMes,
       ),
     };
+  } else if (!nextEmerg.empenhoMeses?.length) {
+    nextEmerg = { ...nextEmerg, empenhoMeses };
   }
 
   const regPlanning = suggestPlanningMonths(
@@ -89,18 +101,6 @@ export function sanitizeProcessPlans(
     nextReg = {
       ...regular,
       plans: rebuildPlans(regPlanning, regular.plans, 0),
-    };
-  }
-
-  const emergKeys = nextEmerg.plans.map((p) => parseMonthKey(p.mes));
-  if (emergKeys.some((k) => excluded.includes(k))) {
-    nextEmerg = {
-      ...nextEmerg,
-      plans: rebuildPlans(
-        emergPlanning,
-        nextEmerg.plans,
-        nextEmerg.cestasPorMes,
-      ),
     };
   }
 

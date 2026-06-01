@@ -14,7 +14,7 @@ function num(n: number | null | undefined, dec = 1): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: dec });
 }
 
-const FONTE_LABEL: Record<SaudeDistribuicao['consumoFonte'], string> = {
+const FONTE_RATEIO_LABEL: Record<SaudeDistribuicao['consumoFonteRateio'], string> = {
   previsao: 'previsão (série limpa)',
   historico: 'média histórico recente',
   meta: 'meta emergencial',
@@ -90,15 +90,25 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           <span className="monitor-saude-card-sub">cestas</span>
         </article>
         <article className="monitor-saude-card">
-          <span className="monitor-saude-card-label">Tendência consumo</span>
-          <strong>{num(saude.consumoMensalEstimado, 0)}</strong>
-          <span className="monitor-saude-card-sub">/mês · {FONTE_LABEL[saude.consumoFonte]}</span>
+          <span className="monitor-saude-card-label">Meta operacional</span>
+          <strong>{num(saude.metaOperacionalMensal, 0)}</strong>
+          <span className="monitor-saude-card-sub">
+            /mês · total a distribuir ({resumo.mes})
+          </span>
         </article>
         <article className="monitor-saude-card">
-          <span className="monitor-saude-card-label">Proposta {resumo.mes}</span>
-          <strong>{num(saude.propostaMensal, 0)}</strong>
+          <span className="monitor-saude-card-label">Ref. rateio</span>
+          <strong>{num(saude.consumoReferenciaRateio, 0)}</strong>
           <span className="monitor-saude-card-sub">
-            {num(saude.pctPropostaMes, 0)}% cumprido · ritmo {num(saude.pctRitmoAcumulado, 0)}%
+            /mês · {FONTE_RATEIO_LABEL[saude.consumoFonteRateio]} (só proporções)
+          </span>
+        </article>
+        <article className="monitor-saude-card">
+          <span className="monitor-saude-card-label">Empenho período</span>
+          <strong>{num(saude.empenho.restante, 0)}</strong>
+          <span className="monitor-saude-card-sub">
+            restantes de {num(saude.empenho.totalEmpenho, 0)} · usado{' '}
+            {num(saude.empenho.totalConsumido, 0)}
           </span>
         </article>
         <article className="monitor-saude-card">
@@ -123,6 +133,42 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
         </article>
       </div>
 
+      <div className="monitor-saude-empenho">
+        <h4>Empenho {saude.empenho.totalEmpenho.toLocaleString('pt-BR')} cestas</h4>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th>Meta</th>
+                <th>Enviado</th>
+                <th>Saldo mês</th>
+              </tr>
+            </thead>
+            <tbody>
+              {saude.empenho.meses.map((m) => (
+                <tr key={m.mes}>
+                  <td>{m.mes}</td>
+                  <td>{num(m.metaMensal, 0)}</td>
+                  <td>{num(m.enviado, 0)}</td>
+                  <td className={m.saldoMes < 0 ? 'empenho-over' : ''}>
+                    {num(m.saldoMes, 0)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {saude.empenho.proximoMes && (
+          <p className="hint">
+            Próximo mês sugerido ({saude.empenho.proximoMes}): ~{' '}
+            <strong>{num(saude.empenho.sugestaoProximoMes, 0)}</strong> cestas (média{' '}
+            {num(saude.empenho.mediaSugeridaProximosMeses, 0)} do empenho restante; pode pedir até
+            ~{num(saude.metaOperacionalMensal + 150, 0)} se necessário).
+          </p>
+        )}
+      </div>
+
       <div className="monitor-saude-acoes">
         <h4>Para retomar o controle esta semana</h4>
         <ul>
@@ -134,10 +180,10 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
 
       <div className="monitor-saude-legend">
         <span>
-          <i className="dot dot-estoque" /> Estoque (55%): meses de saldo ÷ meta {saude.mesesIdeais}
+          <i className="dot dot-estoque" /> Estoque (55%): saldo ÷ {num(saude.metaOperacionalMensal, 0)}/mês
         </span>
         <span>
-          <i className="dot dot-ritmo" /> Ritmo (25%): envio vs esperado até semana {resumo.semanaAtual}
+          <i className="dot dot-ritmo" /> Ritmo (25%): desde S{resumo.semanaInicioControle} até S{resumo.semanaAtual} ({resumo.mes})
         </span>
         <span>
           <i className="dot dot-meta" /> Proposta (20%): % da meta {saude.propostaMensal} no mês

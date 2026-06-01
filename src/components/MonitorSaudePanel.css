@@ -160,6 +160,22 @@
   font-weight: 600;
 }
 
+.monitor-saude-empenho {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+
+.monitor-saude-empenho h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.monitor-saude-empenho .empenho-over {
+  color: #b45309;
+  font-weight: 600;
+}
+
 .monitor-saude-acoes h4 {
   margin: 0 0 0.5rem;
   font-size: 0.95rem;

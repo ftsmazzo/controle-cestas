@@ -14,6 +14,11 @@ import {
   slugServiceId,
 } from './serviceFamilies.js';
 import { parseMonthKey } from './monthUtils.js';
+import {
+  EMPENHO_CESTAS_TOTAL_PADRAO,
+  ensureEmpenhoPlans,
+  suggestEmpenhoMeses,
+} from './empenhoControle.js';
 import { repairServiceCatalog } from './serviceRepair.js';
 import type { MonthlyPlan } from './serviceTypes.js';
 import {
@@ -217,9 +222,13 @@ export function applyCoderpHistoricoImport(
     MES_REFERENCIA_SEGURO,
     TOTAL_MENSAL_EMERGENCIAL_PADRAO,
   );
-  plansEmerg = ensurePlanoEmergencialMes(
-    plansEmerg,
+  const empenhoMeses = suggestEmpenhoMeses(
+    payload.emergencial.duracaoMeses || 4,
     MONITOR_CONTROLE_MES_INICIO,
+  );
+  plansEmerg = ensureEmpenhoPlans(
+    plansEmerg,
+    empenhoMeses,
     TOTAL_MENSAL_EMERGENCIAL_PADRAO,
   );
 
@@ -231,6 +240,9 @@ export function applyCoderpHistoricoImport(
       emergencial: {
         ...payload.emergencial,
         cestasPorMes: TOTAL_MENSAL_EMERGENCIAL_PADRAO,
+        empenhoTotalCestas:
+          payload.emergencial.empenhoTotalCestas ?? EMPENHO_CESTAS_TOTAL_PADRAO,
+        empenhoMeses,
         monitoramento: {
           ...mon,
           mesAtivo: MONITOR_CONTROLE_MES_INICIO,
