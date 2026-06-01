@@ -261,7 +261,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                   </span>
                   <p className="mit-week-value">{num(t.total)}</p>
                   <span className="mit-week-hint">
-                    normal {num(cenario.totaisNormalPorSemana[i] ?? 0)} → proposta
+                    envelope {num(cenario.budgetsSemana[i] ?? 0)} → proposta
                   </span>
                 </article>
               ))}
