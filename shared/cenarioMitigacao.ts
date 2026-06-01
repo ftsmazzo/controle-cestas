@@ -42,6 +42,8 @@ export interface MitigacaoEquipamentoRow {
   fixo: boolean;
   enviadoAteAgora: number;
   cotaMensal: number;
+  /** Teto semanal proporcional (cota ÷ semanas do mês) */
+  cotaSemanal: number;
   /** Espaço até a cota mensal (quem já estourou = 0) */
   espacoAteCota: number;
   mediaHistorica: number;
@@ -60,6 +62,8 @@ export interface MitigacaoEquipamentoRow {
   pctAcimaMedia: number;
   /** % acima da cota no que já foi enviado (0 se abaixo) */
   pctAcimaCota: number;
+  /** Média de excesso vs cota semanal nas semanas já lançadas */
+  pctAcimaSemana: number;
   pctReducaoRitmo: number;
   impacto: MitigacaoImpacto;
 }
@@ -117,16 +121,16 @@ function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
 
 function splitSemanas(
   total: number,
+  cotaSemanal: number,
   alvos: { mes: string; semana: number }[],
   yearByMes: Map<string, { year: number; month: number }>,
 ): MitigacaoSemanaProposta[] {
   if (!alvos.length) return [];
-  const base = Math.floor(total / alvos.length);
-  let resto = total - base * alvos.length;
+  let restante = Math.max(0, total);
   return alvos.map(({ mes, semana }) => {
-    const extra = resto > 0 ? 1 : 0;
-    if (resto > 0) resto--;
-    const cestas = base + extra;
+    const cap = cotaSemanal > 0 ? cotaSemanal : restante;
+    const cestas = Math.min(restante, cap);
+    restante -= cestas;
     const ym = yearByMes.get(mes);
     return {
       mes,
@@ -220,6 +224,7 @@ interface DraftUnit {
   fixo: boolean;
   enviado: number;
   cotaMes: number;
+  cotaSemanal: number;
   espacoAteCota: number;
   mediaHistorica: number;
   participacaoPct: number;
@@ -227,7 +232,9 @@ interface DraftUnit {
   demanda: number;
   pctAcimaMedia: number;
   pctAcimaCota: number;
+  pctAcimaSemana: number;
   scoreCorte: number;
+  meritoReceber: number;
 }
 
 function pctAcimaReferencia(enviado: number, ref: number): number {
@@ -235,19 +242,51 @@ function pctAcimaReferencia(enviado: number, ref: number): number {
   return ((enviado - ref) / ref) * 100;
 }
 
-/** Quem mais estourou média e cota recebe maior peso de corte */
+function mediaExcessoSemanal(
+  semanas: Record<number, number>,
+  metaSemanal: number,
+  semanaInicio: number,
+  semanaFim: number,
+): number {
+  if (metaSemanal <= 0 || semanaFim < semanaInicio) return 0;
+  let soma = 0;
+  let n = 0;
+  for (let w = semanaInicio; w <= semanaFim; w++) {
+    const q = semanas[w] ?? 0;
+    if (q > metaSemanal) {
+      soma += pctAcimaReferencia(q, metaSemanal);
+    }
+    n++;
+  }
+  return n > 0 ? soma / n : 0;
+}
+
+/** Peso de corte: média (2×) + cota mensal + excesso semanal */
 function scorePrioridadeCorte(u: DraftUnit): number {
-  if (u.pctAcimaMedia <= 0 && u.pctAcimaCota <= 0) return 0;
-  return u.pctAcimaMedia * 2 + u.pctAcimaCota;
+  return u.pctAcimaMedia * 2 + u.pctAcimaCota + u.pctAcimaSemana * 1.5;
+}
+
+/** Mérito para receber: participação histórica atenuada pelo score de corte */
+function meritoReceber(u: DraftUnit): number {
+  const base = u.participacaoPct > 0 ? u.participacaoPct : u.cotaMes;
+  return base * (100 / (100 + scorePrioridadeCorte(u)));
+}
+
+interface LimiteAlocacao {
+  u: DraftUnit;
+  piso: number;
+  teto: number;
+  val: number;
 }
 
 /**
- * Parte do ritmo inercial e aplica cortes proporcionais ao excesso vs média/cota.
- * Quem já pediu acima da média E acima da cota não recebe nas próximas semanas.
+ * Distribuição ponderada: todos recebem dentro de [piso, teto],
+ * respeitando cota semanal/mensal; cortes maiores em quem mais estourou.
  */
-function alocarComCortePorExcessoMedia(
+function alocarMitigacaoPonderada(
   units: DraftUnit[],
   budget: number,
+  numSemanas: number,
 ): Map<string, number> {
   const out = new Map<string, number>();
   if (budget <= 0 || !units.length) {
@@ -255,72 +294,84 @@ function alocarComCortePorExcessoMedia(
     return out;
   }
 
-  const bloqueados = new Set(
-    units
-      .filter((u) => u.pctAcimaMedia > 0 && u.pctAcimaCota > 0)
-      .map((u) => u.servicoId),
-  );
+  const somaCotas = units.reduce((s, u) => s + u.cotaMes, 0);
+  const somaMerito = units.reduce((s, u) => s + u.meritoReceber, 0);
 
-  for (const u of units) {
-    out.set(u.servicoId, bloqueados.has(u.servicoId) ? 0 : u.demanda);
-  }
+  const propostas: LimiteAlocacao[] = units.map((u) => {
+    const tetoSemanal = u.cotaSemanal > 0 ? u.cotaSemanal * numSemanas : u.espacoAteCota;
+    const teto = Math.max(0, Math.min(u.espacoAteCota, tetoSemanal));
+    const pisoBruto =
+      u.cotaMes > 0 && somaCotas > 0
+        ? (u.cotaMes / somaCotas) * budget * 0.2
+        : somaMerito > 0
+          ? (u.meritoReceber / somaMerito) * budget * 0.15
+          : budget / units.length;
+    const piso = Math.min(teto, Math.max(0, Math.round(pisoBruto)));
+    const bruto =
+      somaMerito > 0
+        ? (u.meritoReceber / somaMerito) * budget
+        : budget / units.length;
+    const val = Math.min(teto, Math.max(piso, Math.round(bruto)));
+    return { u, piso, teto, val };
+  });
 
-  let total = [...out.values()].reduce((s, v) => s + v, 0);
-  if (total <= budget) {
+  let total = propostas.reduce((s, p) => s + p.val, 0);
+
+  if (total > budget) {
+    let falta = total - budget;
+    while (falta > 0) {
+      const flex = propostas.filter((p) => p.val > p.piso);
+      if (!flex.length) break;
+      const pesoTot = flex.reduce((s, p) => s + p.u.scoreCorte + 1, 0);
+      let cortou = 0;
+      for (const p of flex.sort((a, b) => b.u.scoreCorte - a.u.scoreCorte)) {
+        if (falta <= 0) break;
+        const margem = p.val - p.piso;
+        if (margem <= 0) continue;
+        const peso = p.u.scoreCorte + 1;
+        const cut = Math.min(
+          margem,
+          Math.max(1, Math.round((falta * peso) / pesoTot)),
+          falta,
+        );
+        p.val -= cut;
+        falta -= cut;
+        cortou += cut;
+      }
+      if (cortou === 0) {
+        const p = flex.find((x) => x.val > x.piso);
+        if (!p) break;
+        p.val -= 1;
+        falta -= 1;
+      }
+    }
+  } else if (total < budget) {
     let surplus = budget - total;
-    const candidatos = [...units]
-      .filter((u) => !bloqueados.has(u.servicoId) && u.pctAcimaMedia <= 0)
-      .sort((a, b) => b.espacoAteCota - a.espacoAteCota);
-    for (const u of candidatos) {
+    const candidatos = [...propostas]
+      .filter((p) => p.val < p.teto && p.u.pctAcimaMedia <= 0)
+      .sort((a, b) => b.teto - b.val - (a.teto - a.val));
+    for (const p of candidatos) {
       if (surplus <= 0) break;
-      const cur = out.get(u.servicoId) ?? 0;
-      const add = Math.min(surplus, Math.max(0, u.espacoAteCota - cur));
-      if (add > 0) {
-        out.set(u.servicoId, cur + add);
+      const add = Math.min(surplus, p.teto - p.val);
+      p.val += add;
+      surplus -= add;
+    }
+    if (surplus > 0) {
+      const rest = propostas.filter((p) => p.val < p.teto);
+      const mTot = rest.reduce((s, p) => s + p.u.meritoReceber, 0);
+      for (const p of rest.sort((a, b) => b.u.meritoReceber - a.u.meritoReceber)) {
+        if (surplus <= 0) break;
+        const share =
+          mTot > 0 ? Math.round((surplus * p.u.meritoReceber) / mTot) : 0;
+        const add = Math.min(surplus, p.teto - p.val, Math.max(share, 1));
+        if (add <= 0) continue;
+        p.val += add;
         surplus -= add;
       }
     }
-    return out;
   }
 
-  let falta = total - budget;
-  const ordenados = [...units]
-    .filter((u) => (out.get(u.servicoId) ?? 0) > 0)
-    .sort((a, b) => b.scoreCorte - a.scoreCorte || b.pctAcimaMedia - a.pctAcimaMedia);
-
-  while (falta > 0 && ordenados.length) {
-    const comScore = ordenados.filter((u) => u.scoreCorte > 0);
-    const alvos = comScore.length ? comScore : ordenados;
-    const pesoTotal = alvos.reduce(
-      (s, u) => s + Math.max(u.scoreCorte, comScore.length ? 1 : 0.001),
-      0,
-    );
-    let cortou = 0;
-    for (const u of alvos) {
-      if (falta <= 0) break;
-      const cur = out.get(u.servicoId) ?? 0;
-      if (cur <= 0) continue;
-      const peso = comScore.length
-        ? Math.max(u.scoreCorte, 1)
-        : 0.001 + u.demanda;
-      const cut = Math.min(
-        cur,
-        Math.max(1, Math.round((falta * peso) / pesoTotal)),
-        falta,
-      );
-      out.set(u.servicoId, cur - cut);
-      falta -= cut;
-      cortou += cut;
-    }
-    if (cortou === 0) {
-      const u = ordenados.find((x) => (out.get(x.servicoId) ?? 0) > 0);
-      if (!u) break;
-      const cur = out.get(u.servicoId) ?? 0;
-      out.set(u.servicoId, cur - 1);
-      falta -= 1;
-    }
-  }
-
+  for (const p of propostas) out.set(p.u.servicoId, p.val);
   return out;
 }
 
@@ -393,9 +444,14 @@ export function buildCenarioMitigacao(
   );
 
   const units = consumptionUnits(payload.services);
+  const numSemanas = alvos.length;
+  const semanasNoMes = resumo.semanasNoMes;
   const drafts: DraftUnit[] = units.map((s) => {
     const eq = resumo.equipamentos.find((e) => e.servicoId === s.id);
     const cotaMes = eq?.metaMensal ?? cotaMap.get(s.id) ?? 0;
+    const cotaSemanal =
+      eq?.metaSemanal ??
+      (cotaMes > 0 && semanasNoMes > 0 ? Math.round(cotaMes / semanasNoMes) : 0);
     const enviado = eq
       ? somaEnviosSemanas(
           eq.semanas,
@@ -407,11 +463,19 @@ export function buildCenarioMitigacao(
       resumo.semanasNoPeriodoControle > 0
         ? enviado / resumo.semanasNoPeriodoControle
         : eq?.enviadoSemanaAtual ?? 0;
-    const demanda = Math.round(ritmo * alvos.length);
+    const demanda = Math.round(ritmo * numSemanas);
     const espacoAteCota = Math.max(0, cotaMes - enviado);
     const mediaHistorica = mediaMap.get(s.id) ?? 0;
     const pctAcimaMedia = pctAcimaReferencia(enviado, mediaHistorica);
     const pctAcimaCota = pctAcimaReferencia(enviado, cotaMes);
+    const pctAcimaSemana = eq
+      ? mediaExcessoSemanal(
+          eq.semanas,
+          cotaSemanal,
+          resumo.semanaInicioControle,
+          resumo.semanaBaseRitmo,
+        )
+      : 0;
     const draft: DraftUnit = {
       servicoId: s.id,
       servicoNome: s.nome,
@@ -419,6 +483,7 @@ export function buildCenarioMitigacao(
       fixo: s.fixo,
       enviado,
       cotaMes,
+      cotaSemanal,
       espacoAteCota,
       mediaHistorica,
       participacaoPct: pctMap.get(s.id) ?? 0,
@@ -426,14 +491,17 @@ export function buildCenarioMitigacao(
       demanda,
       pctAcimaMedia,
       pctAcimaCota,
+      pctAcimaSemana,
       scoreCorte: 0,
+      meritoReceber: 0,
     };
     draft.scoreCorte = scorePrioridadeCorte(draft);
+    draft.meritoReceber = meritoReceber(draft);
     return draft;
   });
 
   const demandaInercialTotal = drafts.reduce((s, d) => s + d.demanda, 0);
-  const aloc = alocarComCortePorExcessoMedia(drafts, orcamentoDistribuir);
+  const aloc = alocarMitigacaoPonderada(drafts, orcamentoDistribuir, numSemanas);
 
   const equipamentos: MitigacaoEquipamentoRow[] = drafts
     .map((d) => {
@@ -450,6 +518,7 @@ export function buildCenarioMitigacao(
         fixo: d.fixo,
         enviadoAteAgora: d.enviado,
         cotaMensal: d.cotaMes,
+        cotaSemanal: d.cotaSemanal,
         espacoAteCota: d.espacoAteCota,
         mediaHistorica: d.mediaHistorica,
         participacaoPct: d.participacaoPct,
@@ -457,12 +526,13 @@ export function buildCenarioMitigacao(
         demandaInercial2sem: d.demanda,
         proposta2sem,
         corte2sem,
-        propostasSemana: splitSemanas(proposta2sem, alvos, yearByMes),
+        propostasSemana: splitSemanas(proposta2sem, d.cotaSemanal, alvos, yearByMes),
         fechamentoMes,
         fechamentoInercial,
         vsCotaMesPct: d.cotaMes > 0 ? (fechamentoMes / d.cotaMes) * 100 : 0,
         pctAcimaMedia: d.pctAcimaMedia,
         pctAcimaCota: d.pctAcimaCota,
+        pctAcimaSemana: d.pctAcimaSemana,
         pctReducaoRitmo,
         impacto: impactoFromPct(pctReducaoRitmo, corte2sem),
       };
@@ -516,7 +586,7 @@ export function buildCenarioMitigacao(
     resumoCurto =
       `Já gastou ${fmt(enviadoMes)} em ${mesFechamento}. ${fmt(saldoRestante1150)} até 1.150 + ${fmt(gorduraNoPlano)} gordura do período → ${fmt(orcamentoDistribuir)} a distribuir` +
       (demandaInercialTotal > orcamentoDistribuir
-        ? ` (ritmo pediria ${fmt(demandaInercialTotal)}; cortes maiores em quem mais superou a média)`
+        ? ` (ritmo pediria ${fmt(demandaInercialTotal)}; cortes ponderados por excesso vs média, cota e semana)`
         : '') +
       `. Fecha em ${fmt(fechamentoMesProjetado)}.`;
   }

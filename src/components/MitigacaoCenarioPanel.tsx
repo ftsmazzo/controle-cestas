@@ -35,6 +35,9 @@ function renderUnitRow(r: MitigacaoEquipamentoRow, semanaCount: number) {
       <td className="mit-cell-nome mit-cell-unidade">{r.servicoNome}</td>
       <td>{num(r.enviadoAteAgora)}</td>
       <td>{num(r.cotaMensal)}</td>
+      <td className="mit-cell-muted" title="Teto por semana (cota ÷ semanas do mês)">
+        {r.cotaSemanal > 0 ? num(r.cotaSemanal) : '—'}
+      </td>
       <td className="mit-cell-muted">{num(r.espacoAteCota)}</td>
       {Array.from({ length: semanaCount }, (_, i) => (
         <td key={i}>
@@ -140,9 +143,10 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
             </p>
             {cenario.demandaInercialTotal > cenario.orcamentoDistribuir && (
               <p className="mit-formula-warn">
-                Ritmo atual pediria {num(cenario.demandaInercialTotal)} — cortes
-                concentrados em quem mais superou a média histórica e a cota (
-                −{num(cenario.corteTotal)} vs ritmo).
+                Ritmo atual pediria {num(cenario.demandaInercialTotal)} — redistribuição
+                ponderada (todos recebem dentro da cota semanal/mensal; cortes maiores em
+                quem mais superou média, cota e semana: −{num(cenario.corteTotal)} vs
+                ritmo).
               </p>
             )}
           </div>
@@ -264,6 +268,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                   <th>Equipamento</th>
                   <th>Enviado</th>
                   <th>Cota mês</th>
+                  <th>Cota/sem</th>
                   <th>Espaço cota</th>
                   {cenario.periodosSemana.map((p, i) => (
                     <th key={i}>
@@ -301,7 +306,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                         <td>
                           <strong>{num(envFam)}</strong>
                         </td>
-                        <td colSpan={2} />
+                        <td colSpan={3} />
                         {cenario.periodosSemana.map((_, i) => {
                           const t = fam.itens.reduce(
                             (sum, r) => sum + (r.propostasSemana[i]?.cestas ?? 0),
@@ -345,7 +350,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                   <td>
                     <strong>{num(cenario.enviadoMesAteAgora)}</strong>
                   </td>
-                  <td colSpan={2} />
+                  <td colSpan={3} />
                   {totaisSem.map((t, i) => (
                     <td key={i}>
                       <strong>{num(t.total)}</strong>
@@ -375,10 +380,10 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           </div>
 
           <p className="hint mit-foot">
-            Orçamento das próximas semanas = saldo até 1.150 + gordura do período (até
-            200 no empenho). Parte do ritmo inercial e aplica os maiores cortes em quem
-            já pediu acima da média histórica e acima da cota — quem estourou ambos não
-            recebe mais neste plano.
+            Orçamento = saldo até 1.150 + gordura do período (até 200). Cada equipamento
+            recebe uma fatia ponderada (participação histórica, atenuada por excessos vs
+            média, cota mensal e cota semanal). Nenhuma semana ultrapassa a cota/sem; o
+            total mensal respeita o espaço restante na cota.
           </p>
         </>
       )}
