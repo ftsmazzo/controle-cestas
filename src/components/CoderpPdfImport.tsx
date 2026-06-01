@@ -104,15 +104,14 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
       </button>
 
       <h3 style={{ marginTop: '1.25rem' }}>
-        2. Importar requisição Coderp (histórico por serviço)
+        2. Importar Coderp — só para metas (histórico / rateio)
       </h3>
       <p className="hint">
-        PDF <strong>Consumo por requisitante</strong> (ex. Out/2025–Abr/2026). O sistema
-        distribui o <strong>total do período em 6 meses</strong> ({MESES_REQUISICAO_HISTORICO.join(', ')}
-        ) — <strong>sem Abr/2026</strong>. Requisitante <strong>Banco/Nutrição</strong> é
-        redistribuído para <strong>Mãos Dadas</strong> (40/mês), <strong>SAICA</strong> (25/mês) e{' '}
-        <strong>WARAOS</strong> (29/mês); <strong>SS Proteção Social</strong> vai para WARAOS.
-        Não preenche envios semanais.
+        PDF <strong>Consumo por requisitante</strong> (ex. Out/2025–Abr/2026). Calcula{' '}
+        <strong>proporções e metas</strong> por equipamento (total do período ÷ 6 meses:{' '}
+        {MESES_REQUISICAO_HISTORICO.join(', ')}). <strong>Não</strong> é o registro semanal
+        de produção — use o bloco <strong>Registro real da semana</strong> acima para envios
+        reais. Banco/Nutrição → Mãos Dadas, SAICA e WARAOS conforme cotas.
       </p>
       <div className="config-grid">
         <label>

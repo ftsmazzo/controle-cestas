@@ -15,6 +15,7 @@ import { getYearMonth, parseMonthKey } from '@shared/monthUtils';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import CoderpPdfImport from './CoderpPdfImport';
 import MonitorSaudePanel from './MonitorSaudePanel';
+import RegistroSemanalPdfImport from './RegistroSemanalPdfImport';
 import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from '@shared/requisicaoHistorico';
 import type { DashboardState } from '@shared/types';
 import './EmergencialMonitorPanel.css';
@@ -204,68 +205,6 @@ export default function EmergencialMonitorPanel({
         ? 'atencao'
         : 'ok';
 
-  const semanaPreControle = semanaEdit < resumo.semanaInicioControle;
-
-  const totaisSemanaEdit = useMemo(() => {
-    let enviado = 0;
-    let meta = 0;
-    let comValor = 0;
-    for (const eq of resumo.equipamentos) {
-      const q = eq.semanas[semanaEdit] ?? 0;
-      enviado += q;
-      if (q > 0) comValor += 1;
-      if (eq.metaMensal > 0) meta += eq.metaSemanal;
-    }
-    return { enviado, meta, comValor, total: resumo.equipamentos.length };
-  }, [resumo.equipamentos, semanaEdit]);
-
-  const renderWeeklyEntryRow = (eq: EquipamentoMonitorRow) => {
-    const val = eq.semanas[semanaEdit] ?? 0;
-    const faltaMeta =
-      eq.metaSemanal > 0 ? Math.max(0, eq.metaSemanal - val) : null;
-    return (
-      <div
-        key={eq.servicoId}
-        className={`emerg-weekly-row row-status-${eq.status}`}
-      >
-        <div className="emerg-weekly-row-name">
-          <span className="emerg-weekly-unidade">{eq.servicoNome}</span>
-          {eq.metaSemanal > 0 && (
-            <span className="emerg-weekly-meta-hint">
-              meta sem. {num(eq.metaSemanal)}
-            </span>
-          )}
-        </div>
-        <div className="emerg-weekly-row-qty">
-          {readOnly ? (
-            <strong>{val > 0 ? num(val) : '—'}</strong>
-          ) : (
-            <input
-              type="text"
-              inputMode="numeric"
-              className="emerg-weekly-input"
-              value={val > 0 ? String(val) : ''}
-              placeholder="0"
-              aria-label={`Enviado ${eq.servicoNome}`}
-              onChange={(e) =>
-                setWeekly(eq.servicoId, semanaEdit, parseQty(e.target.value))
-              }
-            />
-          )}
-        </div>
-        <div className="emerg-weekly-row-extra">
-          {faltaMeta != null && faltaMeta > 0 ? (
-            <span className="emerg-weekly-falta">faltam {num(faltaMeta)}</span>
-          ) : val > 0 && eq.metaSemanal > 0 ? (
-            <span className="emerg-weekly-ok">OK</span>
-          ) : (
-            <span className="emerg-weekly-muted">—</span>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="emerg-monitor">
       <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass}`}>
@@ -276,7 +215,7 @@ export default function EmergencialMonitorPanel({
           planilha). <strong>Meta/semana</strong> = meta da unidade ÷ {resumo.semanasNoMes}.{' '}
           {readOnly
             ? 'Consulta pública.'
-            : 'Registre o que o Banco enviou cada semana (dados reais dos documentos).'}{' '}
+            : 'Envios reais: importe o PDF operacional da semana (abaixo). Metas vêm do Coderp + distribuição.'}{' '}
           <strong>Ponto zero:</strong> semana {resumo.semanaInicioControle} de{' '}
           {data.emergencial.monitoramento.mesInicioControle ??
             MONITOR_CONTROLE_MES_INICIO}{' '}
@@ -308,7 +247,7 @@ export default function EmergencialMonitorPanel({
             </select>
           </label>
           <label>
-            Semana para lançamento
+            Semana do registro (PDF)
             <select
               value={semanaEdit}
               onChange={(e) => setSemanaEdit(Number(e.target.value))}
@@ -415,85 +354,13 @@ export default function EmergencialMonitorPanel({
         </div>
       </section>
 
-      <section
-        className={`panel emerg-weekly-entry${semanaPreControle ? ' emerg-weekly-entry--pre' : ''}`}
-        id="lancamento-semana"
-      >
-        <div className="emerg-weekly-entry-head">
-          <div>
-            <h3>
-              Lançamento da semana {semanaEdit}
-              <span className="emerg-weekly-dates">
-                ({weekDateRangeLabel(year, month, semanaEdit)} · {resumo.mes})
-              </span>
-            </h3>
-            <p className="hint">
-              {readOnly
-                ? 'Envios registrados nesta semana.'
-                : 'Informe abaixo o que o Banco enviou a cada equipamento (documento da semana). Depois salve o monitoramento.'}
-              {semanaPreControle && (
-                <>
-                  {' '}
-                  <strong>Pré-controle:</strong> não entra no ritmo acumulado.
-                </>
-              )}
-            </p>
-          </div>
-          <div className="emerg-weekly-totals">
-            <div className="emerg-weekly-total-card">
-              <span>Total da semana</span>
-              <strong>{num(totaisSemanaEdit.enviado)}</strong>
-              <small>
-                {totaisSemanaEdit.comValor}/{totaisSemanaEdit.total} unidades
-              </small>
-            </div>
-            {totaisSemanaEdit.meta > 0 && (
-              <div className="emerg-weekly-total-card">
-                <span>Meta semanal (soma)</span>
-                <strong>{num(totaisSemanaEdit.meta)}</strong>
-                <small>
-                  {num(
-                    (totaisSemanaEdit.enviado / totaisSemanaEdit.meta) * 100,
-                    0,
-                  )}
-                  % do previsto
-                </small>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {!readOnly && (
-          <p className="emerg-weekly-toolbar-hint">
-            Use os seletores acima para trocar <strong>mês</strong> e{' '}
-            <strong>semana para lançamento</strong>.
-          </p>
-        )}
-
-        <div className="emerg-weekly-entry-grid">
-          {resumo.familias.length > 0
-            ? resumo.familias.map((fam) => (
-                <div key={fam.familiaId} className="emerg-weekly-familia">
-                  <h4 className="emerg-weekly-familia-title">{fam.familiaNome}</h4>
-                  <div className="emerg-weekly-familia-rows">
-                    {fam.itens.map((eq) => renderWeeklyEntryRow(eq))}
-                  </div>
-                </div>
-              ))
-            : (
-              <div className="emerg-weekly-familia">
-                {resumo.equipamentos.map((eq) => renderWeeklyEntryRow(eq))}
-              </div>
-            )}
-        </div>
-
-        {!resumo.equipamentos.length && (
-          <p className="alerta-box alerta-nivel-moderado">
-            Nenhuma unidade no monitoramento. Importe a requisição Coderp ou a
-            planilha em Admin → Importar.
-          </p>
-        )}
-      </section>
+      <RegistroSemanalPdfImport
+        data={data}
+        mes={resumo.mes}
+        semana={semanaEdit}
+        readOnly={readOnly}
+        onApply={(next) => onUpdate(next)}
+      />
 
       <MonitorSaudePanel
         data={data}
@@ -559,11 +426,15 @@ export default function EmergencialMonitorPanel({
       )}
 
       <section className="panel">
-        <h3>Visão geral do mês — {resumo.mes}</h3>
-        <p className="hint">
-          Todas as semanas em uma tabela. Para lançar, use a seção{' '}
-          <a href="#lancamento-semana">Lançamento da semana</a> acima.
-        </p>
+        <h3>
+          Metas e envios por unidade — {resumo.mes}
+          {!readOnly && (
+            <span className="hint-inline">
+              {' '}
+              (envio real via PDF · semana {semanaEdit})
+            </span>
+          )}
+        </h3>
         {!resumo.allocation && (
           <p className="alerta-box alerta-nivel-moderado">
             Importe a <strong>requisição Coderp</strong> abaixo e/ou a planilha pivot em Admin →
