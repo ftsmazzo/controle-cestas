@@ -23,6 +23,7 @@ export default function EmergencyContractPage() {
       <EmergencialMonitorPanel
         data={payload}
         readOnly
+        decisionDashboard={dashboard}
         onUpdate={() => {}}
       />
 

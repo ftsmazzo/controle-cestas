@@ -61,6 +61,8 @@ Fluxo em **/admin/monitoramento**:
 
 Semanas civis: 1–7, 8–14, 15–21, 22–28, 29–fim do mês. Mês de referência seguro: **Mar/2026**.
 
+**Painel Saúde da distribuição:** autonomia em meses (meta **4**), tendência de consumo, índice geral e ações para a semana (quanto enviar para retomar o controle vs proposta de 1.150).
+
 ## Por serviço (distribuição)
 
 Aba **Por serviço** no dashboard:

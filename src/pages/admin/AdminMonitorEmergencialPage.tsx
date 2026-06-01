@@ -73,6 +73,7 @@ export default function AdminMonitorEmergencialPage() {
 
       <EmergencialMonitorPanel
         data={draft}
+        decisionDashboard={dashboard}
         onUpdate={(next) => {
           setDraft(next);
           setDirty(true);

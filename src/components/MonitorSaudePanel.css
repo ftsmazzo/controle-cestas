@@ -1,0 +1,205 @@
+.monitor-saude {
+  border-left: 4px solid var(--border);
+}
+
+.monitor-saude--verde {
+  border-left-color: #16a34a;
+  background: linear-gradient(180deg, #f0fdf4 0%, #fff 120px);
+}
+
+.monitor-saude--amarelo {
+  border-left-color: #ca8a04;
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 120px);
+}
+
+.monitor-saude--vermelho {
+  border-left-color: #dc2626;
+  background: linear-gradient(180deg, #fef2f2 0%, #fff 120px);
+}
+
+.monitor-saude-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.monitor-saude-head h3 {
+  margin: 0;
+}
+
+.monitor-saude-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+}
+
+.monitor-saude-badge--verde {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.monitor-saude-badge--amarelo {
+  background: #fef08a;
+  color: #854d0e;
+}
+
+.monitor-saude-badge--vermelho {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.monitor-saude-lead {
+  margin: 0.5rem 0 1rem;
+  font-size: 1rem;
+}
+
+.monitor-saude-autonomia {
+  margin-bottom: 1.25rem;
+}
+
+.monitor-saude-autonomia-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.monitor-saude-meta-line {
+  font-weight: 600;
+}
+
+.monitor-saude-track {
+  position: relative;
+  height: 14px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: visible;
+}
+
+.monitor-saude-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  transition: width 0.4s ease;
+}
+
+.monitor-saude--amarelo .monitor-saude-fill {
+  background: linear-gradient(90deg, #facc15, #ca8a04);
+}
+
+.monitor-saude--vermelho .monitor-saude-fill {
+  background: linear-gradient(90deg, #f87171, #dc2626);
+}
+
+.monitor-saude-ideal {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 20px;
+  background: #0f172a;
+  transform: translateX(-100%);
+  border-radius: 2px;
+}
+
+.monitor-saude-autonomia-valor {
+  margin: 0.5rem 0 0;
+  font-size: 0.95rem;
+}
+
+.monitor-saude-gap {
+  color: #9a3412;
+  font-weight: 600;
+}
+
+.monitor-saude-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.monitor-saude-card {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.monitor-saude-card-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.monitor-saude-card strong {
+  display: block;
+  font-size: 1.35rem;
+  margin-top: 0.15rem;
+}
+
+.monitor-saude-card-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+.monitor-saude-delta-up {
+  color: #9a3412;
+  font-weight: 600;
+}
+
+.monitor-saude-delta-down {
+  color: #166534;
+  font-weight: 600;
+}
+
+.monitor-saude-acoes h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.monitor-saude-acoes ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.monitor-saude-acoes li {
+  margin-bottom: 0.35rem;
+}
+
+.monitor-saude-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.monitor-saude-legend .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+}
+
+.dot-estoque {
+  background: #16a34a;
+}
+
+.dot-ritmo {
+  background: #2563eb;
+}
+
+.dot-meta {
+  background: #7c3aed;
+}

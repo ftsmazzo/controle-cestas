@@ -11,7 +11,9 @@ import {
 import { getYearMonth, parseMonthKey } from '@shared/monthUtils';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import CoderpPdfImport from './CoderpPdfImport';
+import MonitorSaudePanel from './MonitorSaudePanel';
 import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from '@shared/requisicaoHistorico';
+import type { DashboardState } from '@shared/types';
 import './EmergencialMonitorPanel.css';
 
 function num(n: number | null | undefined, dec = 0): string {
@@ -28,12 +30,14 @@ interface Props {
   data: ServicesPayload;
   onUpdate: (next: ServicesPayload) => void;
   readOnly?: boolean;
+  decisionDashboard?: DashboardState | null;
 }
 
 export default function EmergencialMonitorPanel({
   data,
   onUpdate,
   readOnly,
+  decisionDashboard,
 }: Props) {
   const [semanaEdit, setSemanaEdit] = useState(() => weekOfMonth());
 
@@ -260,6 +264,12 @@ export default function EmergencialMonitorPanel({
           </article>
         </div>
       </section>
+
+      <MonitorSaudePanel
+        data={data}
+        resumo={resumo}
+        dashboard={decisionDashboard}
+      />
 
       {!readOnly && (
         <CoderpPdfImport data={data} onApply={(next) => onUpdate(next)} />
