@@ -81,8 +81,8 @@ export function defaultEmergencialConfig(
   return {
     ativo: true,
     duracaoMeses: 4,
-    cestasPorMes: 1200,
-    plans: months.map((mes) => ({ mes, totalDisponivel: 1200 })),
+    cestasPorMes: 1150,
+    plans: months.map((mes) => ({ mes, totalDisponivel: 1150 })),
     observacao: 'Processo emergencial — distribuir por equipamento para evitar ruptura.',
     monitoramento: defaultEmergencialMonitoring(),
   };

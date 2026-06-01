@@ -11,7 +11,7 @@ import {
 import { getYearMonth, parseMonthKey } from '@shared/monthUtils';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import CoderpPdfImport from './CoderpPdfImport';
-import WeeklyHistoricImport from './WeeklyHistoricImport';
+import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from '@shared/requisicaoHistorico';
 import './EmergencialMonitorPanel.css';
 
 function num(n: number | null | undefined, dec = 0): string {
@@ -157,14 +157,14 @@ export default function EmergencialMonitorPanel({
   return (
     <div className="emerg-monitor">
       <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass}`}>
-        <h2>Monitoramento emergencial — produção</h2>
+        <h2>Monitoramento semanal — {resumo.mes}</h2>
         <p className="hint">
-          Acompanhamento <strong>semanal por unidade</strong> — CRAS (12 unidades), CREAS (5
-          unidades) e demais famílias. Metas por unidade vêm da{' '}
-          <strong>distribuição projetada</strong> ({num(resumo.metaMesTotal)} cestas/mês).
+          <strong>Meta do mês:</strong> {num(resumo.metaMesTotal || TOTAL_MENSAL_EMERGENCIAL_PADRAO)}{' '}
+          cestas (fixos reservados primeiro; flexíveis proporcionais ao histórico requisição +
+          planilha). <strong>Meta/semana</strong> = meta da unidade ÷ {resumo.semanasNoMes}.{' '}
           {readOnly
-            ? ' Modo consulta — alterações em /admin/monitoramento.'
-            : ' Registre envios e saldo toda semana.'}
+            ? 'Consulta pública.'
+            : 'Registre apenas o que o Banco enviou cada semana (não use import de planilha operacional).'}
         </p>
 
         <div className="emerg-monitor-toolbar">
@@ -262,13 +262,7 @@ export default function EmergencialMonitorPanel({
       </section>
 
       {!readOnly && (
-        <>
-          <WeeklyHistoricImport
-            data={data}
-            onApply={(next) => onUpdate(next)}
-          />
-          <CoderpPdfImport data={data} onApply={(next) => onUpdate(next)} />
-        </>
+        <CoderpPdfImport data={data} onApply={(next) => onUpdate(next)} />
       )}
 
       {resumo.historicoSaldo.length > 0 && (
@@ -326,18 +320,16 @@ export default function EmergencialMonitorPanel({
 
       <section className="panel">
         <h3>
-          Envios por equipamento — {resumo.mes}
+          Metas e envios por unidade — {resumo.mes}
           {!readOnly && (
-            <span className="hint-inline">
-              {' '}
-              (editando semana {semanaEdit})
-            </span>
+            <span className="hint-inline"> (lançamento semana {semanaEdit})</span>
           )}
         </h3>
         {!resumo.allocation && (
           <p className="alerta-box alerta-nivel-moderado">
-            Calcule a distribuição em Contratos → Emergencial para ver metas por
-            equipamento, ou importe histórico em Admin.
+            Importe a <strong>requisição Coderp</strong> abaixo e/ou a planilha pivot em Admin →
+            Importar. Defina {TOTAL_MENSAL_EMERGENCIAL_PADRAO} cestas/mês em Contratos →
+            Emergencial.
           </p>
         )}
         <div className="table-wrap emerg-monitor-table-wrap">
@@ -425,8 +417,8 @@ export default function EmergencialMonitorPanel({
           </table>
         </div>
         <p className="hint">
-          Totais por semana devem bater com o relatório RME do Banco (requisitante =
-          equipamento). Relatório Coderp: consumo por SETOR CRAS/CREAS.
+          Colunas S1–S4: o que foi <strong>enviado</strong>. Meta/sem: cota proporcional das{' '}
+          {num(resumo.metaMesTotal)} cestas após reservar os serviços <strong>fixos</strong>.
         </p>
       </section>
 

@@ -42,9 +42,9 @@ export default function AdminMonitorEmergencialPage() {
       <section className="panel">
         <h2>Monitoramento emergencial — Banco de Alimentos</h2>
         <p className="hint">
-          Registre <strong>saldo</strong> e <strong>cestas enviadas por equipamento</strong>{' '}
-          a cada semana (formato das planilhas em Docs/). As metas por CRAS/CREAS vêm da
-          projeção emergencial. Salve ao final de cada lançamento.
+          <strong>Passo 1:</strong> limpar carga errada (se existir) e importar PDF Coderp
+          (histórico Out/25–Mar/26 por unidade). <strong>Passo 2:</strong> na grade, registrar
+          envios semanais reais. Metas = 1.150/mês rateadas por unidade (fixos primeiro).
         </p>
         <div className="config-grid">
           <button

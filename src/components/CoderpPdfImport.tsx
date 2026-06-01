@@ -1,7 +1,13 @@
 import { useState } from 'react';
-import { applyCoderpImport } from '@shared/applyCoderpImport';
+import {
+  applyCoderpHistoricoImport,
+  entradasFromBadImportRange,
+  MESES_REQUISICAO_HISTORICO,
+  MES_REFERENCIA_SEGURO,
+  revertCargaPlanilhaIncorreta,
+  TOTAL_MENSAL_EMERGENCIAL_PADRAO,
+} from '@shared/requisicaoHistorico';
 import type { CoderpParseResult } from '@shared/coderpPdfParser';
-import { resolveMesMonitoramento } from '@shared/emergencyMonitoring';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { parseCoderpPdfFile } from '../lib/coderpPdfImport';
 
@@ -14,14 +20,27 @@ interface Props {
 export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
   const [parsing, setParsing] = useState(false);
   const [preview, setPreview] = useState<CoderpParseResult | null>(null);
-  const [mesAlvo, setMesAlvo] = useState(() =>
-    resolveMesMonitoramento(data.emergencial),
-  );
-  const [semanaAlvo, setSemanaAlvo] = useState<number | ''>('');
-  const [atualizarHistorico, setAtualizarHistorico] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   if (readOnly) return null;
+
+  const entradasRuins = entradasFromBadImportRange(
+    data.emergencial.monitoramento.entradasSemanais,
+  ).length;
+
+  const limparCargaIncorreta = () => {
+    if (
+      !window.confirm(
+        'Remove envios semanais do monitoramento e histórico Mar–Set/2025 (carga da planilha operacional). Saldo e histórico longo (pivot) fora desse intervalo são mantidos. Continuar?',
+      )
+    ) {
+      return;
+    }
+    onApply(revertCargaPlanilhaIncorreta(data));
+    setMsg(
+      'Carga incorreta removida do rascunho. Clique em Salvar monitoramento para gravar no banco.',
+    );
+  };
 
   const onFile = async (file: File | null) => {
     if (!file) return;
@@ -32,7 +51,7 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
       const result = await parseCoderpPdfFile(file, data.services);
       setPreview(result);
       if (!result.rows.length) {
-        setMsg('Nenhuma linha reconhecida no PDF.');
+        setMsg('Nenhum requisitante encontrado. Use o PDF Coderp oficial (RME).');
       }
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Erro ao ler PDF');
@@ -43,77 +62,50 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
 
   const aplicar = () => {
     if (!preview?.rows.length) return;
-    const { payload, linhasAplicadas, novosEquipamentos } = applyCoderpImport(
-      data,
-      preview,
-      {
-        mes: mesAlvo,
-        semana: semanaAlvo === '' ? undefined : Number(semanaAlvo),
-        atualizarHistoricoMensal: atualizarHistorico,
-      },
-    );
+    const { payload, linhasAplicadas, novosEquipamentos, mesesPreenchidos } =
+      applyCoderpHistoricoImport(data, preview);
     onApply(payload);
     setMsg(
-      `Importado: ${linhasAplicadas} requisitante(s).` +
+      `Histórico de requisição: ${linhasAplicadas} unidade(s), meses ${mesesPreenchidos.join(', ')} (total do período ÷ 6). ` +
+        `Meta emergencial: ${TOTAL_MENSAL_EMERGENCIAL_PADRAO}/mês · referência ${MES_REFERENCIA_SEGURO}. ` +
         (novosEquipamentos.length
-          ? ` Novos: ${novosEquipamentos.slice(0, 5).join(', ')}${novosEquipamentos.length > 5 ? '…' : ''}.`
+          ? `Novos: ${novosEquipamentos.slice(0, 4).join(', ')}. `
           : '') +
-        ' Salve o monitoramento.',
+        'Envios semanais do monitoramento foram zerados. Salve e use a grade abaixo só para controle semanal.',
     );
     setPreview(null);
   };
 
   return (
     <section className="panel coderp-import">
-      <h3>Importar PDF Coderp (RME por requisitante)</h3>
+      <h3>1. Limpar carga incorreta (se já importou a planilha Mar–Set)</h3>
       <p className="hint">
-        Relatório &quot;Consumo de Materiais (Requisitante/SubClasse)&quot; — mapeia SETOR
-        CRAS1, CREAS II, etc. para as <strong>unidades</strong> (12 CRAS + 5 CREAS + demais).
+        {entradasRuins > 0
+          ? `Há ${entradasRuins} lançamento(s) semanal(is) em meses da planilha operacional.`
+          : 'Nenhum envio semanal suspeito detectado — pode pular se o banco já estiver limpo.'}
+      </p>
+      <button type="button" className="secondary" onClick={limparCargaIncorreta}>
+        Limpar monitoramento + histórico Mar–Set/2025
+      </button>
+
+      <h3 style={{ marginTop: '1.25rem' }}>
+        2. Importar requisição Coderp (histórico por serviço)
+      </h3>
+      <p className="hint">
+        PDF <strong>Consumo por requisitante</strong> (ex. Out/2025–Abr/2026). O sistema
+        distribui o <strong>total do período em 6 meses</strong> ({MESES_REQUISICAO_HISTORICO.join(', ')}
+        ) — <strong>sem Abr/2026</strong>. Isso alimenta as <strong>proporções</strong> junto com
+        o histórico longo da planilha pivot. Não preenche envios semanais.
       </p>
       <div className="config-grid">
         <label>
-          PDF Coderp
+          PDF Coderp (RME)
           <input
             type="file"
             accept="application/pdf,.pdf"
             disabled={parsing}
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
           />
-        </label>
-        <label>
-          Mês alvo (monitoramento)
-          <select value={mesAlvo} onChange={(e) => setMesAlvo(e.target.value)}>
-            {data.emergencial.plans.map((p) => (
-              <option key={p.mes} value={p.mes}>
-                {p.mes}
-              </option>
-            ))}
-            <option value={mesAlvo}>{mesAlvo}</option>
-          </select>
-        </label>
-        <label>
-          Semana única (opcional)
-          <select
-            value={semanaAlvo}
-            onChange={(e) =>
-              setSemanaAlvo(e.target.value === '' ? '' : Number(e.target.value))
-            }
-          >
-            <option value="">Dividir nas 4–5 semanas</option>
-            {[1, 2, 3, 4, 5].map((w) => (
-              <option key={w} value={w}>
-                Semana {w} (tudo nesta)
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={atualizarHistorico}
-            onChange={(e) => setAtualizarHistorico(e.target.checked)}
-          />
-          Atualizar histórico mensal
         </label>
       </div>
 
@@ -124,9 +116,9 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
         <>
           {preview.periodoLabel && (
             <p className="hint">
-              Período no PDF: <strong>{preview.periodoLabel}</strong> — quantidades serão
-              lançadas em <strong>{mesAlvo}</strong>
-              {semanaAlvo === '' ? ' (rateio semanal)' : ` (semana ${semanaAlvo})`}.
+              Período no PDF: <strong>{preview.periodoLabel}</strong> → rateio em{' '}
+              <strong>Out/25–Mar/26</strong> (6 meses). Mês seguro para metas:{' '}
+              <strong>{MES_REFERENCIA_SEGURO}</strong>.
             </p>
           )}
           {preview.warnings.slice(0, 3).map((w, i) => (
@@ -140,24 +132,24 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
                 <tr>
                   <th>Requisitante</th>
                   <th>Unidade</th>
-                  <th>Qtd</th>
-                  <th>Match</th>
+                  <th>Total período</th>
+                  <th>≈ / mês (÷6)</th>
                 </tr>
               </thead>
               <tbody>
                 {preview.rows.map((r) => (
-                  <tr key={r.codigo} className={r.match === 'unmatched' ? 'row-unmatched' : ''}>
-                    <td title={r.requisitante}>{r.requisitante.slice(0, 48)}…</td>
+                  <tr key={r.codigo}>
+                    <td title={r.requisitante}>{r.requisitante.slice(0, 40)}…</td>
                     <td>{r.canonicalNome ?? '—'}</td>
                     <td>{r.quantidade.toLocaleString('pt-BR')}</td>
-                    <td>{r.match}</td>
+                    <td>{Math.round(r.quantidade / 6).toLocaleString('pt-BR')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <button type="button" className="primary-btn" onClick={aplicar}>
-            Aplicar ao monitoramento
+            Importar histórico de requisição
           </button>
         </>
       )}

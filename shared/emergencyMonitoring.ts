@@ -7,6 +7,11 @@ import {
   groupByFamilia,
   type FamiliaGroup,
 } from './serviceFamilies.js';
+import {
+  historyForDistribuicao,
+  MES_REFERENCIA_SEGURO,
+  TOTAL_MENSAL_EMERGENCIAL_PADRAO,
+} from './requisicaoHistorico.js';
 import type { ProcessoRiscoItem } from './processTypes.js';
 import type { MonthAllocationResult, ServicesPayload } from './serviceTypes.js';
 import type { ProcessoEmergencialConfig } from './processTypes.js';
@@ -231,14 +236,19 @@ export function buildMonitoramentoResumo(
     year > 0 && month > 0 ? weeksInCalendarMonth(year, month) : 4;
   const semanaAtual = Math.min(weekOfMonth(now), semanasNoMes);
 
-  const planMes = cfg.plans.find((p) => parseMonthKey(p.mes) === ym);
-  const metaMesTotal = planMes?.totalDisponivel ?? cfg.cestasPorMes;
+  const planMes =
+    cfg.plans.find((p) => parseMonthKey(p.mes) === ym) ??
+    cfg.plans.find((p) => parseMonthKey(p.mes) === parseMonthKey(MES_REFERENCIA_SEGURO));
+  const metaMesTotal =
+    planMes?.totalDisponivel ?? cfg.cestasPorMes ?? TOTAL_MENSAL_EMERGENCIAL_PADRAO;
+
+  const histDistrib = historyForDistribuicao(payload);
 
   let allocation: MonthAllocationResult | null = null;
-  if (payload.services.length && payload.history.length && planMes) {
+  if (payload.services.length && histDistrib.length && planMes) {
     const janela = resolveJanelaAnaliseMeses(payload.settings?.methodology);
     const validMonthKeys = validMonthKeysForPayload(payload);
-    const results = allocatePlans([planMes], payload.services, payload.history, {
+    const results = allocatePlans([planMes], payload.services, histDistrib, {
       validMonthKeys,
       mediaWindowMonths: janela,
       excluirMesDistribuicao: true,

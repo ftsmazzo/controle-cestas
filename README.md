@@ -53,20 +53,13 @@ Executadas **automaticamente** cada vez que o container sobe (`server/migrate.ts
 
 ## Monitor emergencial (produção semanal)
 
-O Banco de Alimentos registra em **/admin/monitoramento** (área administrativa):
+Fluxo em **/admin/monitoramento**:
 
-- **Saldo** atual de cestas no almoxarifado
-- **Envios semanais por equipamento** (CRAS 1, CREAS II, SAICA…), no formato das planilhas em `Docs/` (4–5 semanas por mês)
+1. **Limpar** carga incorreta (planilha operacional Mar–Set/2025), se existir no banco.
+2. **Importar PDF Coderp** (RME por requisitante) — histórico **Out/2025–Mar/2026** por unidade (total do período ÷ 6 meses; **sem Abr/2026**). Combina com o histórico longo da planilha pivot para calcular proporções.
+3. **Controle semanal:** registrar saldo e envios por unidade (CRAS 1…12, CREAS I…V). Metas = **1.150 cestas/mês**, fixos reservados primeiro, restante proporcional.
 
-A consulta pública em **Monitor emergencial** exibe ritmo vs. meta, alertas de ruptura e metas por equipamento derivadas da **distribuição projetada** do processo emergencial (não agrega só “CRAS”).
-
-Semanas civis: 1–7, 8–14, 15–21, 22–28, 29–fim do mês.
-
-**Granularidade:** CRAS e CREAS são *famílias*; o monitoramento opera nas *unidades* (CRAS 1…12, CREAS I…V). Saldo é registrado semana a semana (`historicoSaldo`).
-
-**Carga histórica (uma vez):** em `/admin/monitoramento`, bloco **“Carga histórica — planilha semanal”** — envie o Excel/PDF operacional (SEMANA 1–4 + CRAS 1, Creas I…), ex. Mar–Ago/2025. Não usa “Requisitante” do Coderp.
-
-**Import PDF Coderp (oficial):** no bloco abaixo, relatório RME “Consumo por requisitante” — para conferência ou períodos oficiais após a carga histórica.
+Semanas civis: 1–7, 8–14, 15–21, 22–28, 29–fim do mês. Mês de referência seguro: **Mar/2026**.
 
 ## Por serviço (distribuição)
 
