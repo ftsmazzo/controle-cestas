@@ -34,7 +34,7 @@ export interface SaldoSemanalRegistro {
 
 /** Mês em que começa o controle semanal operacional (ponto zero) */
 export const MONITOR_CONTROLE_MES_INICIO = 'Mai/2026';
-/** Semana operacional 15–21 (contém 18/mai) — envios 18–22 e 25–29 entram nas semanas 3–4+ */
+/** 3ª semana civil do mês (seg–dom); em Mai/2026 = 18–24 (envios ~18–22) */
 export const MONITOR_CONTROLE_SEMANA_INICIO = 3;
 
 export interface EmergencialMonitoramento {
@@ -189,14 +189,54 @@ export function registerSaldoSemanal(
   };
 }
 
-/** Semanas operacionais (como planilha SEMAS): 1–7, 8–14, 15–21, 22–28, 29–fim */
+/** Intervalos seg–dom de cada semana do mês (a partir da 1ª segunda-feira do mês) */
+export function calendarWeekRangesInMonth(
+  year: number,
+  month: number,
+): { start: number; end: number }[] {
+  const lastDay = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month - 1, 1).getDay();
+  let firstMonday = 1;
+  if (firstDow !== 1) {
+    firstMonday = 1 + (firstDow === 0 ? 1 : 8 - firstDow);
+  }
+  const ranges: { start: number; end: number }[] = [];
+  for (let start = firstMonday; start <= lastDay; start += 7) {
+    ranges.push({ start, end: Math.min(start + 6, lastDay) });
+  }
+  return ranges;
+}
+
+/** Dias do mês antes da 1ª segunda (ex.: 1–3 em Mai/2026), se houver */
+export function leadingDaysBeforeFirstMondayWeek(
+  year: number,
+  month: number,
+): { start: number; end: number } | null {
+  const ranges = calendarWeekRangesInMonth(year, month);
+  if (!ranges.length || ranges[0].start <= 1) return null;
+  return { start: 1, end: ranges[0].start - 1 };
+}
+
+export function dayToWeekNumber(
+  year: number,
+  month: number,
+  day: number,
+): number {
+  const ranges = calendarWeekRangesInMonth(year, month);
+  if (!ranges.length) return 1;
+  const idx = ranges.findIndex((r) => day >= r.start && day <= r.end);
+  if (idx >= 0) return idx + 1;
+  if (day < ranges[0].start) return 1;
+  return ranges.length;
+}
+
+/** Semana civil (seg–dom) do mês em que cai a data */
 export function weekOfMonth(date: Date = new Date()): number {
-  const d = date.getDate();
-  if (d <= 7) return 1;
-  if (d <= 14) return 2;
-  if (d <= 21) return 3;
-  if (d <= 28) return 4;
-  return 5;
+  return dayToWeekNumber(
+    date.getFullYear(),
+    date.getMonth() + 1,
+    date.getDate(),
+  );
 }
 
 /** Semana civil dentro do mês monitorado (não usa semana do mês corrente se estiver editando outro mês) */
@@ -212,8 +252,7 @@ export function semanaAtualParaMes(mes: string, now: Date = new Date()): number 
 }
 
 export function weeksInCalendarMonth(year: number, month: number): number {
-  const last = new Date(year, month, 0).getDate();
-  return last > 28 ? 5 : 4;
+  return calendarWeekRangesInMonth(year, month).length || 4;
 }
 
 export function currentMonthLabelPt(date: Date = new Date()): string {
@@ -509,15 +548,8 @@ export function weekDateRangeLabel(
   month: number,
   semana: number,
 ): string {
-  const last = new Date(year, month, 0).getDate();
-  const ranges: [number, number][] = [
-    [1, 7],
-    [8, 14],
-    [15, 21],
-    [22, 28],
-    [29, last],
-  ];
+  const ranges = calendarWeekRangesInMonth(year, month);
   const r = ranges[semana - 1];
   if (!r) return `Sem. ${semana}`;
-  return `${r[0]}–${r[1]}`;
+  return `${r.start}–${r.end}`;
 }

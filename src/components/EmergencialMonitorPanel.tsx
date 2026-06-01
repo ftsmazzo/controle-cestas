@@ -4,10 +4,10 @@ import {
   MONITOR_CONTROLE_MES_INICIO,
   MONITOR_CONTROLE_SEMANA_INICIO,
   buildMonitoramentoResumo,
+  leadingDaysBeforeFirstMondayWeek,
   registerSaldoSemanal,
   upsertWeeklyQty,
   weekDateRangeLabel,
-  weekOfMonth,
   type EmergencialMonitoramento,
   type EquipamentoMonitorRow,
 } from '@shared/emergencyMonitoring';
@@ -69,6 +69,10 @@ export default function EmergencialMonitorPanel({
   const ym = getYearMonth(resumo.mes);
   const year = ym?.year ?? new Date().getFullYear();
   const month = ym?.month ?? new Date().getMonth() + 1;
+  const diasAntesPrimeiraSemana = useMemo(
+    () => leadingDaysBeforeFirstMondayWeek(year, month),
+    [year, month],
+  );
 
   const patchMonitoring = (mon: EmergencialMonitoramento) => {
     onUpdate({
@@ -218,9 +222,12 @@ export default function EmergencialMonitorPanel({
             year,
             month,
             resumo.semanaInicioControle,
-          )}{' '}
-          — inclui envios ~18–22 e 25–29/mai). Semanas anteriores: só registro, não
-          entram no ritmo.
+          )}
+          ). Semanas seg–dom variam por mês
+          {diasAntesPrimeiraSemana
+            ? ` (dias ${diasAntesPrimeiraSemana.start}–${diasAntesPrimeiraSemana.end} ficam fora da S1)`
+            : ''}
+          . Anteriores ao ponto zero: só registro, não entram no ritmo.
         </p>
 
         <div className="emerg-monitor-toolbar">
