@@ -1,6 +1,7 @@
 import type { CoderpRequisitanteRow } from './coderpPdfParser.js';
 import { canonicalUnitNameFromCoderp } from './serviceFamilies.js';
-import { MESES_REQUISICAO_HISTORICO } from './requisicaoHistorico.js';
+/** Meses do rateio Coderp (Out/25–Mar/26) — evita dependência circular com requisicaoHistorico */
+export const MESES_RATEIO_CODERP = 6;
 
 export const UNIDADE_SAICA = 'SAICA';
 export const UNIDADE_WARAOS = 'WARAOS';
@@ -45,7 +46,6 @@ export function isSaicaRequisitanteDireto(requisitante: string): boolean {
   const n = norm(requisitante);
   return (
     /acolhimento institucional/.test(n) ||
-    /criancas e adolescentes/.test(n) ||
     (/\bsaica\b/.test(n) && !/banco/.test(n))
   );
 }
@@ -68,7 +68,7 @@ export function isUnidadeFixaEspecial(nome: string): boolean {
  */
 export function splitTotalBancoAlimentos(
   totalPeriodo: number,
-  mesCount: number = MESES_REQUISICAO_HISTORICO.length,
+  mesCount: number = MESES_RATEIO_CODERP,
 ): Record<string, number> {
   const pesoMd = COTA_MENSAL_FIXA[UNIDADE_MAOS_DADAS] * mesCount;
   const pesoSaica = COTA_MENSAL_FIXA[UNIDADE_SAICA] * mesCount;
@@ -126,7 +126,7 @@ function addAgg(
 /** Converte linhas brutas do PDF em totais por unidade correta (com redistribuição do Banco). */
 export function normalizeCoderpImportRows(
   rows: CoderpRequisitanteRow[],
-  mesCount: number = MESES_REQUISICAO_HISTORICO.length,
+  mesCount: number = MESES_RATEIO_CODERP,
 ): NormalizeCoderpResult {
   const map = new Map<string, CoderpUnidadeAgg>();
   const warnings: string[] = [];

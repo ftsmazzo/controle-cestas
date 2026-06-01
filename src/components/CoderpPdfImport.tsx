@@ -71,8 +71,12 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
       notasRedistribuicao,
     } = applyCoderpHistoricoImport(data, preview);
     onApply(payload);
+    const esperadas = normalizeCoderpImportRows(preview.rows).unidades.length;
     setMsg(
-      `Histórico de requisição: ${linhasAplicadas} unidade(s), meses ${mesesPreenchidos.join(', ')} (total do período ÷ 6). ` +
+      `Histórico de requisição: ${linhasAplicadas}/${esperadas} unidade(s), meses ${mesesPreenchidos.join(', ')} (total do período ÷ 6). ` +
+        (linhasAplicadas < esperadas
+          ? 'Algumas unidades não foram gravadas — confira avisos. '
+          : '') +
         `Meta emergencial: ${TOTAL_MENSAL_EMERGENCIAL_PADRAO}/mês · referência ${MES_REFERENCIA_SEGURO}. ` +
         (notasRedistribuicao.length
           ? `${notasRedistribuicao[0]} `

@@ -8,7 +8,9 @@ import {
   enrichServiceDef,
   ensureFamiliaHierarchy,
   familiaId,
+  isFamiliaLevel,
   matchServiceByCanonicalName,
+  normalizeCanonicalUnitName,
   slugServiceId,
 } from './serviceFamilies.js';
 import { parseMonthKey } from './monthUtils.js';
@@ -42,9 +44,10 @@ function ensureServiceByUnitName(
   services: ServiceDef[],
   unidadeNome: string,
 ): { services: ServiceDef[]; id: string; nome: string; criado: boolean } {
-  const found = matchServiceByCanonicalName(services, unidadeNome);
-  const cota = cotaFixaPorUnidade(unidadeNome);
-  if (found) {
+  const nomeCanon = normalizeCanonicalUnitName(unidadeNome);
+  const cota = cotaFixaPorUnidade(nomeCanon);
+  const found = matchServiceByCanonicalName(services, nomeCanon);
+  if (found && !isFamiliaLevel(found)) {
     let next = services;
     if (cota != null && (!found.fixo || found.cotaFixa !== cota)) {
       next = services.map((s) =>
@@ -53,22 +56,28 @@ function ensureServiceByUnitName(
     }
     return { services: next, id: found.id, nome: found.nome, criado: false };
   }
-  const id = slugServiceId(unidadeNome);
-  const existing = services.find((s) => s.id === id);
+  const id = slugServiceId(nomeCanon);
+  const existing = services.find((s) => s.id === id && !isFamiliaLevel(s));
   if (existing) {
-    return { services, id, nome: existing.nome, criado: false };
+    let next = services;
+    if (cota != null && (!existing.fixo || existing.cotaFixa !== cota)) {
+      next = services.map((s) =>
+        s.id === existing.id ? { ...s, fixo: true, cotaFixa: cota } : s,
+      );
+    }
+    return { services: next, id: existing.id, nome: existing.nome, criado: false };
   }
-  const fam = detectFamiliaFromName(unidadeNome);
+  const fam = detectFamiliaFromName(nomeCanon);
   const def = enrichServiceDef({
     id,
-    nome: unidadeNome,
+    nome: nomeCanon,
     fixo: cota != null,
     cotaFixa: cota,
     level: 'unidade',
     parentId: fam ? familiaId(fam) : null,
     familiaCodigo: fam,
   });
-  return { services: [...services, def], id, nome: unidadeNome, criado: true };
+  return { services: [...services, def], id, nome: nomeCanon, criado: true };
 }
 
 function distributePeriodToMonths(totalPeriodo: number, meses: readonly string[]): Map<string, number> {
@@ -140,6 +149,10 @@ export function applyCoderpHistoricoImport(
 
   const novosEquipamentos: string[] = [];
   let linhasAplicadas = 0;
+  const historyByKey = new Map<string, ServiceMonthRecord>();
+  for (const h of history) {
+    historyByKey.set(`${parseMonthKey(h.mes)}|${h.servicoId}`, h);
+  }
 
   for (const agg of unidades) {
     if (agg.quantidadePeriodo <= 0) continue;
@@ -150,7 +163,8 @@ export function applyCoderpHistoricoImport(
     const porMes = distributePeriodToMonths(agg.quantidadePeriodo, meses);
     for (const [mes, total] of porMes) {
       if (total <= 0) continue;
-      history.push({
+      const key = `${parseMonthKey(mes)}|${ensured.id}`;
+      historyByKey.set(key, {
         mes,
         servicoId: ensured.id,
         servicoNome: ensured.nome,
@@ -159,6 +173,7 @@ export function applyCoderpHistoricoImport(
     }
     linhasAplicadas++;
   }
+  history = [...historyByKey.values()];
 
   const mon = clearEntradasMonitoramento(payload.emergencial.monitoramento);
 

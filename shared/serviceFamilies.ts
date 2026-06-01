@@ -53,8 +53,8 @@ export function isFamiliaAggregateName(nome: string): boolean {
     n === 'naem' ||
     n === 'crepd' ||
     n === 'idoso' ||
-    n.includes('maos dadas') ||
-    n.includes('defesa civil') ||
+    n === 'maos dadas' ||
+    n === 'defesa civil' ||
     n === 'gabinete' ||
     n === 'avarias' ||
     n === 'outros'
@@ -80,17 +80,21 @@ export function detectFamiliaFromName(nome: string): FamiliaCodigo | null {
 }
 
 export function isFamiliaLevel(s: ServiceDef): boolean {
-  return s.level === 'familia' || isFamiliaAggregateName(s.nome);
+  if (s.level === 'familia') return true;
+  if (s.level === 'unidade' || s.level === 'equipamento' || s.level === 'servico') {
+    return false;
+  }
+  return isFamiliaAggregateName(s.nome) && !s.parentId;
 }
 
 /** Unidade que recebe cestas (CRAS 1, Creas II, SAICA…) */
 export function isUnidadeConsumo(s: ServiceDef): boolean {
-  if (isFamiliaLevel(s)) return false;
-  if (s.level === 'unidade' || s.level === 'equipamento') return true;
-  if (s.level === 'servico') return true;
-  if (!s.level && s.parentId) return true;
-  if (!s.level && !isFamiliaAggregateName(s.nome)) return true;
-  return false;
+  if (s.level === 'familia') return false;
+  if (s.level === 'unidade' || s.level === 'equipamento' || s.level === 'servico') {
+    return true;
+  }
+  if (s.parentId) return true;
+  return !isFamiliaAggregateName(s.nome);
 }
 
 export function consumptionUnits(services: ServiceDef[]): ServiceDef[] {
@@ -147,23 +151,62 @@ export function canonicalUnitNameFromCoderp(requisitante: string): string | null
   return null;
 }
 
+/** Normaliza nome canônico (CRAS 01 → CRAS 1) para casar com cadastro */
+export function normalizeCanonicalUnitName(name: string): string {
+  const t = name.trim();
+  let m = t.match(/^CRAS\s*0*(\d{1,2})$/i);
+  if (m) return `CRAS ${parseInt(m[1], 10)}`;
+  m = t.match(/^CREAS\s*([IVX]+|\d)$/i);
+  if (m) {
+    const r = m[1].toUpperCase();
+    const n = parseInt(r, 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= 5) {
+      const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+      return `CREAS ${ROMAN[n]}`;
+    }
+    return `CREAS ${r}`;
+  }
+  return t;
+}
+
+function canonicalIsSpecificUnit(canonical: string): boolean {
+  const n = norm(canonical);
+  return /cras\s*\d/.test(n) || /creas\s*[\divx\d]/.test(n);
+}
+
 export function matchServiceByCanonicalName(
   services: ServiceDef[],
   canonical: string,
 ): ServiceDef | undefined {
-  const want = slugServiceId(canonical);
+  const canonicalNorm = normalizeCanonicalUnitName(canonical);
+  const want = slugServiceId(canonicalNorm);
   const units = consumptionUnits(services);
   let found = units.find((s) => slugServiceId(s.nome) === want);
   if (found) return found;
+  found = units.find((s) => norm(s.nome) === norm(canonicalNorm));
+  if (found) return found;
+
+  if (canonicalIsSpecificUnit(canonicalNorm)) return undefined;
+
   found = units.find(
-    (s) => norm(s.nome) === norm(canonical) || norm(s.nome).includes(norm(canonical)),
+    (s) =>
+      !isFamiliaAggregateName(s.nome) &&
+      norm(s.nome).includes(norm(canonicalNorm)),
   );
   if (found) return found;
-  return units.find((s) => norm(canonical).includes(norm(s.nome)));
+  return units.find(
+    (s) =>
+      !isFamiliaAggregateName(s.nome) &&
+      norm(canonicalNorm).includes(norm(s.nome)),
+  );
 }
 
 export function enrichServiceDef(s: ServiceDef): ServiceDef {
-  if (isFamiliaAggregateName(s.nome)) {
+  const isExplicitUnit =
+    s.level === 'unidade' ||
+    s.level === 'equipamento' ||
+    s.level === 'servico';
+  if (isFamiliaAggregateName(s.nome) && !isExplicitUnit) {
     const fam = detectFamiliaFromName(s.nome) ?? s.nome.toUpperCase();
     return {
       ...s,
