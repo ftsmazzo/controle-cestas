@@ -16,9 +16,11 @@ import {
 import { parseMonthKey } from './monthUtils.js';
 import { repairServiceCatalog } from './serviceRepair.js';
 import type { MonthlyPlan } from './serviceTypes.js';
-import type {
-  EmergencialMonitoramento,
-  EntradaSemanalEquipamento,
+import {
+  MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
+  type EmergencialMonitoramento,
+  type EntradaSemanalEquipamento,
 } from './emergencyMonitoring.js';
 import type {
   ServiceDef,
@@ -210,9 +212,14 @@ export function applyCoderpHistoricoImport(
   }
 
   const mon = clearEntradasMonitoramento(payload.emergencial.monitoramento);
-  const plansEmerg = ensurePlanoEmergencialMes(
+  let plansEmerg = ensurePlanoEmergencialMes(
     payload.emergencial.plans,
     MES_REFERENCIA_SEGURO,
+    TOTAL_MENSAL_EMERGENCIAL_PADRAO,
+  );
+  plansEmerg = ensurePlanoEmergencialMes(
+    plansEmerg,
+    MONITOR_CONTROLE_MES_INICIO,
     TOTAL_MENSAL_EMERGENCIAL_PADRAO,
   );
 
@@ -226,7 +233,9 @@ export function applyCoderpHistoricoImport(
         cestasPorMes: TOTAL_MENSAL_EMERGENCIAL_PADRAO,
         monitoramento: {
           ...mon,
-          mesAtivo: MES_REFERENCIA_SEGURO,
+          mesAtivo: MONITOR_CONTROLE_MES_INICIO,
+          mesInicioControle: MONITOR_CONTROLE_MES_INICIO,
+          semanaInicioControle: MONITOR_CONTROLE_SEMANA_INICIO,
         },
         plans: plansEmerg,
       },

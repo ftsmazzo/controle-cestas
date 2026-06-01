@@ -32,6 +32,11 @@ export interface SaldoSemanalRegistro {
   registradoEm: string;
 }
 
+/** Mês em que começa o controle semanal operacional (ponto zero) */
+export const MONITOR_CONTROLE_MES_INICIO = 'Mai/2026';
+/** Semana operacional 15–21 (contém 18/mai) — envios 18–22 e 25–29 entram nas semanas 3–4+ */
+export const MONITOR_CONTROLE_SEMANA_INICIO = 3;
+
 export interface EmergencialMonitoramento {
   saldoAtual: number | null;
   saldoAtualizadoEm: string | null;
@@ -39,6 +44,10 @@ export interface EmergencialMonitoramento {
   /** Mês em acompanhamento; se vazio, usa o 1º plano emergencial ou o mês civil atual */
   mesAtivo: string | null;
   historicoSaldo: SaldoSemanalRegistro[];
+  /** Primeira semana (1–5) que entra no ritmo/meta acumulada; anteriores = só registro */
+  semanaInicioControle?: number | null;
+  /** Mês em que vale semanaInicioControle (meses posteriores contam da S1) */
+  mesInicioControle?: string | null;
 }
 
 export type MonitorEquipStatus = 'ok' | 'atencao' | 'critico' | 'sem_meta';
@@ -61,6 +70,9 @@ export interface MonitoramentoResumo {
   mes: string;
   semanaAtual: number;
   semanasNoMes: number;
+  /** Primeira semana do mês considerada no ritmo (ponto zero) */
+  semanaInicioControle: number;
+  semanasNoPeriodoControle: number;
   metaMesTotal: number;
   enviadoMesTotal: number;
   pctMes: number;
@@ -84,8 +96,10 @@ export function defaultEmergencialMonitoring(): EmergencialMonitoramento {
     saldoAtual: null,
     saldoAtualizadoEm: null,
     entradasSemanais: [],
-    mesAtivo: null,
+    mesAtivo: MONITOR_CONTROLE_MES_INICIO,
     historicoSaldo: [],
+    mesInicioControle: MONITOR_CONTROLE_MES_INICIO,
+    semanaInicioControle: MONITOR_CONTROLE_SEMANA_INICIO,
   };
 }
 
@@ -105,7 +119,47 @@ export function mergeEmergencialMonitoring(
     mesAtivo: partial.mesAtivo !== undefined ? partial.mesAtivo : base.mesAtivo,
     entradasSemanais: partial.entradasSemanais ?? base.entradasSemanais,
     historicoSaldo: partial.historicoSaldo ?? base.historicoSaldo ?? [],
+    mesInicioControle:
+      partial.mesInicioControle !== undefined
+        ? partial.mesInicioControle
+        : base.mesInicioControle,
+    semanaInicioControle:
+      partial.semanaInicioControle !== undefined
+        ? partial.semanaInicioControle
+        : base.semanaInicioControle,
   };
+}
+
+/** Semana operacional (1–5) a partir da qual o ritmo e a meta acumulada contam */
+export function semanaInicioControleEfetiva(
+  mes: string,
+  mon: EmergencialMonitoramento,
+): number {
+  const mesIni = mon.mesInicioControle ?? MONITOR_CONTROLE_MES_INICIO;
+  const semIni = mon.semanaInicioControle ?? MONITOR_CONTROLE_SEMANA_INICIO;
+  const k = parseMonthKey(mes);
+  const k0 = parseMonthKey(mesIni);
+  if (k < k0) return 99;
+  if (k === k0) return Math.max(1, Math.min(5, semIni));
+  return 1;
+}
+
+export function semanasNoPeriodoControle(
+  semanaAtual: number,
+  semanaInicio: number,
+): number {
+  if (semanaInicio > 99) return 0;
+  return Math.max(0, semanaAtual - semanaInicio + 1);
+}
+
+export function somaEnviosSemanas(
+  semanas: Record<number, number>,
+  de: number,
+  ate: number,
+): number {
+  let t = 0;
+  for (let w = de; w <= ate; w++) t += semanas[w] ?? 0;
+  return t;
 }
 
 export function registerSaldoSemanal(
@@ -235,6 +289,11 @@ export function buildMonitoramentoResumo(
   const semanasNoMes =
     year > 0 && month > 0 ? weeksInCalendarMonth(year, month) : 4;
   const semanaAtual = Math.min(weekOfMonth(now), semanasNoMes);
+  const semanaInicioControle = semanaInicioControleEfetiva(mes, mon);
+  const semanasNoPeriodoControleVal = semanasNoPeriodoControle(
+    semanaAtual,
+    semanaInicioControle,
+  );
 
   const planMes =
     cfg.plans.find((p) => parseMonthKey(p.mes) === ym) ??
@@ -276,10 +335,21 @@ export function buildMonitoramentoResumo(
       semanas[w] = q;
       totalEnviado += q;
     }
-    const metaAcumEquip = metaSemanal * semanaAtual;
-    const pctMes = metaMensal > 0 ? (totalEnviado / metaMensal) * 100 : 0;
+    const enviadoNoControle = somaEnviosSemanas(
+      semanas,
+      semanaInicioControle,
+      semanasNoMes,
+    );
+    const enviadoRitmo = somaEnviosSemanas(
+      semanas,
+      semanaInicioControle,
+      semanaAtual,
+    );
+    const metaAcumEquip =
+      metaSemanal * semanasNoPeriodoControleVal;
+    const pctMes = metaMensal > 0 ? (enviadoNoControle / metaMensal) * 100 : 0;
     const pctRitmo =
-      metaAcumEquip > 0 ? (totalEnviado / metaAcumEquip) * 100 : 0;
+      metaAcumEquip > 0 ? (enviadoRitmo / metaAcumEquip) * 100 : 0;
     const status: MonitorEquipStatus =
       metaMensal <= 0 ? 'sem_meta' : statusFromPct(pctRitmo, pctMes);
     return {
@@ -296,15 +366,20 @@ export function buildMonitoramentoResumo(
     };
   });
 
-  const enviadoMesTotal = equipamentos.reduce((s, e) => s + e.totalEnviado, 0);
-  const metaAcumuladaEsperada = Math.round(
-    (metaMesTotal / semanasNoMes) * semanaAtual,
+  const enviadoMesTotal = equipamentos.reduce(
+    (s, e) =>
+      s +
+      somaEnviosSemanas(e.semanas, semanaInicioControle, semanasNoMes),
+    0,
   );
-  const enviadoAcumulado = equipamentos.reduce((s, e) => {
-    let t = 0;
-    for (let w = 1; w <= semanaAtual; w++) t += e.semanas[w] ?? 0;
-    return s + t;
-  }, 0);
+  const metaAcumuladaEsperada = Math.round(
+    (metaMesTotal / semanasNoMes) * semanasNoPeriodoControleVal,
+  );
+  const enviadoAcumulado = equipamentos.reduce(
+    (s, e) =>
+      s + somaEnviosSemanas(e.semanas, semanaInicioControle, semanaAtual),
+    0,
+  );
   const pctMes = metaMesTotal > 0 ? (enviadoMesTotal / metaMesTotal) * 100 : 0;
   const pctRitmoGeral =
     metaAcumuladaEsperada > 0
@@ -312,7 +387,9 @@ export function buildMonitoramentoResumo(
       : 0;
 
   const ritmoSemanal =
-    semanaAtual > 0 ? enviadoAcumulado / semanaAtual : metaMesTotal / semanasNoMes;
+    semanasNoPeriodoControleVal > 0
+      ? enviadoAcumulado / semanasNoPeriodoControleVal
+      : metaMesTotal / semanasNoMes;
   const saldo = mon.saldoAtual;
   const autonomiaSemanasSaldo =
     saldo != null && ritmoSemanal > 0 ? saldo / ritmoSemanal : null;
@@ -326,7 +403,7 @@ export function buildMonitoramentoResumo(
     alertas.push({
       nivel: 'critico',
       titulo: 'Ritmo abaixo do esperado na semana',
-      descricao: `Até a semana ${semanaAtual} de ${mes}, o enviado (${enviadoAcumulado}) está em ${pctRitmoGeral.toFixed(0)}% do esperado (${metaAcumuladaEsperada}). Risco de não cumprir a meta mensal de ${metaMesTotal} cestas.`,
+      descricao: `Desde a semana ${semanaInicioControle} (ponto zero) até a S${semanaAtual} de ${mes}, o enviado (${enviadoAcumulado}) está em ${pctRitmoGeral.toFixed(0)}% do esperado (${metaAcumuladaEsperada}). Risco de não cumprir a meta mensal de ${metaMesTotal} cestas.`,
     });
   } else if (pctRitmoGeral < 90 && metaMesTotal > 0) {
     alertas.push({
@@ -395,6 +472,8 @@ export function buildMonitoramentoResumo(
     mes,
     semanaAtual,
     semanasNoMes,
+    semanaInicioControle,
+    semanasNoPeriodoControle: semanasNoPeriodoControleVal,
     metaMesTotal,
     enviadoMesTotal,
     pctMes,

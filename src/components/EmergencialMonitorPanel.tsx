@@ -1,5 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
+  MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
   buildMonitoramentoResumo,
   registerSaldoSemanal,
   upsertWeeklyQty,
@@ -39,9 +41,9 @@ export default function EmergencialMonitorPanel({
   readOnly,
   decisionDashboard,
 }: Props) {
-  const [semanaEdit, setSemanaEdit] = useState(() => weekOfMonth());
-
   const resumo = useMemo(() => buildMonitoramentoResumo(data), [data]);
+
+  const [semanaEdit, setSemanaEdit] = useState(MONITOR_CONTROLE_SEMANA_INICIO);
 
   const ym = getYearMonth(resumo.mes);
   const year = ym?.year ?? new Date().getFullYear();
@@ -66,10 +68,14 @@ export default function EmergencialMonitorPanel({
   };
 
   const setMesAtivo = (mes: string) => {
-    patchMonitoring({
-      ...data.emergencial.monitoramento,
-      mesAtivo: mes,
-    });
+    const mon = { ...data.emergencial.monitoramento, mesAtivo: mes };
+    const ini =
+      parseMonthKey(mes) ===
+      parseMonthKey(mon.mesInicioControle ?? MONITOR_CONTROLE_MES_INICIO)
+        ? (mon.semanaInicioControle ?? MONITOR_CONTROLE_SEMANA_INICIO)
+        : 1;
+    setSemanaEdit(ini);
+    patchMonitoring(mon);
   };
 
   const setSaldo = (saldo: number | null) => {
@@ -99,8 +105,23 @@ export default function EmergencialMonitorPanel({
       {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map((w) => {
         const val = eq.semanas[w] ?? 0;
         const isEdit = !readOnly && w === semanaEdit;
+        const preControle = w < resumo.semanaInicioControle;
         return (
-          <td key={w} className={isEdit ? 'cell-edit-week' : ''}>
+          <td
+            key={w}
+            className={
+              isEdit
+                ? 'cell-edit-week'
+                : preControle
+                  ? 'cell-pre-controle'
+                  : ''
+            }
+            title={
+              preControle
+                ? 'Antes do ponto zero — não entra no ritmo'
+                : undefined
+            }
+          >
             {isEdit ? (
               <input
                 type="text"
@@ -168,7 +189,17 @@ export default function EmergencialMonitorPanel({
           planilha). <strong>Meta/semana</strong> = meta da unidade ÷ {resumo.semanasNoMes}.{' '}
           {readOnly
             ? 'Consulta pública.'
-            : 'Registre apenas o que o Banco enviou cada semana (não use import de planilha operacional).'}
+            : 'Registre o que o Banco enviou cada semana (dados reais dos documentos).'}{' '}
+          <strong>Ponto zero:</strong> semana {resumo.semanaInicioControle} de{' '}
+          {data.emergencial.monitoramento.mesInicioControle ??
+            MONITOR_CONTROLE_MES_INICIO}{' '}
+          ({weekDateRangeLabel(
+            year,
+            month,
+            resumo.semanaInicioControle,
+          )}{' '}
+          — inclui envios ~18–22 e 25–29/mai). Semanas anteriores: só registro, não
+          entram no ritmo.
         </p>
 
         <div className="emerg-monitor-toolbar">
@@ -199,12 +230,41 @@ export default function EmergencialMonitorPanel({
                 (w) => (
                   <option key={w} value={w}>
                     Semana {w} ({weekDateRangeLabel(year, month, w)})
+                    {w < resumo.semanaInicioControle ? ' — pré-controle' : ''}
                     {w === resumo.semanaAtual ? ' — atual' : ''}
                   </option>
                 ),
               )}
             </select>
           </label>
+          {!readOnly && (
+            <label>
+              Ponto zero (semana)
+              <select
+                value={
+                  data.emergencial.monitoramento.semanaInicioControle ??
+                  MONITOR_CONTROLE_SEMANA_INICIO
+                }
+                onChange={(e) =>
+                  patchMonitoring({
+                    ...data.emergencial.monitoramento,
+                    semanaInicioControle: Number(e.target.value),
+                    mesInicioControle:
+                      data.emergencial.monitoramento.mesInicioControle ??
+                      resumo.mes,
+                  })
+                }
+              >
+                {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
+                  (w) => (
+                    <option key={w} value={w}>
+                      S{w} ({weekDateRangeLabel(year, month, w)})
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+          )}
           <label>
             Saldo no Banco (cestas)
             <input
@@ -351,10 +411,19 @@ export default function EmergencialMonitorPanel({
                 <th rowSpan={2}>Meta/sem</th>
                 {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
                   (w) => (
-                    <th key={w} colSpan={1} className="sem-head">
+                    <th
+                      key={w}
+                      colSpan={1}
+                      className={
+                        w < resumo.semanaInicioControle
+                          ? 'sem-head sem-head-pre'
+                          : 'sem-head'
+                      }
+                    >
                       S{w}
                       <span className="sem-range">
                         {weekDateRangeLabel(year, month, w)}
+                        {w < resumo.semanaInicioControle ? ' · pré' : ''}
                       </span>
                     </th>
                   ),

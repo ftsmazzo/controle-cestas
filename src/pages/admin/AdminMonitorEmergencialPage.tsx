@@ -43,8 +43,9 @@ export default function AdminMonitorEmergencialPage() {
         <h2>Monitoramento emergencial — Banco de Alimentos</h2>
         <p className="hint">
           <strong>Passo 1:</strong> limpar carga errada (se existir) e importar PDF Coderp
-          (histórico Out/25–Mar/26 por unidade). <strong>Passo 2:</strong> na grade, registrar
-          envios semanais reais. Metas = 1.150/mês rateadas por unidade (fixos primeiro).
+          (histórico Out/25–Mar/26 por unidade). <strong>Passo 2:</strong> em Mai/2026,
+          lançar envios reais a partir da <strong>semana 3 (15–21, ponto zero 18/mai)</strong> —
+          semanas 18–22 e 25–29 nas colunas S3/S4+. Metas = 1.150/mês (fixos primeiro).
         </p>
         <div className="config-grid">
           <button

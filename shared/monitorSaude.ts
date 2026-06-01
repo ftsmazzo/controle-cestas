@@ -50,6 +50,7 @@ export type MonitorResumoSaude = Pick<
   MonitoramentoResumoShape,
   | 'semanaAtual'
   | 'semanasNoMes'
+  | 'semanasNoPeriodoControle'
   | 'metaMesTotal'
   | 'enviadoMesTotal'
   | 'enviadoAcumulado'
@@ -63,6 +64,7 @@ export type MonitorResumoSaude = Pick<
 interface MonitoramentoResumoShape {
   semanaAtual: number;
   semanasNoMes: number;
+  semanasNoPeriodoControle: number;
   metaMesTotal: number;
   enviadoMesTotal: number;
   enviadoAcumulado: number;
@@ -112,9 +114,11 @@ function estimateConsumoMensal(
     return { valor: resumo.metaMesTotal, fonte: 'meta' };
   }
 
-  const ritmoMes = resumo.enviadoAcumulado > 0 && resumo.semanaAtual > 0
-    ? (resumo.enviadoAcumulado / resumo.semanaAtual) * resumo.semanasNoMes
-    : TOTAL_MENSAL_EMERGENCIAL_PADRAO;
+  const ritmoMes =
+    resumo.enviadoAcumulado > 0 && resumo.semanasNoPeriodoControle > 0
+      ? (resumo.enviadoAcumulado / resumo.semanasNoPeriodoControle) *
+        resumo.semanasNoMes
+      : TOTAL_MENSAL_EMERGENCIAL_PADRAO;
   return { valor: Math.round(ritmoMes), fonte: 'ritmo' };
 }
 
@@ -145,8 +149,8 @@ export function buildSaudeDistribuicao(
   const faltaNoMes = Math.max(0, resumo.metaMesTotal - resumo.enviadoMesTotal);
   const envioIdealPorSemana = Math.ceil(faltaNoMes / semanasComAtual);
   const ritmoSemanalAtual =
-    resumo.semanaAtual > 0
-      ? resumo.enviadoAcumulado / resumo.semanaAtual
+    resumo.semanasNoPeriodoControle > 0
+      ? resumo.enviadoAcumulado / resumo.semanasNoPeriodoControle
       : resumo.metaMesTotal / resumo.semanasNoMes;
   const ajusteSemanalCestas = Math.round(envioIdealPorSemana - ritmoSemanalAtual);
 

@@ -34,6 +34,12 @@
   padding: 0.4rem 0.5rem;
 }
 
+.cell-pre-controle,
+.sem-head-pre {
+  opacity: 0.55;
+  background: #f8fafc;
+}
+
 .emerg-saldo-ts {
   font-size: 0.8rem;
   color: var(--muted);
