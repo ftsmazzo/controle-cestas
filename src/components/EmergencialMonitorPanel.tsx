@@ -168,15 +168,17 @@ export default function EmergencialMonitorPanel({
       <td>
         <strong>{num(eq.totalEnviado)}</strong>
       </td>
-      <td>{eq.metaMensal > 0 ? `${num(eq.pctMes, 0)}%` : '—'}</td>
+      <td className={eq.pctMes > 100 ? 'cell-over-limit' : ''}>
+        {eq.metaMensal > 0 ? `${num(eq.pctMes, 0)}%` : '—'}
+      </td>
       <td>
         <span className={`badge badge-${eq.status}`}>
           {eq.status === 'ok'
             ? 'OK'
             : eq.status === 'atencao'
-              ? 'Atenção'
+              ? 'Perto teto'
               : eq.status === 'critico'
-                ? 'Crítico'
+                ? 'Estouro'
                 : '—'}
         </span>
       </td>
@@ -199,9 +201,9 @@ export default function EmergencialMonitorPanel({
   };
 
   const riskClass =
-    resumo.pctRitmoGeral < 70
+    resumo.estouroMes > 0 || resumo.estouroSemana > 0 || resumo.pctMes > 100
       ? 'critico'
-      : resumo.pctRitmoGeral < 90
+      : resumo.pctMes > 90 || resumo.pctLimiteSemana > 90
         ? 'atencao'
         : 'ok';
 
@@ -210,12 +212,13 @@ export default function EmergencialMonitorPanel({
       <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass}`}>
         <h2>Monitoramento semanal — {resumo.mes}</h2>
         <p className="hint">
-          <strong>Meta do mês:</strong> {num(resumo.metaMesTotal || TOTAL_MENSAL_EMERGENCIAL_PADRAO)}{' '}
-          cestas (fixos reservados primeiro; flexíveis proporcionais ao histórico requisição +
-          planilha). <strong>Meta/semana</strong> = meta da unidade ÷ {resumo.semanasNoMes}.{' '}
+          <strong>Teto do mês:</strong>{' '}
+          {num(resumo.metaMesTotal || TOTAL_MENSAL_EMERGENCIAL_PADRAO)} cestas (não ultrapassar).{' '}
+          <strong>Teto/semana (total):</strong> ~{num(resumo.limiteSemanal)}. Cotas por unidade =
+          rateio do teto (Coderp + planilha).{' '}
           {readOnly
             ? 'Consulta pública.'
-            : 'Envios reais: importe o PDF operacional da semana (abaixo). Metas vêm do Coderp + distribuição.'}{' '}
+            : 'Envios reais via PDF RME semanal. Acima do teto = alerta crítico.'}{' '}
           <strong>Ponto zero:</strong> semana {resumo.semanaInicioControle} de{' '}
           {data.emergencial.monitoramento.mesInicioControle ??
             MONITOR_CONTROLE_MES_INICIO}{' '}
@@ -241,7 +244,7 @@ export default function EmergencialMonitorPanel({
             >
               {mesesMonitor.map((p) => (
                 <option key={p.mes} value={p.mes}>
-                  {p.mes} — meta {num(p.total)}
+                  {p.mes} — teto {num(p.total)}
                 </option>
               ))}
             </select>
@@ -327,19 +330,30 @@ export default function EmergencialMonitorPanel({
               {weekDateRangeLabel(year, month, resumo.semanaAtual)} ({resumo.mes})
             </span>
           </article>
-          <article className="emerg-kpi">
-            <span className="emerg-kpi-label">Enviado no mês</span>
+          <article className={`emerg-kpi${resumo.estouroMes > 0 ? ' emerg-kpi--over' : ''}`}>
+            <span className="emerg-kpi-label">Uso do teto mensal</span>
             <strong>
               {num(resumo.enviadoMesTotal)} / {num(resumo.metaMesTotal)}
             </strong>
-            <span className="emerg-kpi-sub">{num(resumo.pctMes, 0)}% da meta</span>
-          </article>
-          <article className="emerg-kpi">
-            <span className="emerg-kpi-label">Ritmo até hoje</span>
-            <strong>{num(resumo.pctRitmoGeral, 0)}%</strong>
             <span className="emerg-kpi-sub">
-              {num(resumo.enviadoAcumulado)} de {num(resumo.metaAcumuladaEsperada)}{' '}
-              esperados
+              {num(resumo.pctMes, 0)}%
+              {resumo.estouroMes > 0
+                ? ` · estouro +${num(resumo.estouroMes)}`
+                : ` · margem ${num(resumo.margemMes)}`}
+            </span>
+          </article>
+          <article
+            className={`emerg-kpi${resumo.estouroSemana > 0 ? ' emerg-kpi--over' : ''}`}
+          >
+            <span className="emerg-kpi-label">Semana {resumo.semanaAtual}</span>
+            <strong>
+              {num(resumo.enviadoSemanaAtual)} / {num(resumo.limiteSemanal)}
+            </strong>
+            <span className="emerg-kpi-sub">
+              {num(resumo.pctLimiteSemana, 0)}% do teto
+              {resumo.estouroSemana > 0
+                ? ` · +${num(resumo.estouroSemana)}`
+                : ` · margem ${num(resumo.margemSemana)}`}
             </span>
           </article>
           <article className="emerg-kpi">
@@ -427,7 +441,7 @@ export default function EmergencialMonitorPanel({
 
       <section className="panel">
         <h3>
-          Metas e envios por unidade — {resumo.mes}
+          Tetos e envios por unidade — {resumo.mes}
           {!readOnly && (
             <span className="hint-inline">
               {' '}
@@ -447,8 +461,8 @@ export default function EmergencialMonitorPanel({
             <thead>
               <tr>
                 <th rowSpan={2}>Equipamento</th>
-                <th rowSpan={2}>Meta mês</th>
-                <th rowSpan={2}>Meta/sem</th>
+                <th rowSpan={2}>Teto mês</th>
+                <th rowSpan={2}>Teto/sem</th>
                 {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
                   (w) => (
                     <th
@@ -469,7 +483,7 @@ export default function EmergencialMonitorPanel({
                   ),
                 )}
                 <th rowSpan={2}>Total</th>
-                <th rowSpan={2}>% mês</th>
+                <th rowSpan={2}>% teto</th>
                 <th rowSpan={2}>Status</th>
               </tr>
             </thead>
@@ -485,7 +499,7 @@ export default function EmergencialMonitorPanel({
                         <strong>{fam.familiaNome}</strong>
                         <span className="familia-sub">
                           {fam.itens.length} unidade(s)
-                          {metaFam > 0 ? ` · meta ${num(metaFam)}` : ''}
+                          {metaFam > 0 ? ` · teto ${num(metaFam)}` : ''}
                         </span>
                       </td>
                       <td>
@@ -536,8 +550,8 @@ export default function EmergencialMonitorPanel({
           </table>
         </div>
         <p className="hint">
-          Colunas S1–S4: o que foi <strong>enviado</strong>. Meta/sem: cota proporcional das{' '}
-          {num(resumo.metaMesTotal)} cestas após reservar os serviços <strong>fixos</strong>.
+          Envios reais por semana. Teto/sem: cota proporcional do teto{' '}
+          {num(resumo.metaMesTotal)} (fixos reservados primeiro). Acima de 100% = estouro.
         </p>
       </section>
 

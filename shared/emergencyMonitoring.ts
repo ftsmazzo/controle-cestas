@@ -1,4 +1,9 @@
 import { allocatePlans } from './allocation.js';
+import {
+  estouroAcimaLimite,
+  margemAteLimite,
+  pctUsoLimite,
+} from './limitesControle.js';
 import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
 import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
 import { validMonthKeysForPayload } from './payloadAnalysis.js';
@@ -56,12 +61,18 @@ export interface EquipamentoMonitorRow {
   servicoId: string;
   servicoNome: string;
   familiaCodigo?: string;
+  /** Teto mensal proporcional (rateio do limite 1.150) */
   metaMensal: number;
+  /** Teto semanal proporcional */
   metaSemanal: number;
   semanas: Record<number, number>;
   totalEnviado: number;
+  enviadoSemanaAtual: number;
+  /** % do limite mensal consumido (>100 = estouro) */
   pctMes: number;
-  /** % do que deveria ter sido enviado até a semana corrente */
+  /** % do limite semanal na semana corrente */
+  pctSemana: number;
+  /** legado: % acumulado no período de controle — preferir pctMes/pctSemana */
   pctRitmo: number;
   status: MonitorEquipStatus;
 }
@@ -73,9 +84,17 @@ export interface MonitoramentoResumo {
   /** Primeira semana do mês considerada no ritmo (ponto zero) */
   semanaInicioControle: number;
   semanasNoPeriodoControle: number;
+  /** Limite máximo do mês (ex. 1.150) — não é meta a cumprir */
   metaMesTotal: number;
+  limiteSemanal: number;
   enviadoMesTotal: number;
+  enviadoSemanaAtual: number;
   pctMes: number;
+  pctLimiteSemana: number;
+  estouroMes: number;
+  estouroSemana: number;
+  margemMes: number;
+  margemSemana: number;
   metaAcumuladaEsperada: number;
   enviadoAcumulado: number;
   pctRitmoGeral: number;
@@ -314,10 +333,9 @@ export function upsertWeeklyQty(
   return { ...mon, entradasSemanais: entradas };
 }
 
-function statusFromPct(pctRitmo: number, pctMes: number): MonitorEquipStatus {
-  if (pctMes >= 100) return 'ok';
-  if (pctRitmo < 70 || pctMes < 50) return 'critico';
-  if (pctRitmo < 90 || pctMes < 75) return 'atencao';
+function statusFromLimites(pctMes: number, pctSemana: number): MonitorEquipStatus {
+  if (pctMes > 100 || pctSemana > 100) return 'critico';
+  if (pctMes > 90 || pctSemana > 90) return 'atencao';
   return 'ok';
 }
 
@@ -396,13 +414,15 @@ export function buildMonitoramentoResumo(
       semanaInicioControle,
       semanaAtual,
     );
+    const enviadoSemanaAtual = semanas[semanaAtual] ?? 0;
     const metaAcumEquip =
       metaSemanal * semanasNoPeriodoControleVal;
-    const pctMes = metaMensal > 0 ? (enviadoNoControle / metaMensal) * 100 : 0;
+    const pctMes = pctUsoLimite(enviadoNoControle, metaMensal);
+    const pctSemana = pctUsoLimite(enviadoSemanaAtual, metaSemanal);
     const pctRitmo =
       metaAcumEquip > 0 ? (enviadoRitmo / metaAcumEquip) * 100 : 0;
     const status: MonitorEquipStatus =
-      metaMensal <= 0 ? 'sem_meta' : statusFromPct(pctRitmo, pctMes);
+      metaMensal <= 0 ? 'sem_meta' : statusFromLimites(pctMes, pctSemana);
     return {
       servicoId: s.id,
       servicoNome: s.nome,
@@ -411,7 +431,9 @@ export function buildMonitoramentoResumo(
       metaSemanal,
       semanas,
       totalEnviado,
+      enviadoSemanaAtual,
       pctMes,
+      pctSemana,
       pctRitmo,
       status,
     };
@@ -431,7 +453,18 @@ export function buildMonitoramentoResumo(
       s + somaEnviosSemanas(e.semanas, semanaInicioControle, semanaAtual),
     0,
   );
-  const pctMes = metaMesTotal > 0 ? (enviadoMesTotal / metaMesTotal) * 100 : 0;
+  const limiteSemanal =
+    semanasNoMes > 0 ? Math.round(metaMesTotal / semanasNoMes) : 0;
+  const enviadoSemanaAtual = equipamentos.reduce(
+    (s, e) => s + (e.semanas[semanaAtual] ?? 0),
+    0,
+  );
+  const pctMes = pctUsoLimite(enviadoMesTotal, metaMesTotal);
+  const pctLimiteSemana = pctUsoLimite(enviadoSemanaAtual, limiteSemanal);
+  const estouroMes = estouroAcimaLimite(enviadoMesTotal, metaMesTotal);
+  const estouroSemana = estouroAcimaLimite(enviadoSemanaAtual, limiteSemanal);
+  const margemMes = margemAteLimite(enviadoMesTotal, metaMesTotal);
+  const margemSemana = margemAteLimite(enviadoSemanaAtual, limiteSemanal);
   const pctRitmoGeral =
     metaAcumuladaEsperada > 0
       ? (enviadoAcumulado / metaAcumuladaEsperada) * 100
@@ -440,47 +473,71 @@ export function buildMonitoramentoResumo(
   const ritmoSemanal =
     semanasNoPeriodoControleVal > 0
       ? enviadoAcumulado / semanasNoPeriodoControleVal
-      : metaMesTotal / semanasNoMes;
+      : limiteSemanal;
   const saldo = mon.saldoAtual;
   const autonomiaSemanasSaldo =
     saldo != null && ritmoSemanal > 0 ? saldo / ritmoSemanal : null;
-  const faltam = Math.max(0, metaMesTotal - enviadoMesTotal);
+  const faltam = margemMes;
   const projecaoSemanasAteMeta =
-    faltam > 0 && ritmoSemanal > 0 ? faltam / ritmoSemanal : null;
+    ritmoSemanal > 0 && margemMes > 0
+      ? margemMes / ritmoSemanal
+      : null;
 
   const alertas: ProcessoRiscoItem[] = [];
 
-  if (pctRitmoGeral < 70 && metaMesTotal > 0) {
+  if (estouroMes > 0) {
     alertas.push({
       nivel: 'critico',
-      titulo: 'Ritmo abaixo do esperado na semana',
-      descricao: `Desde a semana ${semanaInicioControle} (ponto zero) até a S${semanaAtual} de ${mes}, o enviado (${enviadoAcumulado}) está em ${pctRitmoGeral.toFixed(0)}% do esperado (${metaAcumuladaEsperada}). Risco de não cumprir a meta mensal de ${metaMesTotal} cestas.`,
+      titulo: 'Estouro do limite mensal',
+      descricao: `Enviado ${enviadoMesTotal} cestas — ${estouroMes} acima do teto de ${metaMesTotal} (${pctMes.toFixed(0)}% do limite). Reduza envios ou revise lançamentos.`,
     });
-  } else if (pctRitmoGeral < 90 && metaMesTotal > 0) {
+  } else if (pctMes > 90 && metaMesTotal > 0) {
     alertas.push({
       nivel: 'alto',
-      titulo: 'Atenção ao ritmo semanal',
-      descricao: `Enviado acumulado ${enviadoAcumulado} vs. esperado ${metaAcumuladaEsperada} (${pctRitmoGeral.toFixed(0)}%).`,
+      titulo: 'Próximo do teto mensal',
+      descricao: `Uso ${pctMes.toFixed(0)}% do limite (${enviadoMesTotal}/${metaMesTotal}). Margem: ${margemMes} cestas.`,
     });
   }
 
-  if (pctMes >= 100 && metaMesTotal > 0) {
+  if (estouroSemana > 0) {
+    alertas.push({
+      nivel: 'critico',
+      titulo: `Estouro na semana ${semanaAtual}`,
+      descricao: `S${semanaAtual}: ${enviadoSemanaAtual} cestas — ${estouroSemana} acima do teto semanal (~${limiteSemanal}, ${pctLimiteSemana.toFixed(0)}%).`,
+    });
+  } else if (pctLimiteSemana > 90 && limiteSemanal > 0) {
+    alertas.push({
+      nivel: 'alto',
+      titulo: `Semana ${semanaAtual} perto do teto`,
+      descricao: `${enviadoSemanaAtual}/${limiteSemanal} cestas (${pctLimiteSemana.toFixed(0)}%). Margem semanal: ${margemSemana}.`,
+    });
+  }
+
+  const acimaLimite = equipamentos.filter(
+    (e) => e.status === 'critico' && e.metaMensal > 0,
+  );
+  if (acimaLimite.length) {
+    alertas.push({
+      nivel: 'critico',
+      titulo: `${acimaLimite.length} equipamento(s) acima do limite`,
+      descricao: acimaLimite
+        .slice(0, 5)
+        .map((e) => {
+          const partes: string[] = [];
+          if (e.pctMes > 100) partes.push(`mês ${e.pctMes.toFixed(0)}%`);
+          if (e.pctSemana > 100) partes.push(`S${semanaAtual} ${e.pctSemana.toFixed(0)}%`);
+          return `${e.servicoNome} (${partes.join(', ')})`;
+        })
+        .join('; '),
+    });
+  }
+
+  const pertoLimite = equipamentos.filter((e) => e.status === 'atencao');
+  if (pertoLimite.length >= 3) {
     alertas.push({
       nivel: 'moderado',
-      titulo: 'Meta mensal já atingida ou ultrapassada',
-      descricao: `Total enviado no mês: ${enviadoMesTotal} (meta ${metaMesTotal}).`,
-    });
-  }
-
-  const atrasados = equipamentos.filter((e) => e.status === 'critico');
-  if (atrasados.length) {
-    alertas.push({
-      nivel: 'alto',
-      titulo: `${atrasados.length} equipamento(s) crítico(s)`,
-      descricao: atrasados
-        .slice(0, 5)
-        .map((e) => `${e.servicoNome} (${e.pctMes.toFixed(0)}% da meta)`)
-        .join('; '),
+      titulo: `${pertoLimite.length} equipamento(s) perto do teto`,
+      descricao: 'Revise cotas antes do fechamento da semana.',
     });
   }
 
@@ -489,31 +546,36 @@ export function buildMonitoramentoResumo(
       alertas.push({
         nivel: 'critico',
         titulo: 'Saldo crítico no Banco',
-        descricao: `Saldo ${saldo} cobre menos de 25% da meta mensal (${metaMesTotal}). Atualize o estoque ou reduza o ritmo de saída.`,
+        descricao: `Saldo ${saldo} cobre menos de 25% do limite mensal (${metaMesTotal}).`,
       });
     } else if (
       autonomiaSemanasSaldo != null &&
-      autonomiaSemanasSaldo < semanasNoMes - semanaAtual + 1
+      autonomiaSemanasSaldo < semanasNoMes - semanaAtual + 1 &&
+      pctMes > 70
     ) {
       alertas.push({
         nivel: 'alto',
-        titulo: 'Saldo pode não durar até o fim do mês',
-        descricao: `Autonomia estimada: ${autonomiaSemanasSaldo.toFixed(1)} semanas (ritmo médio ${ritmoSemanal.toFixed(0)}/sem).`,
+        titulo: 'Saldo pode não durar com este ritmo de saída',
+        descricao: `Autonomia ~${autonomiaSemanasSaldo.toFixed(1)} sem. ao ritmo ${ritmoSemanal.toFixed(0)}/sem.`,
       });
     }
   } else {
     alertas.push({
       nivel: 'moderado',
       titulo: 'Saldo não informado',
-      descricao: 'O Banco deve registrar o saldo atual para monitorar ruptura.',
+      descricao: 'Registre o saldo para monitorar ruptura de estoque.',
     });
   }
 
-  if (projecaoSemanasAteMeta != null && projecaoSemanasAteMeta > semanasNoMes - semanaAtual) {
+  if (
+    projecaoSemanasAteMeta != null &&
+    projecaoSemanasAteMeta < semanasNoMes - semanaAtual &&
+    pctMes < 100
+  ) {
     alertas.push({
       nivel: 'moderado',
-      titulo: 'Projeção: meta mensal em risco',
-      descricao: `Ao ritmo atual, faltariam ~${projecaoSemanasAteMeta.toFixed(1)} semanas para completar ${faltam} cestas; restam ${semanasNoMes - semanaAtual} semana(s) no mês.`,
+      titulo: 'Margem mensal apertada',
+      descricao: `Ao ritmo atual (~${ritmoSemanal.toFixed(0)}/sem), a margem de ${margemMes} cestas pode acabar antes do fim do mês.`,
     });
   }
 
@@ -526,8 +588,15 @@ export function buildMonitoramentoResumo(
     semanaInicioControle,
     semanasNoPeriodoControle: semanasNoPeriodoControleVal,
     metaMesTotal,
+    limiteSemanal,
     enviadoMesTotal,
+    enviadoSemanaAtual,
     pctMes,
+    pctLimiteSemana,
+    estouroMes,
+    estouroSemana,
+    margemMes,
+    margemSemana,
     metaAcumuladaEsperada,
     enviadoAcumulado,
     pctRitmoGeral,

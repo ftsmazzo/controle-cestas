@@ -176,6 +176,29 @@
   font-weight: 600;
 }
 
+.monitor-saude-card--over {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.monitor-saude-card--over strong {
+  color: #b91c1c;
+}
+
+.emerg-kpi--over {
+  border-color: #dc2626 !important;
+  background: #fef2f2 !important;
+}
+
+.emerg-kpi--over strong {
+  color: #b91c1c;
+}
+
+.cell-over-limit {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 .monitor-saude-acoes h4 {
   margin: 0 0 0.5rem;
   font-size: 0.95rem;

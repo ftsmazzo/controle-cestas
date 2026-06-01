@@ -3,6 +3,7 @@ import {
   buildSaudeDistribuicao,
   MESES_SAUDE_IDEAIS,
   type SaudeDistribuicao,
+  type SaudeNivel,
 } from '@shared/monitorSaude';
 import type { MonitoramentoResumo } from '@shared/emergencyMonitoring';
 import type { ServicesPayload } from '@shared/serviceTypes';
@@ -17,9 +18,20 @@ function num(n: number | null | undefined, dec = 1): string {
 const FONTE_RATEIO_LABEL: Record<SaudeDistribuicao['consumoFonteRateio'], string> = {
   previsao: 'previsão (série limpa)',
   historico: 'média histórico recente',
-  meta: 'meta emergencial',
+  meta: 'limite emergencial',
   ritmo: 'ritmo observado',
 };
+
+function nivelGeral(saude: SaudeDistribuicao): SaudeNivel {
+  if (saude.estouroMes > 0 || saude.estouroSemana > 0) return 'vermelho';
+  if (saude.nivelLimiteMes === 'vermelho' || saude.nivelLimiteSemana === 'vermelho') {
+    return 'vermelho';
+  }
+  if (saude.nivelLimiteMes === 'amarelo' || saude.nivelLimiteSemana === 'amarelo') {
+    return 'amarelo';
+  }
+  return saude.nivelEstoque;
+}
 
 interface Props {
   data: ServicesPayload;
@@ -33,15 +45,17 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
     [data, resumo, dashboard],
   );
 
+  const nivel = nivelGeral(saude);
+
   const pctBar = saude.autonomiaMeses != null
     ? Math.min(100, (saude.autonomiaMeses / saude.mesesIdeais) * 100)
     : 0;
 
   return (
-    <section className={`panel monitor-saude monitor-saude--${saude.nivelEstoque}`}>
+    <section className={`panel monitor-saude monitor-saude--${nivel}`}>
       <div className="monitor-saude-head">
         <h3>Saúde da distribuição</h3>
-        <span className={`monitor-saude-badge monitor-saude-badge--${saude.nivelEstoque}`}>
+        <span className={`monitor-saude-badge monitor-saude-badge--${nivel}`}>
           Índice {saude.indiceSaudeGeral}%
         </span>
       </div>
@@ -51,7 +65,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
         <div className="monitor-saude-autonomia-labels">
           <span>0</span>
           <span className="monitor-saude-meta-line">
-            Meta {saude.mesesIdeais} meses
+            Estoque ideal {saude.mesesIdeais} meses
           </span>
           <span>{saude.mesesIdeais}+ m</span>
         </div>
@@ -69,7 +83,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
         <p className="monitor-saude-autonomia-valor">
           {saude.autonomiaMeses != null ? (
             <>
-              <strong>{num(saude.autonomiaMeses)}</strong> meses de saúde
+              <strong>{num(saude.autonomiaMeses)}</strong> meses de estoque
               {saude.gapMesesParaIdeal != null && saude.gapMesesParaIdeal > 0 && (
                 <span className="monitor-saude-gap">
                   {' '}
@@ -89,18 +103,34 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           <strong>{num(saude.saldoAtual, 0)}</strong>
           <span className="monitor-saude-card-sub">cestas</span>
         </article>
-        <article className="monitor-saude-card">
-          <span className="monitor-saude-card-label">Meta operacional</span>
-          <strong>{num(saude.metaOperacionalMensal, 0)}</strong>
+        <article
+          className={`monitor-saude-card${saude.estouroMes > 0 ? ' monitor-saude-card--over' : ''}`}
+        >
+          <span className="monitor-saude-card-label">Teto mensal</span>
+          <strong>{num(saude.limiteMensal, 0)}</strong>
           <span className="monitor-saude-card-sub">
-            /mês · total a distribuir ({resumo.mes})
+            uso {num(saude.pctUsoLimiteMes, 0)}% · {num(saude.enviadoMes, 0)} enviadas
+            {saude.estouroMes > 0
+              ? ` · estouro +${num(saude.estouroMes, 0)}`
+              : ` · margem ${num(saude.margemMes, 0)}`}
+          </span>
+        </article>
+        <article
+          className={`monitor-saude-card${saude.estouroSemana > 0 ? ' monitor-saude-card--over' : ''}`}
+        >
+          <span className="monitor-saude-card-label">
+            Teto semana {resumo.semanaAtual}
+          </span>
+          <strong>{num(saude.limiteSemanal, 0)}</strong>
+          <span className="monitor-saude-card-sub">
+            uso {num(saude.pctUsoLimiteSemana, 0)}% · {num(saude.enviadoSemana, 0)} enviadas
           </span>
         </article>
         <article className="monitor-saude-card">
           <span className="monitor-saude-card-label">Ref. rateio</span>
           <strong>{num(saude.consumoReferenciaRateio, 0)}</strong>
           <span className="monitor-saude-card-sub">
-            /mês · {FONTE_RATEIO_LABEL[saude.consumoFonteRateio]} (só proporções)
+            /mês · {FONTE_RATEIO_LABEL[saude.consumoFonteRateio]} (só cotas)
           </span>
         </article>
         <article className="monitor-saude-card">
@@ -109,26 +139,6 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           <span className="monitor-saude-card-sub">
             restantes de {num(saude.empenho.totalEmpenho, 0)} · usado{' '}
             {num(saude.empenho.totalConsumido, 0)}
-          </span>
-        </article>
-        <article className="monitor-saude-card">
-          <span className="monitor-saude-card-label">Envio ideal / semana</span>
-          <strong>{num(saude.envioIdealPorSemana, 0)}</strong>
-          <span className="monitor-saude-card-sub">
-            ritmo atual {num(saude.ritmoSemanalAtual, 0)}
-            {saude.ajusteSemanalCestas !== 0 && (
-              <span
-                className={
-                  saude.ajusteSemanalCestas > 0
-                    ? 'monitor-saude-delta-up'
-                    : 'monitor-saude-delta-down'
-                }
-              >
-                {' '}
-                ({saude.ajusteSemanalCestas > 0 ? '+' : ''}
-                {num(saude.ajusteSemanalCestas, 0)})
-              </span>
-            )}
           </span>
         </article>
       </div>
@@ -140,7 +150,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
             <thead>
               <tr>
                 <th>Mês</th>
-                <th>Meta</th>
+                <th>Limite</th>
                 <th>Enviado</th>
                 <th>Saldo mês</th>
               </tr>
@@ -152,25 +162,19 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
                   <td>{num(m.metaMensal, 0)}</td>
                   <td>{num(m.enviado, 0)}</td>
                   <td className={m.saldoMes < 0 ? 'empenho-over' : ''}>
-                    {num(m.saldoMes, 0)}
+                    {m.saldoMes < 0
+                      ? `+${num(Math.abs(m.saldoMes), 0)} estouro`
+                      : num(m.saldoMes, 0)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {saude.empenho.proximoMes && (
-          <p className="hint">
-            Próximo mês sugerido ({saude.empenho.proximoMes}): ~{' '}
-            <strong>{num(saude.empenho.sugestaoProximoMes, 0)}</strong> cestas (média{' '}
-            {num(saude.empenho.mediaSugeridaProximosMeses, 0)} do empenho restante; pode pedir até
-            ~{num(saude.metaOperacionalMensal + 150, 0)} se necessário).
-          </p>
-        )}
       </div>
 
       <div className="monitor-saude-acoes">
-        <h4>Para retomar o controle esta semana</h4>
+        <h4>Controle desta semana</h4>
         <ul>
           {saude.acoesSemana.map((a, i) => (
             <li key={i}>{a}</li>
@@ -180,13 +184,15 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
 
       <div className="monitor-saude-legend">
         <span>
-          <i className="dot dot-estoque" /> Estoque (55%): saldo ÷ {num(saude.metaOperacionalMensal, 0)}/mês
+          <i className="dot dot-estoque" /> Estoque (45%): saldo ÷ teto{' '}
+          {num(saude.limiteMensal, 0)}/mês
         </span>
         <span>
-          <i className="dot dot-ritmo" /> Ritmo (25%): desde S{resumo.semanaInicioControle} até S{resumo.semanaAtual} ({resumo.mes})
+          <i className="dot dot-ritmo" /> Teto mensal (30%): estouro penaliza índice
         </span>
         <span>
-          <i className="dot dot-meta" /> Proposta (20%): % da meta {saude.propostaMensal} no mês
+          <i className="dot dot-meta" /> Teto semanal (15%): S{resumo.semanaAtual} ·
+          empenho (10%)
         </span>
       </div>
     </section>

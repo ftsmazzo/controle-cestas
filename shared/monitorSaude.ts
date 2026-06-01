@@ -3,6 +3,12 @@ import { buildEmpenhoControle, type EmpenhoControleResumo } from './empenhoContr
 import { forecastNextMonth } from './forecastPlan.js';
 import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
 import {
+  estouroAcimaLimite,
+  margemAteLimite,
+  nivelPorUsoLimite,
+  scoreDentroDoLimite,
+} from './limitesControle.js';
+import {
   processedRowsFromPayload,
   validMonthKeysForPayload,
 } from './payloadAnalysis.js';
@@ -17,9 +23,8 @@ export type SaudeNivel = 'verde' | 'amarelo' | 'vermelho';
 
 export interface SaudeDistribuicao {
   mesesIdeais: number;
-  /** Meta operacional do mês (ex. 1.150) — total a distribuir */
-  metaOperacionalMensal: number;
-  /** Previsão / média histórica — só para rateio entre unidades */
+  limiteMensal: number;
+  limiteSemanal: number;
   consumoReferenciaRateio: number;
   consumoFonteRateio: 'previsao' | 'historico' | 'meta' | 'ritmo';
   saldoAtual: number | null;
@@ -27,20 +32,27 @@ export interface SaudeDistribuicao {
   autonomiaSemanas: number | null;
   gapMesesParaIdeal: number | null;
   nivelEstoque: SaudeNivel;
+  nivelLimiteMes: SaudeNivel;
+  nivelLimiteSemana: SaudeNivel;
   indiceSaudeGeral: number;
-  propostaMensal: number;
-  pctPropostaMes: number;
-  pctRitmoAcumulado: number;
-  semanasRestantes: number;
-  faltaNoMes: number;
-  envioIdealPorSemana: number;
-  ajusteSemanalCestas: number;
-  ritmoSemanalAtual: number;
-  saldoAlvoMesesIdeais: number | null;
-  deficitSaldoParaIdeal: number | null;
+  pctUsoLimiteMes: number;
+  pctUsoLimiteSemana: number;
+  estouroMes: number;
+  estouroSemana: number;
+  margemMes: number;
+  margemSemana: number;
+  enviadoMes: number;
+  enviadoSemana: number;
   empenho: EmpenhoControleResumo;
   acoesSemana: string[];
   resumoDecisao: string;
+}
+
+function nivelLimiteParaSaude(pctUso: number): SaudeNivel {
+  const n = nivelPorUsoLimite(pctUso);
+  if (n === 'ok') return 'verde';
+  if (n === 'atencao') return 'amarelo';
+  return 'vermelho';
 }
 
 function nivelFromMeses(meses: number | null): SaudeNivel {
@@ -58,10 +70,15 @@ export type MonitorResumoSaude = Pick<
   | 'semanasNoPeriodoControle'
   | 'semanaInicioControle'
   | 'metaMesTotal'
+  | 'limiteSemanal'
   | 'enviadoMesTotal'
-  | 'enviadoAcumulado'
+  | 'enviadoSemanaAtual'
   | 'pctMes'
-  | 'pctRitmoGeral'
+  | 'pctLimiteSemana'
+  | 'estouroMes'
+  | 'estouroSemana'
+  | 'margemMes'
+  | 'margemSemana'
   | 'saldoAtual'
   | 'autonomiaSemanasSaldo'
   | 'equipamentos'
@@ -74,18 +91,23 @@ interface MonitoramentoResumoShape {
   semanasNoPeriodoControle: number;
   semanaInicioControle: number;
   metaMesTotal: number;
+  limiteSemanal: number;
   enviadoMesTotal: number;
-  enviadoAcumulado: number;
+  enviadoSemanaAtual: number;
   pctMes: number;
-  pctRitmoGeral: number;
+  pctLimiteSemana: number;
+  estouroMes: number;
+  estouroSemana: number;
+  margemMes: number;
+  margemSemana: number;
   saldoAtual: number | null;
   autonomiaSemanasSaldo: number | null;
-  equipamentos: { status: string }[];
+  equipamentos: { status: string; pctMes: number; pctSemana: number }[];
 }
 
 function estimateConsumoReferenciaRateio(
   payload: ServicesPayload,
-  resumo: MonitorResumoSaude,
+  limiteMensal: number,
   dashboard?: DashboardState | null,
 ): { valor: number; fonte: SaudeDistribuicao['consumoFonteRateio'] } {
   const janela = resolveJanelaAnaliseMeses(payload.settings?.methodology);
@@ -118,8 +140,8 @@ function estimateConsumoReferenciaRateio(
     return { valor: Math.round(avg), fonte: 'historico' };
   }
 
-  if (resumo.metaMesTotal > 0) {
-    return { valor: resumo.metaMesTotal, fonte: 'meta' };
+  if (limiteMensal > 0) {
+    return { valor: limiteMensal, fonte: 'meta' };
   }
 
   return { valor: TOTAL_MENSAL_EMERGENCIAL_PADRAO, fonte: 'ritmo' };
@@ -131,19 +153,21 @@ export function buildSaudeDistribuicao(
   dashboard?: DashboardState | null,
   mesesIdeais: number = MESES_SAUDE_IDEAIS,
 ): SaudeDistribuicao {
-  const metaOperacionalMensal =
+  const limiteMensal =
     resumo.metaMesTotal > 0 ? resumo.metaMesTotal : TOTAL_MENSAL_EMERGENCIAL_PADRAO;
+  const limiteSemanal =
+    resumo.limiteSemanal > 0
+      ? resumo.limiteSemanal
+      : Math.round(limiteMensal / Math.max(1, resumo.semanasNoMes));
 
   const { valor: consumoReferenciaRateio, fonte: consumoFonteRateio } =
-    estimateConsumoReferenciaRateio(payload, resumo, dashboard);
+    estimateConsumoReferenciaRateio(payload, limiteMensal, dashboard);
 
   const empenho = buildEmpenhoControle(payload);
 
   const saldo = resumo.saldoAtual;
   const autonomiaMeses =
-    saldo != null && metaOperacionalMensal > 0
-      ? saldo / metaOperacionalMensal
-      : null;
+    saldo != null && limiteMensal > 0 ? saldo / limiteMensal : null;
   const autonomiaSemanas =
     autonomiaMeses != null
       ? autonomiaMeses * (resumo.semanasNoMes || 4)
@@ -153,38 +177,40 @@ export function buildSaudeDistribuicao(
     autonomiaMeses != null ? Math.max(0, mesesIdeais - autonomiaMeses) : null;
 
   const nivelEstoque = nivelFromMeses(autonomiaMeses);
+  const pctUsoLimiteMes = resumo.pctMes;
+  const pctUsoLimiteSemana = resumo.pctLimiteSemana;
+  const nivelLimiteMes = nivelLimiteParaSaude(pctUsoLimiteMes);
+  const nivelLimiteSemana = nivelLimiteParaSaude(pctUsoLimiteSemana);
 
-  const semanasRestantes = Math.max(
-    0,
-    resumo.semanasNoMes - resumo.semanaAtual,
-  );
-  const semanasComAtual = Math.max(1, semanasRestantes + 1);
-  const faltaNoMes = Math.max(0, metaOperacionalMensal - resumo.enviadoMesTotal);
-  const envioIdealPorSemana = Math.ceil(faltaNoMes / semanasComAtual);
-  const ritmoSemanalAtual =
-    resumo.semanasNoPeriodoControle > 0
-      ? resumo.enviadoAcumulado / resumo.semanasNoPeriodoControle
-      : metaOperacionalMensal / resumo.semanasNoMes;
-  const ajusteSemanalCestas = Math.round(envioIdealPorSemana - ritmoSemanalAtual);
-
-  const saldoAlvoMesesIdeais =
-    metaOperacionalMensal > 0
-      ? metaOperacionalMensal * mesesIdeais
-      : null;
-  const deficitSaldoParaIdeal =
-    saldo != null && saldoAlvoMesesIdeais != null
-      ? Math.max(0, saldoAlvoMesesIdeais - saldo)
-      : null;
+  const estouroMes = resumo.estouroMes;
+  const estouroSemana = resumo.estouroSemana;
+  const margemMes = resumo.margemMes;
+  const margemSemana = resumo.margemSemana;
 
   const pctEstoque =
     autonomiaMeses != null
       ? Math.min(100, (autonomiaMeses / mesesIdeais) * 100)
       : 40;
-  const pctRitmo = Math.min(100, resumo.pctRitmoGeral);
-  const pctProposta = Math.min(100, resumo.pctMes);
-  const indiceSaudeGeral = Math.round(
-    pctEstoque * 0.55 + pctRitmo * 0.25 + pctProposta * 0.2,
+  const scoreMes = scoreDentroDoLimite(pctUsoLimiteMes);
+  const scoreSemana = scoreDentroDoLimite(pctUsoLimiteSemana);
+  const mesEmpenho = empenho.meses.find(
+    (m) => parseMonthKey(m.mes) === parseMonthKey(resumo.mes),
   );
+  const pctEmpenhoMes =
+    mesEmpenho && mesEmpenho.metaMensal > 0
+      ? (mesEmpenho.enviado / mesEmpenho.metaMensal) * 100
+      : pctUsoLimiteMes;
+  const scoreEmpenho = scoreDentroDoLimite(pctEmpenhoMes);
+
+  let indiceSaudeGeral = Math.round(
+    pctEstoque * 0.45 + scoreMes * 0.3 + scoreSemana * 0.15 + scoreEmpenho * 0.1,
+  );
+  if (estouroMes > 0 || estouroSemana > 0) {
+    indiceSaudeGeral = Math.min(indiceSaudeGeral, 45);
+  }
+  if (empenho.restante < 0) {
+    indiceSaudeGeral = Math.min(indiceSaudeGeral, 35);
+  }
 
   const acoesSemana: string[] = [];
 
@@ -192,68 +218,75 @@ export function buildSaudeDistribuicao(
     acoesSemana.push('Informar o saldo atual no Banco.');
   } else if (gapMesesParaIdeal != null && gapMesesParaIdeal > 0) {
     acoesSemana.push(
-      `Repor ou preservar estoque: faltam ~${Math.round(gapMesesParaIdeal * 10) / 10} mês(es) para ${mesesIdeais} meses de saúde (consumo operacional ${num(metaOperacionalMensal)}/mês, não a previsão de rateio).`,
-    );
-    if (deficitSaldoParaIdeal != null && deficitSaldoParaIdeal > 0) {
-      acoesSemana.push(
-        `Saldo ideal (${mesesIdeais} meses × ${num(metaOperacionalMensal)}): ~${deficitSaldoParaIdeal.toLocaleString('pt-BR')} cestas acima do saldo atual.`,
-      );
-    }
-  }
-
-  if (empenho.restante > 0 && empenho.proximoMes) {
-    acoesSemana.push(
-      `Empenho ${empenho.totalEmpenho.toLocaleString('pt-BR')} cestas: restam ${empenho.restante.toLocaleString('pt-BR')} em ${empenho.mesesRestantes} mês(es). Sugestão para ${empenho.proximoMes}: ~${empenho.sugestaoProximoMes.toLocaleString('pt-BR')} (média ${empenho.mediaSugeridaProximosMeses.toLocaleString('pt-BR')}; meta operacional ${num(metaOperacionalMensal)}).`,
-    );
-  } else if (empenho.restante <= 0 && empenho.totalConsumido > 0) {
-    acoesSemana.push(
-      'Empenho do período esgotado ou no limite — ajuste o próximo mês ou revise totais lançados.',
+      `Preservar estoque: autonomia ~${num(autonomiaMeses)} mês(es) (teto ${num(limiteMensal)}/mês de saída).`,
     );
   }
 
-  if (resumo.pctRitmoGeral < 90 && metaOperacionalMensal > 0) {
-    if (ajusteSemanalCestas > 0) {
-      acoesSemana.push(
-        `Nesta semana e nas ${semanasRestantes} restante(s): enviar ~${envioIdealPorSemana.toLocaleString('pt-BR')} cestas/semana no total (≈ +${ajusteSemanalCestas.toLocaleString('pt-BR')} vs ritmo atual) para fechar ${metaOperacionalMensal} no mês.`,
-      );
-    } else if (ajusteSemanalCestas < -50) {
-      acoesSemana.push(
-        `Ritmo acima do necessário: pode reduzir ~${Math.abs(ajusteSemanalCestas).toLocaleString('pt-BR')} cestas/semana e ainda bater a meta — cuide o saldo e o empenho.`,
-      );
-    }
-  } else if (faltaNoMes === 0) {
+  if (estouroMes > 0) {
     acoesSemana.push(
-      'Meta operacional do mês cumprida no volume — mantenha o saldo e a regularidade semanal.',
+      `Crítico — estouro mensal: ${num(estouroMes)} cestas acima do teto ${num(limiteMensal)}. Não enviar além do limite até regularizar.`,
+    );
+  } else if (pctUsoLimiteMes > 90) {
+    acoesSemana.push(
+      `Atenção: ${pctUsoLimiteMes.toFixed(0)}% do teto mensal usado. Margem restante: ${num(margemMes)} cestas.`,
     );
   }
 
-  const atrasados = resumo.equipamentos.filter((e) => e.status === 'critico').length;
-  if (atrasados > 0) {
+  if (estouroSemana > 0) {
     acoesSemana.push(
-      `Priorizar ${atrasados} unidade(s) em vermelho na grade (abaixo do ritmo proporcional; rateio usa referência ~${num(consumoReferenciaRateio)}/mês).`,
+      `Crítico — semana ${resumo.semanaAtual}: ${num(estouroSemana)} acima do teto ~${num(limiteSemanal)} (${pctUsoLimiteSemana.toFixed(0)}%).`,
+    );
+  } else if (pctUsoLimiteSemana > 90) {
+    acoesSemana.push(
+      `Semana ${resumo.semanaAtual} perto do teto: margem ${num(margemSemana)} de ~${num(limiteSemanal)}.`,
+    );
+  }
+
+  if (empenho.restante < 0) {
+    acoesSemana.push(
+      `Empenho ${num(empenho.totalEmpenho)} estourado em ${num(Math.abs(empenho.restante))} cestas — revise meses anteriores.`,
+    );
+  } else if (mesEmpenho && mesEmpenho.saldoMes < 0) {
+    acoesSemana.push(
+      `${resumo.mes}: ${num(Math.abs(mesEmpenho.saldoMes))} acima do limite mensal do empenho.`,
+    );
+  } else if (empenho.restante > 0 && empenho.proximoMes) {
+    acoesSemana.push(
+      `Empenho: ${num(empenho.restante)} restantes em ${empenho.mesesRestantes} mês(es). Teto sugerido ${empenho.proximoMes}: ~${num(empenho.sugestaoProximoMes)}.`,
+    );
+  }
+
+  const acima = resumo.equipamentos.filter((e) => e.status === 'critico');
+  if (acima.length) {
+    acoesSemana.push(
+      `${acima.length} unidade(s) acima do teto proporcional — reduzir antes da próxima saída (rateio ref. ~${num(consumoReferenciaRateio)}/mês).`,
     );
   }
 
   if (!acoesSemana.length) {
-    acoesSemana.push('Distribuição e estoque dentro do esperado — manter cadência semanal.');
+    acoesSemana.push(
+      `Dentro dos limites: ${pctUsoLimiteMes.toFixed(0)}% do mês · ${pctUsoLimiteSemana.toFixed(0)}% da semana ${resumo.semanaAtual}.`,
+    );
   }
 
   let resumoDecisao: string;
-  if (
+  if (estouroMes > 0 || estouroSemana > 0) {
+    resumoDecisao = `Fora do controle: estouro ${estouroMes > 0 ? `mensal +${num(estouroMes)}` : ''}${estouroMes > 0 && estouroSemana > 0 ? ' · ' : ''}${estouroSemana > 0 ? `semanal +${num(estouroSemana)}` : ''} (teto ${num(limiteMensal)}/mês).`;
+  } else if (
+    nivelLimiteMes === 'verde' &&
+    nivelLimiteSemana === 'verde' &&
     autonomiaMeses != null &&
-    autonomiaMeses >= mesesIdeais &&
-    resumo.pctRitmoGeral >= 90
+    autonomiaMeses >= mesesIdeais
   ) {
-    resumoDecisao = `Saúde estável: ~${autonomiaMeses.toFixed(1)} meses de estoque (÷ ${num(metaOperacionalMensal)}/mês) e ritmo alinhado à meta de ${metaOperacionalMensal}.`;
-  } else if (autonomiaMeses != null && autonomiaMeses < 2) {
-    resumoDecisao = `Atenção: autonomia ~${autonomiaMeses.toFixed(1)} mês(es) na meta ${metaOperacionalMensal} (meta ${mesesIdeais}). Empenho: ${empenho.restante.toLocaleString('pt-BR')} restantes.`;
+    resumoDecisao = `Controle estável: ${pctUsoLimiteMes.toFixed(0)}% do teto mensal · ${pctUsoLimiteSemana.toFixed(0)}% da semana · ~${autonomiaMeses.toFixed(1)} mês(es) de estoque.`;
   } else {
-    resumoDecisao = `Autonomia ~${autonomiaMeses?.toFixed(1) ?? '—'} mês(es) (meta ${metaOperacionalMensal}/mês) · proposta ${resumo.pctMes.toFixed(0)}% · ritmo ${resumo.pctRitmoGeral.toFixed(0)}% · empenho ${empenho.restante.toLocaleString('pt-BR')} restantes.`;
+    resumoDecisao = `Uso ${pctUsoLimiteMes.toFixed(0)}% do teto ${num(limiteMensal)} · S${resumo.semanaAtual} ${pctUsoLimiteSemana.toFixed(0)}% · margem ${num(margemMes)} no mês · empenho ${num(empenho.restante)} restantes.`;
   }
 
   return {
     mesesIdeais,
-    metaOperacionalMensal,
+    limiteMensal,
+    limiteSemanal,
     consumoReferenciaRateio,
     consumoFonteRateio,
     saldoAtual: saldo,
@@ -261,23 +294,24 @@ export function buildSaudeDistribuicao(
     autonomiaSemanas,
     gapMesesParaIdeal,
     nivelEstoque,
+    nivelLimiteMes,
+    nivelLimiteSemana,
     indiceSaudeGeral,
-    propostaMensal: metaOperacionalMensal,
-    pctPropostaMes: resumo.pctMes,
-    pctRitmoAcumulado: resumo.pctRitmoGeral,
-    semanasRestantes,
-    faltaNoMes,
-    envioIdealPorSemana,
-    ajusteSemanalCestas,
-    ritmoSemanalAtual: Math.round(ritmoSemanalAtual),
-    saldoAlvoMesesIdeais,
-    deficitSaldoParaIdeal,
+    pctUsoLimiteMes,
+    pctUsoLimiteSemana,
+    estouroMes,
+    estouroSemana,
+    margemMes,
+    margemSemana,
+    enviadoMes: resumo.enviadoMesTotal,
+    enviadoSemana: resumo.enviadoSemanaAtual,
     empenho,
     acoesSemana,
     resumoDecisao,
   };
 }
 
-function num(n: number): string {
+function num(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return '—';
   return n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 }
