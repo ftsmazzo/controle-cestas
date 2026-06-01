@@ -64,7 +64,9 @@ Semanas civis: 1–7, 8–14, 15–21, 22–28, 29–fim do mês.
 
 **Granularidade:** CRAS e CREAS são *famílias*; o monitoramento opera nas *unidades* (CRAS 1…12, CREAS I…V). Saldo é registrado semana a semana (`historicoSaldo`).
 
-**Import PDF Coderp:** em `/admin/monitoramento`, envie o relatório RME “Consumo por requisitante” — o sistema mapeia SETOR CRAS1, CREAS II, etc. para as unidades e preenche o monitoramento (opcional: atualizar histórico mensal).
+**Carga histórica (uma vez):** em `/admin/monitoramento`, bloco **“Carga histórica — planilha semanal”** — envie o Excel/PDF operacional (SEMANA 1–4 + CRAS 1, Creas I…), ex. Mar–Ago/2025. Não usa “Requisitante” do Coderp.
+
+**Import PDF Coderp (oficial):** no bloco abaixo, relatório RME “Consumo por requisitante” — para conferência ou períodos oficiais após a carga histórica.
 
 ## Por serviço (distribuição)
 

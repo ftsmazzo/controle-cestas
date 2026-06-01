@@ -11,6 +11,7 @@ import {
 import { getYearMonth, parseMonthKey } from '@shared/monthUtils';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import CoderpPdfImport from './CoderpPdfImport';
+import WeeklyHistoricImport from './WeeklyHistoricImport';
 import './EmergencialMonitorPanel.css';
 
 function num(n: number | null | undefined, dec = 0): string {
@@ -261,10 +262,13 @@ export default function EmergencialMonitorPanel({
       </section>
 
       {!readOnly && (
-        <CoderpPdfImport
-          data={data}
-          onApply={(next) => onUpdate(next)}
-        />
+        <>
+          <WeeklyHistoricImport
+            data={data}
+            onApply={(next) => onUpdate(next)}
+          />
+          <CoderpPdfImport data={data} onApply={(next) => onUpdate(next)} />
+        </>
       )}
 
       {resumo.historicoSaldo.length > 0 && (
