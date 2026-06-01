@@ -3,6 +3,8 @@ import {
   estouroAcimaLimite,
   margemAteLimite,
   pctUsoLimite,
+  projecaoFimMes,
+  semanasAteLimite,
 } from './limitesControle.js';
 import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
 import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
@@ -74,6 +76,12 @@ export interface EquipamentoMonitorRow {
   pctSemana: number;
   /** legado: % acumulado no período de controle — preferir pctMes/pctSemana */
   pctRitmo: number;
+  /** Projeção de envio até fim do mês ao ritmo recente */
+  projecaoMes: number;
+  pctProjecaoMes: number;
+  estouroProjetadoMes: number;
+  /** Texto curto para decisão na próxima semana */
+  alertaEquip: string | null;
   status: MonitorEquipStatus;
 }
 
@@ -95,6 +103,15 @@ export interface MonitoramentoResumo {
   estouroSemana: number;
   margemMes: number;
   margemSemana: number;
+  /** Projeção total do mês ao ritmo médio recente */
+  projecaoMesTotal: number;
+  pctProjecaoMes: number;
+  estouroProjetadoMes: number;
+  ritmoSemanalMedio: number;
+  semanasRestantesNoMes: number;
+  /** Semana civil em que o teto mensal estoura (projeção) */
+  semanaProjetadaEstouro: number | null;
+  autonomiaDiasSaldo: number | null;
   metaAcumuladaEsperada: number;
   enviadoAcumulado: number;
   pctRitmoGeral: number;
@@ -333,9 +350,38 @@ export function upsertWeeklyQty(
   return { ...mon, entradasSemanais: entradas };
 }
 
-function statusFromLimites(pctMes: number, pctSemana: number): MonitorEquipStatus {
-  if (pctMes > 100 || pctSemana > 100) return 'critico';
-  if (pctMes > 90 || pctSemana > 90) return 'atencao';
+function alertaEquipamentoTexto(
+  pctMes: number,
+  pctSemana: number,
+  pctProjecao: number,
+  estouroProj: number,
+  semanasRestantes: number,
+): string | null {
+  if (pctMes > 100 || pctSemana > 100) {
+    return 'Já acima do teto — reduzir na próxima semana.';
+  }
+  if (pctProjecao > 100 || estouroProj > 0) {
+    return `Ritmo atual estoura o teto do mês antes do fim (projeção ${pctProjecao.toFixed(0)}%). Ajustar na próxima semana.`;
+  }
+  if (pctSemana > 90) {
+    return 'Semana perto do teto — não repetir este volume.';
+  }
+  if (pctProjecao > 88) {
+    return `Projeção ${pctProjecao.toFixed(0)}% do teto — ajustar já na próxima semana.`;
+  }
+  if (pctMes > 85 && pctSemana > 70) {
+    return 'Uso mensal e semanal altos — monitorar de perto.';
+  }
+  return null;
+}
+
+function statusFromLimites(
+  pctMes: number,
+  pctSemana: number,
+  pctProjecao: number,
+): MonitorEquipStatus {
+  if (pctMes > 100 || pctSemana > 100 || pctProjecao > 100) return 'critico';
+  if (pctProjecao > 92 || pctMes > 90 || pctSemana > 90) return 'atencao';
   return 'ok';
 }
 
@@ -392,6 +438,8 @@ export function buildMonitoramentoResumo(
     }
   }
 
+  const semanasRestantesNoMes = Math.max(0, semanasNoMes - semanaAtual);
+
   const units = consumptionUnits(payload.services);
   const equipamentos: EquipamentoMonitorRow[] = units.map((s) => {
     const metaMensal = metaPorEquip.get(s.id) ?? 0;
@@ -421,8 +469,31 @@ export function buildMonitoramentoResumo(
     const pctSemana = pctUsoLimite(enviadoSemanaAtual, metaSemanal);
     const pctRitmo =
       metaAcumEquip > 0 ? (enviadoRitmo / metaAcumEquip) * 100 : 0;
+    const ritmoEquip =
+      semanasNoPeriodoControleVal > 0
+        ? enviadoRitmo / semanasNoPeriodoControleVal
+        : enviadoSemanaAtual;
+    const projecaoMes = projecaoFimMes(
+      enviadoNoControle,
+      ritmoEquip,
+      semanasRestantesNoMes,
+    );
+    const pctProjecaoMes = pctUsoLimite(projecaoMes, metaMensal);
+    const estouroProjetadoMes = estouroAcimaLimite(projecaoMes, metaMensal);
+    const alertaEquip =
+      metaMensal <= 0
+        ? null
+        : alertaEquipamentoTexto(
+            pctMes,
+            pctSemana,
+            pctProjecaoMes,
+            estouroProjetadoMes,
+            semanasRestantesNoMes,
+          );
     const status: MonitorEquipStatus =
-      metaMensal <= 0 ? 'sem_meta' : statusFromLimites(pctMes, pctSemana);
+      metaMensal <= 0
+        ? 'sem_meta'
+        : statusFromLimites(pctMes, pctSemana, pctProjecaoMes);
     return {
       servicoId: s.id,
       servicoNome: s.nome,
@@ -435,6 +506,10 @@ export function buildMonitoramentoResumo(
       pctMes,
       pctSemana,
       pctRitmo,
+      projecaoMes,
+      pctProjecaoMes,
+      estouroProjetadoMes,
+      alertaEquip,
       status,
     };
   });
@@ -470,13 +545,36 @@ export function buildMonitoramentoResumo(
       ? (enviadoAcumulado / metaAcumuladaEsperada) * 100
       : 0;
 
-  const ritmoSemanal =
+  const ritmoSemanalMedio =
     semanasNoPeriodoControleVal > 0
       ? enviadoAcumulado / semanasNoPeriodoControleVal
-      : limiteSemanal;
+      : enviadoSemanaAtual > 0
+        ? enviadoSemanaAtual
+        : 0;
+  const projecaoMesTotal = projecaoFimMes(
+    enviadoMesTotal,
+    ritmoSemanalMedio,
+    semanasRestantesNoMes,
+  );
+  const pctProjecaoMes = pctUsoLimite(projecaoMesTotal, metaMesTotal);
+  const estouroProjetadoMes = estouroAcimaLimite(projecaoMesTotal, metaMesTotal);
+  const semanasAteTeto = semanasAteLimite(margemMes, ritmoSemanalMedio);
+  const semanaProjetadaEstouro =
+    semanasAteTeto != null && semanasAteTeto < semanasRestantesNoMes + 0.5
+      ? Math.min(
+          semanasNoMes,
+          semanaAtual + Math.max(1, Math.ceil(semanasAteTeto)),
+        )
+      : null;
+
+  const ritmoSemanal = ritmoSemanalMedio || limiteSemanal;
   const saldo = mon.saldoAtual;
   const autonomiaSemanasSaldo =
     saldo != null && ritmoSemanal > 0 ? saldo / ritmoSemanal : null;
+  const autonomiaDiasSaldo =
+    autonomiaSemanasSaldo != null
+      ? Math.round(autonomiaSemanasSaldo * 7)
+      : null;
   const faltam = margemMes;
   const projecaoSemanasAteMeta =
     ritmoSemanal > 0 && margemMes > 0
@@ -510,6 +608,44 @@ export function buildMonitoramentoResumo(
       nivel: 'alto',
       titulo: `Semana ${semanaAtual} perto do teto`,
       descricao: `${enviadoSemanaAtual}/${limiteSemanal} cestas (${pctLimiteSemana.toFixed(0)}%). Margem semanal: ${margemSemana}.`,
+    });
+  }
+
+  const ritmoAltoProjecao = equipamentos.filter(
+    (e) =>
+      e.metaMensal > 0 &&
+      e.pctMes <= 100 &&
+      e.pctSemana <= 95 &&
+      e.pctProjecaoMes > 95,
+  );
+  if (ritmoAltoProjecao.length) {
+    alertas.push({
+      nivel: 'alto',
+      titulo: `${ritmoAltoProjecao.length} unidade(s) verdes mas com ritmo perigoso`,
+      descricao: `${ritmoAltoProjecao
+        .slice(0, 4)
+        .map((e) => `${e.servicoNome} (proj. ${e.pctProjecaoMes.toFixed(0)}%)`)
+        .join('; ')} — se mantiver o ritmo da semana, estoura o teto do mês.`,
+    });
+  }
+
+  if (pctProjecaoMes > 100 && estouroProjetadoMes > 0 && estouroMes === 0) {
+    alertas.push({
+      nivel: 'critico',
+      titulo: 'Projeção: teto mensal antes do fim do mês',
+      descricao: `Ritmo ~${ritmoSemanalMedio.toFixed(0)}/sem projeta ${projecaoMesTotal} cestas (teto ${metaMesTotal})${semanaProjetadaEstouro != null ? ` — estouro previsto na S${semanaProjetadaEstouro}` : ''}. Ajuste já na próxima semana.`,
+    });
+  }
+
+  if (
+    autonomiaSemanasSaldo != null &&
+    autonomiaSemanasSaldo < semanasRestantesNoMes + 1 &&
+    saldo != null
+  ) {
+    alertas.push({
+      nivel: 'critico',
+      titulo: 'Saldo não chega ao fim do mês',
+      descricao: `Com ~${ritmoSemanalMedio.toFixed(0)} cestas/sem, o saldo ${saldo} acaba em ~${autonomiaSemanasSaldo.toFixed(1)} semana(s) (${autonomiaDiasSaldo ?? '—'} dias); faltam ${semanasRestantesNoMes + 1} semana(s) no mês.`,
     });
   }
 
@@ -597,6 +733,13 @@ export function buildMonitoramentoResumo(
     estouroSemana,
     margemMes,
     margemSemana,
+    projecaoMesTotal,
+    pctProjecaoMes,
+    estouroProjetadoMes,
+    ritmoSemanalMedio,
+    semanasRestantesNoMes,
+    semanaProjetadaEstouro,
+    autonomiaDiasSaldo,
     metaAcumuladaEsperada,
     enviadoAcumulado,
     pctRitmoGeral,

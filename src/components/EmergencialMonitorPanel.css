@@ -187,3 +187,34 @@
   align-items: center;
   gap: 0.5rem;
 }
+
+.cell-over-limit {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.cell-near-limit {
+  color: #a16207;
+  font-weight: 600;
+}
+
+.cell-projecao-alerta {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.row-ritmo-perigoso td:first-child {
+  border-left: 3px solid #ea580c;
+}
+
+.badge-ritmo {
+  display: inline-block;
+  margin-left: 0.25rem;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: #ffedd5;
+  color: #9a3412;
+  font-weight: 700;
+  vertical-align: middle;
+}

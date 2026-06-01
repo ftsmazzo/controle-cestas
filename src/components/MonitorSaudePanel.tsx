@@ -24,10 +24,21 @@ const FONTE_RATEIO_LABEL: Record<SaudeDistribuicao['consumoFonteRateio'], string
 
 function nivelGeral(saude: SaudeDistribuicao): SaudeNivel {
   if (saude.estouroMes > 0 || saude.estouroSemana > 0) return 'vermelho';
+  if (
+    saude.estouroProjetadoMes > 0 ||
+    (saude.autonomiaSemanasSaldo != null &&
+      saude.autonomiaSemanasSaldo < saude.semanasRestantesNoMes + 1)
+  ) {
+    return 'vermelho';
+  }
   if (saude.nivelLimiteMes === 'vermelho' || saude.nivelLimiteSemana === 'vermelho') {
     return 'vermelho';
   }
-  if (saude.nivelLimiteMes === 'amarelo' || saude.nivelLimiteSemana === 'amarelo') {
+  if (
+    saude.pctProjecaoMes > 92 ||
+    saude.nivelLimiteMes === 'amarelo' ||
+    saude.nivelLimiteSemana === 'amarelo'
+  ) {
     return 'amarelo';
   }
   return saude.nivelEstoque;
@@ -60,6 +71,54 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
         </span>
       </div>
       <p className="hint monitor-saude-lead">{saude.resumoDecisao}</p>
+
+      {(saude.autonomiaSemanasSaldo != null || saude.pctProjecaoMes > 0) && (
+        <div className={`monitor-saude-prazo monitor-saude-prazo--${nivel}`}>
+          <h4>Prazo para decisão (semana e mês)</h4>
+          {saude.autonomiaSemanasSaldo != null && (
+            <p className="monitor-saude-prazo-destaque">
+              <strong>
+                Cestas no Banco acabam em ~{num(saude.autonomiaSemanasSaldo, 1)} semana(s)
+              </strong>
+              {saude.autonomiaDiasSaldo != null && (
+                <> (~{saude.autonomiaDiasSaldo} dias)</>
+              )}
+              {` ao ritmo ${num(saude.ritmoSemanalConsumo, 0)}/sem`}
+              {saude.semanasRestantesNoMes > 0 && (
+                <>
+                  {' '}
+                  · faltam <strong>{saude.semanasRestantesNoMes}</strong> semana(s) no mês
+                </>
+              )}
+              {saude.autonomiaSemanasSaldo < saude.semanasRestantesNoMes + 1 && (
+                <span className="monitor-saude-prazo-alerta">
+                  {' '}
+                  — saldo não chega ao fim do mês
+                </span>
+              )}
+            </p>
+          )}
+          {saude.pctProjecaoMes > 0 && (
+            <p className="monitor-saude-prazo-proj">
+              Projeção fim do mês:{' '}
+              <strong>{num(saude.projecaoMesTotal, 0)}</strong> cestas (
+              {num(saude.pctProjecaoMes, 0)}% do teto)
+              {saude.estouroProjetadoMes > 0 && (
+                <>
+                  {' '}
+                  · estouro previsto <strong>+{num(saude.estouroProjetadoMes, 0)}</strong>
+                </>
+              )}
+              {saude.semanaProjetadaEstouro != null && (
+                <>
+                  {' '}
+                  · teto estoura na <strong>S{saude.semanaProjetadaEstouro}</strong>
+                </>
+              )}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="monitor-saude-autonomia">
         <div className="monitor-saude-autonomia-labels">
@@ -126,6 +185,20 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
             uso {num(saude.pctUsoLimiteSemana, 0)}% · {num(saude.enviadoSemana, 0)} enviadas
           </span>
         </article>
+        <article
+          className={`monitor-saude-card${saude.estouroProjetadoMes > 0 ? ' monitor-saude-card--over' : ''}`}
+        >
+          <span className="monitor-saude-card-label">Projeção fim do mês</span>
+          <strong>{num(saude.projecaoMesTotal, 0)}</strong>
+          <span className="monitor-saude-card-sub">
+            {num(saude.pctProjecaoMes, 0)}% do teto
+            {saude.semanaProjetadaEstouro != null
+              ? ` · estouro S${saude.semanaProjetadaEstouro}`
+              : saude.estouroProjetadoMes > 0
+                ? ` · +${num(saude.estouroProjetadoMes, 0)}`
+                : ''}
+          </span>
+        </article>
         <article className="monitor-saude-card">
           <span className="monitor-saude-card-label">Ref. rateio</span>
           <strong>{num(saude.consumoReferenciaRateio, 0)}</strong>
@@ -184,15 +257,12 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
 
       <div className="monitor-saude-legend">
         <span>
-          <i className="dot dot-estoque" /> Estoque (45%): saldo ÷ teto{' '}
+          <i className="dot dot-estoque" /> Estoque (35%): saldo ÷ teto{' '}
           {num(saude.limiteMensal, 0)}/mês
         </span>
         <span>
-          <i className="dot dot-ritmo" /> Teto mensal (30%): estouro penaliza índice
-        </span>
-        <span>
-          <i className="dot dot-meta" /> Teto semanal (15%): S{resumo.semanaAtual} ·
-          empenho (10%)
+          <i className="dot dot-ritmo" /> Teto mês (25%) · projeção (15%) · semana S
+          {resumo.semanaAtual} (15%) · empenho (10%)
         </span>
       </div>
     </section>

@@ -123,8 +123,18 @@ export default function EmergencialMonitorPanel({
     );
   };
 
-  const renderEquipRow = (eq: EquipamentoMonitorRow) => (
-    <tr key={eq.servicoId} className={`row-status-${eq.status}`}>
+  const renderEquipRow = (eq: EquipamentoMonitorRow) => {
+    const ritmoPerigoso =
+      eq.metaMensal > 0 &&
+      eq.pctMes <= 100 &&
+      eq.pctSemana <= 95 &&
+      eq.pctProjecaoMes > 95;
+    return (
+    <tr
+      key={eq.servicoId}
+      className={`row-status-${eq.status}${ritmoPerigoso ? ' row-ritmo-perigoso' : ''}`}
+      title={eq.alertaEquip ?? undefined}
+    >
       <td className="cell-unidade">{eq.servicoNome}</td>
       <td>{eq.metaMensal > 0 ? num(eq.metaMensal) : '—'}</td>
       <td>{eq.metaSemanal > 0 ? num(eq.metaSemanal) : '—'}</td>
@@ -171,10 +181,40 @@ export default function EmergencialMonitorPanel({
       <td className={eq.pctMes > 100 ? 'cell-over-limit' : ''}>
         {eq.metaMensal > 0 ? `${num(eq.pctMes, 0)}%` : '—'}
       </td>
+      <td
+        className={
+          eq.pctSemana > 100
+            ? 'cell-over-limit'
+            : eq.pctSemana > 90
+              ? 'cell-near-limit'
+              : ''
+        }
+      >
+        {eq.metaSemanal > 0 ? `${num(eq.pctSemana, 0)}%` : '—'}
+      </td>
+      <td
+        className={
+          eq.pctProjecaoMes > 100
+            ? 'cell-over-limit'
+            : eq.pctProjecaoMes > 92 || ritmoPerigoso
+              ? 'cell-projecao-alerta'
+              : ''
+        }
+        title={eq.alertaEquip ?? undefined}
+      >
+        {eq.metaMensal > 0 ? `${num(eq.pctProjecaoMes, 0)}%` : '—'}
+        {ritmoPerigoso && eq.status === 'ok' && (
+          <span className="badge badge-ritmo" title={eq.alertaEquip ?? ''}>
+            Ritmo
+          </span>
+        )}
+      </td>
       <td>
         <span className={`badge badge-${eq.status}`}>
           {eq.status === 'ok'
-            ? 'OK'
+            ? ritmoPerigoso
+              ? 'Ritmo ↑'
+              : 'OK'
             : eq.status === 'atencao'
               ? 'Perto teto'
               : eq.status === 'critico'
@@ -184,6 +224,7 @@ export default function EmergencialMonitorPanel({
       </td>
     </tr>
   );
+  };
 
   const setWeekly = (
     servicoId: string,
@@ -201,9 +242,14 @@ export default function EmergencialMonitorPanel({
   };
 
   const riskClass =
-    resumo.estouroMes > 0 || resumo.estouroSemana > 0 || resumo.pctMes > 100
+    resumo.estouroMes > 0 ||
+    resumo.estouroSemana > 0 ||
+    resumo.pctMes > 100 ||
+    resumo.estouroProjetadoMes > 0
       ? 'critico'
-      : resumo.pctMes > 90 || resumo.pctLimiteSemana > 90
+      : resumo.pctMes > 90 ||
+          resumo.pctLimiteSemana > 90 ||
+          resumo.pctProjecaoMes > 92
         ? 'atencao'
         : 'ok';
 
@@ -356,13 +402,46 @@ export default function EmergencialMonitorPanel({
                 : ` · margem ${num(resumo.margemSemana)}`}
             </span>
           </article>
-          <article className="emerg-kpi">
+          <article
+            className={`emerg-kpi${
+              resumo.autonomiaSemanasSaldo != null &&
+              resumo.autonomiaSemanasSaldo < resumo.semanasRestantesNoMes + 1
+                ? ' emerg-kpi--over'
+                : ''
+            }`}
+          >
             <span className="emerg-kpi-label">Saldo / autonomia</span>
             <strong>{num(resumo.saldoAtual)}</strong>
             <span className="emerg-kpi-sub">
-              {resumo.autonomiaSemanasSaldo != null
-                ? `~${num(resumo.autonomiaSemanasSaldo, 1)} sem.`
-                : 'Informe saldo'}
+              {resumo.autonomiaSemanasSaldo != null ? (
+                <>
+                  ~{num(resumo.autonomiaSemanasSaldo, 1)} sem.
+                  {resumo.autonomiaDiasSaldo != null &&
+                    ` (~${resumo.autonomiaDiasSaldo} dias)`}
+                  {resumo.autonomiaSemanasSaldo <
+                    resumo.semanasRestantesNoMes + 1 && ' · não chega ao fim do mês'}
+                </>
+              ) : (
+                'Informe saldo'
+              )}
+            </span>
+          </article>
+          <article
+            className={`emerg-kpi${
+              resumo.estouroProjetadoMes > 0 ? ' emerg-kpi--over' : ''
+            }`}
+          >
+            <span className="emerg-kpi-label">Projeção fim do mês</span>
+            <strong>{num(resumo.projecaoMesTotal)}</strong>
+            <span className="emerg-kpi-sub">
+              {num(resumo.pctProjecaoMes, 0)}% do teto
+              {resumo.semanaProjetadaEstouro != null
+                ? ` · estouro S${resumo.semanaProjetadaEstouro}`
+                : resumo.estouroProjetadoMes > 0
+                  ? ` · +${num(resumo.estouroProjetadoMes)}`
+                  : ''}
+              {' '}
+              · ritmo ~{num(resumo.ritmoSemanalMedio, 0)}/sem
             </span>
           </article>
         </div>
@@ -483,7 +562,11 @@ export default function EmergencialMonitorPanel({
                   ),
                 )}
                 <th rowSpan={2}>Total</th>
-                <th rowSpan={2}>% teto</th>
+                <th rowSpan={2}>% mês</th>
+                <th rowSpan={2}>% sem. {resumo.semanaAtual}</th>
+                <th rowSpan={2} title="Se o ritmo das semanas de controle continuar">
+                  % proj. mês
+                </th>
                 <th rowSpan={2}>Status</th>
               </tr>
             </thead>
@@ -510,6 +593,8 @@ export default function EmergencialMonitorPanel({
                           ? `${num((envFam / metaFam) * 100, 0)}%`
                           : '—'}
                       </td>
+                      <td />
+                      <td />
                       <td />
                     </tr>
                     {fam.itens.map((eq) => renderEquipRow(eq))}
@@ -544,14 +629,28 @@ export default function EmergencialMonitorPanel({
                   <strong>{num(resumo.enviadoMesTotal)}</strong>
                 </td>
                 <td>{num(resumo.pctMes, 0)}%</td>
+                <td>{num(resumo.pctLimiteSemana, 0)}%</td>
+                <td
+                  className={
+                    resumo.pctProjecaoMes > 100
+                      ? 'cell-over-limit'
+                      : resumo.pctProjecaoMes > 92
+                        ? 'cell-projecao-alerta'
+                        : ''
+                  }
+                >
+                  {num(resumo.pctProjecaoMes, 0)}%
+                </td>
                 <td />
               </tr>
             </tfoot>
           </table>
         </div>
         <p className="hint">
-          Envios reais por semana. Teto/sem: cota proporcional do teto{' '}
-          {num(resumo.metaMesTotal)} (fixos reservados primeiro). Acima de 100% = estouro.
+          Envios reais por semana. <strong>% sem.</strong> = uso do teto na semana{' '}
+          {resumo.semanaAtual}. <strong>% proj. mês</strong> = se o ritmo do período de
+          controle continuar até o fim do mês (verde na semana pode ainda estourar o teto).
+          Badge <em>Ritmo</em> = semana ok, mas projeção alta — ajustar na próxima semana.
         </p>
       </section>
 

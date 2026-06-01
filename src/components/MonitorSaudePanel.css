@@ -56,6 +56,47 @@
   font-size: 1rem;
 }
 
+.monitor-saude-prazo {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+}
+
+.monitor-saude-prazo--vermelho {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.monitor-saude-prazo--amarelo {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.monitor-saude-prazo h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.monitor-saude-prazo-destaque {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.monitor-saude-prazo-proj {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.monitor-saude-prazo-alerta {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .monitor-saude-autonomia {
   margin-bottom: 1.25rem;
 }

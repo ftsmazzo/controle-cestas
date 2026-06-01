@@ -28,3 +28,22 @@ export function nivelPorUsoLimite(pctUso: number): NivelLimite {
   if (pctUso > 90) return 'atencao';
   return 'ok';
 }
+
+/** Projeção: mantém ritmo médio semanal até o fim do mês civil */
+export function projecaoFimMes(
+  enviadoAteAgora: number,
+  ritmoMedioSemanal: number,
+  semanasRestantes: number,
+): number {
+  if (semanasRestantes <= 0) return Math.round(enviadoAteAgora);
+  return Math.round(enviadoAteAgora + ritmoMedioSemanal * semanasRestantes);
+}
+
+/** Semanas até atingir o limite (null se ritmo ≤ 0 ou já estourou) */
+export function semanasAteLimite(
+  margem: number,
+  ritmoSemanal: number,
+): number | null {
+  if (margem <= 0 || ritmoSemanal <= 0) return null;
+  return margem / ritmoSemanal;
+}
