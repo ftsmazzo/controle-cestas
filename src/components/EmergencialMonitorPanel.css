@@ -145,3 +145,30 @@
 .emerg-meta-ref {
   background: #f8fafc;
 }
+
+.row-familia td {
+  background: #f1f5f9;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.familia-sub {
+  margin-left: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.cell-unidade {
+  padding-left: 1.25rem;
+}
+
+.coderp-import .row-unmatched {
+  background: #fff7ed;
+}
+
+.checkbox-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem;
+}

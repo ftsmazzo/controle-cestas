@@ -1,16 +1,17 @@
 import { mergeAppSettings } from './appSettings.js';
 import { mergeEmergencialMonitoring } from './emergencyMonitoring.js';
+import { ensureFamiliaHierarchy, enrichServiceDef } from './serviceFamilies.js';
 import { defaultEmergencialConfig, defaultRegularConfig } from './processTypes.js';
 import { sanitizeProcessPlans } from './processSanitize.js';
 import type { ProcessoEmergencialConfig } from './processTypes.js';
 import type { ServiceDef, ServicesPayload } from './serviceTypes.js';
 
 function normalizeUnit(s: ServiceDef): ServiceDef {
-  return {
+  return enrichServiceDef({
     ...s,
-    level: s.level ?? 'equipamento',
+    level: s.level ?? 'unidade',
     parentId: s.parentId ?? null,
-  };
+  });
 }
 
 export function normalizeServicesPayload(
@@ -72,7 +73,7 @@ export function normalizeServicesPayload(
   regular.totalContratoAnual = settings.contratoAnual;
 
   return {
-    services: (raw.services ?? []).map(normalizeUnit),
+    services: ensureFamiliaHierarchy((raw.services ?? []).map(normalizeUnit)),
     history,
     plans,
     emergencial,

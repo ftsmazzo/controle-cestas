@@ -2,6 +2,11 @@ import { allocatePlans } from './allocation.js';
 import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
 import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
 import { validMonthKeysForPayload } from './payloadAnalysis.js';
+import {
+  consumptionUnits,
+  groupByFamilia,
+  type FamiliaGroup,
+} from './serviceFamilies.js';
 import type { ProcessoRiscoItem } from './processTypes.js';
 import type { MonthAllocationResult, ServicesPayload } from './serviceTypes.js';
 import type { ProcessoEmergencialConfig } from './processTypes.js';
@@ -15,12 +20,20 @@ export interface EntradaSemanalEquipamento {
   quantidade: number;
 }
 
+export interface SaldoSemanalRegistro {
+  mes: string;
+  semana: number;
+  saldo: number;
+  registradoEm: string;
+}
+
 export interface EmergencialMonitoramento {
   saldoAtual: number | null;
   saldoAtualizadoEm: string | null;
   entradasSemanais: EntradaSemanalEquipamento[];
   /** Mês em acompanhamento; se vazio, usa o 1º plano emergencial ou o mês civil atual */
   mesAtivo: string | null;
+  historicoSaldo: SaldoSemanalRegistro[];
 }
 
 export type MonitorEquipStatus = 'ok' | 'atencao' | 'critico' | 'sem_meta';
@@ -28,6 +41,7 @@ export type MonitorEquipStatus = 'ok' | 'atencao' | 'critico' | 'sem_meta';
 export interface EquipamentoMonitorRow {
   servicoId: string;
   servicoNome: string;
+  familiaCodigo?: string;
   metaMensal: number;
   metaSemanal: number;
   semanas: Record<number, number>;
@@ -55,6 +69,8 @@ export interface MonitoramentoResumo {
   projecaoSemanasAteMeta: number | null;
   alertas: ProcessoRiscoItem[];
   equipamentos: EquipamentoMonitorRow[];
+  familias: FamiliaGroup<EquipamentoMonitorRow>[];
+  historicoSaldo: SaldoSemanalRegistro[];
   allocation: MonthAllocationResult | null;
 }
 
@@ -64,6 +80,7 @@ export function defaultEmergencialMonitoring(): EmergencialMonitoramento {
     saldoAtualizadoEm: null,
     entradasSemanais: [],
     mesAtivo: null,
+    historicoSaldo: [],
   };
 }
 
@@ -82,6 +99,34 @@ export function mergeEmergencialMonitoring(
         : base.saldoAtualizadoEm,
     mesAtivo: partial.mesAtivo !== undefined ? partial.mesAtivo : base.mesAtivo,
     entradasSemanais: partial.entradasSemanais ?? base.entradasSemanais,
+    historicoSaldo: partial.historicoSaldo ?? base.historicoSaldo ?? [],
+  };
+}
+
+export function registerSaldoSemanal(
+  mon: EmergencialMonitoramento,
+  mes: string,
+  semana: number,
+  saldo: number,
+): EmergencialMonitoramento {
+  const registradoEm = new Date().toISOString();
+  const historico = [...(mon.historicoSaldo ?? [])];
+  const mesKey = parseMonthKey(mes);
+  const idx = historico.findIndex(
+    (h) => parseMonthKey(h.mes) === mesKey && h.semana === semana,
+  );
+  const entry: SaldoSemanalRegistro = { mes, semana, saldo, registradoEm };
+  if (idx >= 0) historico[idx] = entry;
+  else historico.push(entry);
+  historico.sort(
+    (a, b) =>
+      parseMonthKey(a.mes) - parseMonthKey(b.mes) || a.semana - b.semana,
+  );
+  return {
+    ...mon,
+    saldoAtual: saldo,
+    saldoAtualizadoEm: registradoEm,
+    historicoSaldo: historico,
   };
 }
 
@@ -209,7 +254,8 @@ export function buildMonitoramentoResumo(
     }
   }
 
-  const equipamentos: EquipamentoMonitorRow[] = payload.services.map((s) => {
+  const units = consumptionUnits(payload.services);
+  const equipamentos: EquipamentoMonitorRow[] = units.map((s) => {
     const metaMensal = metaPorEquip.get(s.id) ?? 0;
     const metaSemanal =
       metaMensal > 0 ? Math.round(metaMensal / semanasNoMes) : 0;
@@ -229,6 +275,7 @@ export function buildMonitoramentoResumo(
     return {
       servicoId: s.id,
       servicoNome: s.nome,
+      familiaCodigo: s.familiaCodigo ?? undefined,
       metaMensal,
       metaSemanal,
       semanas,
@@ -332,6 +379,8 @@ export function buildMonitoramentoResumo(
     });
   }
 
+  const familias = groupByFamilia(equipamentos, payload.services);
+
   return {
     mes,
     semanaAtual,
@@ -348,6 +397,8 @@ export function buildMonitoramentoResumo(
     projecaoSemanasAteMeta,
     alertas,
     equipamentos,
+    familias,
+    historicoSaldo: mon.historicoSaldo ?? [],
     allocation,
   };
 }

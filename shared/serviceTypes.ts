@@ -1,14 +1,21 @@
 import type { AppSettings } from './appSettings.js';
 import type { AssistancePayload } from './assistanceTypes.js';
 
-export type ConsumptionLevel = 'equipamento' | 'servico';
+/** familia = CRAS/CREAS (grupo); unidade/equipamento = CRAS 1, CREAS II…; servico = filho futuro */
+export type ConsumptionLevel =
+  | 'familia'
+  | 'unidade'
+  | 'equipamento'
+  | 'servico';
 
-/** Unidade de consumo (equipamento hoje; serviço filho no futuro, ex. 12 CRAS) */
+/** Unidade de consumo ou família agregadora */
 export interface ServiceDef {
   id: string;
   nome: string;
   level?: ConsumptionLevel;
-  /** Equipamento pai quando level === 'servico' */
+  /** CRAS, CREAS, SAICA… */
+  familiaCodigo?: string | null;
+  /** Família pai (unidade → familia-cras) ou equipamento pai (servico → unidade) */
   parentId?: string | null;
   /** Não pode ter alocação reduzida abaixo da cota */
   fixo: boolean;

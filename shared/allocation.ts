@@ -3,6 +3,7 @@ import {
   pickWindowKeys,
   monthKeysToLabels,
 } from './analysisWindow.js';
+import { consumptionUnits } from './serviceFamilies.js';
 import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
 import { suggestPlanningMonths } from './planningMonths.js';
 import type {
@@ -102,6 +103,7 @@ export function allocateMonth(
   history: ServiceMonthRecord[],
   options?: AllocateOptions,
 ): MonthAllocationResult {
+  const units = consumptionUnits(services);
   const windowN = options?.mediaWindowMonths;
   let histForMedia = history;
   let mesesJanelaUsados: string[] = [];
@@ -132,7 +134,7 @@ export function allocateMonth(
   histForMedia = historyForMonthKeys(history, picked);
   mesesJanelaUsados = monthKeysToLabels(picked);
 
-  const stats = computeServiceStats(histForMedia, services.map((s) => s.id));
+  const stats = computeServiceStats(histForMedia, units.map((s) => s.id));
   const statsMap = new Map(stats.map((s) => [s.servicoId, s]));
 
   const linhasDraft: {
@@ -141,7 +143,7 @@ export function allocateMonth(
     pct: number;
     minimo: number;
     fixo: boolean;
-  }[] = services.map((svc) => {
+  }[] = units.map((svc) => {
     const st = statsMap.get(svc.id);
     const media = st?.mediaHistorica ?? 0;
     const pct = st?.participacaoPct ?? 0;

@@ -1,4 +1,7 @@
+import { consumptionUnits, isUnidadeConsumo } from './serviceFamilies.js';
 import type { ServiceDef, ServiceMonthRecord } from './serviceTypes.js';
+
+export { consumptionUnits, familiaUnits, childrenOf } from './serviceFamilies.js';
 
 /** Agrega histórico de serviços filhos no equipamento pai (fase 3 — 12 CRAS). */
 export function aggregateChildrenToParent(
@@ -33,14 +36,15 @@ export function aggregateChildrenToParent(
 
   const equipHistory = history.filter((h) => {
     const u = byId.get(h.servicoId);
-    return (u?.level ?? 'equipamento') === 'equipamento';
+    return u && isUnidadeConsumo(u) && u.level !== 'servico';
   });
 
   return [...equipHistory, ...parentTotals.values()];
 }
 
+/** Unidades que recebem distribuição (exclui família CRAS/CREAS agregada) */
 export function equipmentUnits(services: ServiceDef[]): ServiceDef[] {
-  return services.filter((s) => (s.level ?? 'equipamento') === 'equipamento');
+  return consumptionUnits(services);
 }
 
 export function serviceUnits(
@@ -53,3 +57,4 @@ export function serviceUnits(
       (parentId == null || s.parentId === parentId),
   );
 }
+

@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   buildMonitoramentoResumo,
+  registerSaldoSemanal,
   upsertWeeklyQty,
   weekDateRangeLabel,
   weekOfMonth,
   type EmergencialMonitoramento,
+  type EquipamentoMonitorRow,
 } from '@shared/emergencyMonitoring';
 import { getYearMonth, parseMonthKey } from '@shared/monthUtils';
 import type { ServicesPayload } from '@shared/serviceTypes';
+import CoderpPdfImport from './CoderpPdfImport';
 import './EmergencialMonitorPanel.css';
 
 function num(n: number | null | undefined, dec = 0): string {
@@ -65,12 +68,68 @@ export default function EmergencialMonitorPanel({
   };
 
   const setSaldo = (saldo: number | null) => {
-    patchMonitoring({
-      ...data.emergencial.monitoramento,
-      saldoAtual: saldo,
-      saldoAtualizadoEm: new Date().toISOString(),
-    });
+    if (saldo == null) {
+      patchMonitoring({
+        ...data.emergencial.monitoramento,
+        saldoAtual: null,
+        saldoAtualizadoEm: new Date().toISOString(),
+      });
+      return;
+    }
+    patchMonitoring(
+      registerSaldoSemanal(
+        data.emergencial.monitoramento,
+        resumo.mes,
+        semanaEdit,
+        saldo,
+      ),
+    );
   };
+
+  const renderEquipRow = (eq: EquipamentoMonitorRow) => (
+    <tr key={eq.servicoId} className={`row-status-${eq.status}`}>
+      <td className="cell-unidade">{eq.servicoNome}</td>
+      <td>{eq.metaMensal > 0 ? num(eq.metaMensal) : '—'}</td>
+      <td>{eq.metaSemanal > 0 ? num(eq.metaSemanal) : '—'}</td>
+      {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map((w) => {
+        const val = eq.semanas[w] ?? 0;
+        const isEdit = !readOnly && w === semanaEdit;
+        return (
+          <td key={w} className={isEdit ? 'cell-edit-week' : ''}>
+            {isEdit ? (
+              <input
+                type="text"
+                inputMode="numeric"
+                className="cell-qty-input"
+                value={val > 0 ? String(val) : ''}
+                placeholder="0"
+                onChange={(e) =>
+                  setWeekly(eq.servicoId, w, parseQty(e.target.value))
+                }
+              />
+            ) : (
+              (val > 0 ? num(val) : '·')
+            )}
+          </td>
+        );
+      })}
+      <td>
+        <strong>{num(eq.totalEnviado)}</strong>
+      </td>
+      <td>{eq.metaMensal > 0 ? `${num(eq.pctMes, 0)}%` : '—'}</td>
+      <td>
+        <span className={`badge badge-${eq.status}`}>
+          {eq.status === 'ok'
+            ? 'OK'
+            : eq.status === 'atencao'
+              ? 'Atenção'
+              : eq.status === 'critico'
+                ? 'Crítico'
+                : '—'}
+        </span>
+      </td>
+    </tr>
+  );
 
   const setWeekly = (
     servicoId: string,
@@ -99,10 +158,9 @@ export default function EmergencialMonitorPanel({
       <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass}`}>
         <h2>Monitoramento emergencial — produção</h2>
         <p className="hint">
-          Acompanhamento <strong>semanal por equipamento</strong> (CRAS 1, CREAS II, SAICA…),
-          alinhado às planilhas do Banco. Metas por equipamento vêm da{' '}
-          <strong>distribuição projetada</strong> do mês ({num(resumo.metaMesTotal)} cestas
-          totais).
+          Acompanhamento <strong>semanal por unidade</strong> — CRAS (12 unidades), CREAS (5
+          unidades) e demais famílias. Metas por unidade vêm da{' '}
+          <strong>distribuição projetada</strong> ({num(resumo.metaMesTotal)} cestas/mês).
           {readOnly
             ? ' Modo consulta — alterações em /admin/monitoramento.'
             : ' Registre envios e saldo toda semana.'}
@@ -202,6 +260,55 @@ export default function EmergencialMonitorPanel({
         </div>
       </section>
 
+      {!readOnly && (
+        <CoderpPdfImport
+          data={data}
+          onApply={(next) => onUpdate(next)}
+        />
+      )}
+
+      {resumo.historicoSaldo.length > 0 && (
+        <section className="panel">
+          <h3>Histórico de saldo (semana a semana)</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mês</th>
+                  <th>Semana</th>
+                  <th>Saldo</th>
+                  <th>Registrado em</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...resumo.historicoSaldo]
+                  .reverse()
+                  .slice(0, 24)
+                  .map((h, i) => {
+                    const hym = getYearMonth(h.mes);
+                    const hy = hym?.year ?? year;
+                    const hm = hym?.month ?? month;
+                    return (
+                    <tr key={`${h.mes}-${h.semana}-${i}`}>
+                      <td>{h.mes}</td>
+                      <td>
+                        S{h.semana} ({weekDateRangeLabel(hy, hm, h.semana)})
+                      </td>
+                      <td>
+                        <strong>{num(h.saldo)}</strong>
+                      </td>
+                      <td>
+                        {new Date(h.registradoEm).toLocaleString('pt-BR')}
+                      </td>
+                    </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {resumo.alertas.length > 0 && (
         <section className="panel">
           <h3>Alertas</h3>
@@ -252,56 +359,36 @@ export default function EmergencialMonitorPanel({
               </tr>
             </thead>
             <tbody>
-              {resumo.equipamentos.map((eq) => (
-                <tr key={eq.servicoId} className={`row-status-${eq.status}`}>
-                  <td>{eq.servicoNome}</td>
-                  <td>{eq.metaMensal > 0 ? num(eq.metaMensal) : '—'}</td>
-                  <td>{eq.metaSemanal > 0 ? num(eq.metaSemanal) : '—'}</td>
-                  {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
-                    (w) => {
-                      const val = eq.semanas[w] ?? 0;
-                      const isEdit = !readOnly && w === semanaEdit;
-                      return (
-                        <td key={w} className={isEdit ? 'cell-edit-week' : ''}>
-                          {isEdit ? (
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              className="cell-qty-input"
-                              value={val > 0 ? String(val) : ''}
-                              placeholder="0"
-                              onChange={(e) =>
-                                setWeekly(
-                                  eq.servicoId,
-                                  w,
-                                  parseQty(e.target.value),
-                                )
-                              }
-                            />
-                          ) : (
-                            val > 0 ? num(val) : '·'
-                          )}
-                        </td>
-                      );
-                    },
-                  )}
-                  <td>
-                    <strong>{num(eq.totalEnviado)}</strong>
-                  </td>
-                  <td>{eq.metaMensal > 0 ? `${num(eq.pctMes, 0)}%` : '—'}</td>
-                  <td>
-                    <span className={`badge badge-${eq.status}`}>
-                      {eq.status === 'ok'
-                        ? 'OK'
-                        : eq.status === 'atencao'
-                          ? 'Atenção'
-                          : eq.status === 'critico'
-                            ? 'Crítico'
-                            : '—'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {resumo.familias.map((fam) => {
+                const metaFam = fam.itens.reduce((s, e) => s + e.metaMensal, 0);
+                const envFam = fam.itens.reduce((s, e) => s + e.totalEnviado, 0);
+                const colSpan = 3 + resumo.semanasNoMes;
+                return (
+                  <Fragment key={fam.familiaId}>
+                    <tr className="row-familia">
+                      <td colSpan={colSpan}>
+                        <strong>{fam.familiaNome}</strong>
+                        <span className="familia-sub">
+                          {fam.itens.length} unidade(s)
+                          {metaFam > 0 ? ` · meta ${num(metaFam)}` : ''}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{num(envFam)}</strong>
+                      </td>
+                      <td>
+                        {metaFam > 0
+                          ? `${num((envFam / metaFam) * 100, 0)}%`
+                          : '—'}
+                      </td>
+                      <td />
+                    </tr>
+                    {fam.itens.map((eq) => renderEquipRow(eq))}
+                  </Fragment>
+                );
+              })}
+              {!resumo.familias.length &&
+                resumo.equipamentos.map((eq) => renderEquipRow(eq))}
             </tbody>
             <tfoot>
               <tr>
