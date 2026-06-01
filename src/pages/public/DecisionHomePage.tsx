@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import CessaoEquipamentosTable from '../../components/CessaoEquipamentosTable';
+import TopEstourosRetomadaCard from '../../components/TopEstourosRetomadaCard';
 
 function num(n: number | null | undefined, dec = 1): string {
   if (n == null || Number.isNaN(n)) return '—';
@@ -134,6 +135,8 @@ export default function DecisionHomePage() {
           </span>
         </article>
       </section>
+
+      <TopEstourosRetomadaCard payload={payload} />
 
       <CessaoEquipamentosTable payload={payload} />
 

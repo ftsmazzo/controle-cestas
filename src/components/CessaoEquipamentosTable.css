@@ -86,6 +86,26 @@
   font-size: 0.85rem;
 }
 
+.cessao-row-familia td {
+  background: #f1f5f9;
+  font-size: 0.9rem;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+.cessao-familia-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.cessao-cell-unidade {
+  padding-left: 1.35rem;
+  font-weight: 500;
+}
+
 .cessao-row--medio td {
   background: #fffbeb;
 }

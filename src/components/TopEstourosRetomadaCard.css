@@ -1,0 +1,109 @@
+.top-estouros-panel {
+  margin-top: 1.25rem;
+}
+
+.top-estouros-head {
+  margin-bottom: 1rem;
+}
+
+.top-estouros-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  color: #9a3412;
+}
+
+.top-estouros-sub {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  max-width: 44rem;
+}
+
+.top-estouros-empty {
+  margin: 0;
+}
+
+.top-estouros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.top-estouro-card {
+  position: relative;
+  padding: 0.85rem 1rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: linear-gradient(180deg, #fff7ed 0%, #fff 100%);
+}
+
+.top-estouro-rank {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #c2410c;
+  opacity: 0.85;
+}
+
+.top-estouro-nome {
+  margin: 0 2rem 0.5rem 0;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.top-estouro-enviado {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.top-estouro-enviado strong {
+  font-size: 1.35rem;
+  color: var(--text);
+}
+
+.top-estouro-metrics {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.top-estouro-metric {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+.top-estouro-metric dt {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
+.top-estouro-metric dd {
+  margin: 0;
+  text-align: right;
+}
+
+.top-estouro-over {
+  color: #b91c1c;
+}
+
+.top-estouro-metric--cota dd {
+  color: #7c2d12;
+}
+
+.top-estouro-metric--media dd {
+  color: #991b1b;
+}

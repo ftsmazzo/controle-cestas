@@ -8,7 +8,7 @@ import {
   TETO_MENSAL_OPERACIONAL,
 } from './processoEmergencial.js';
 import { MESES_REQUISICAO_HISTORICO } from './requisicaoHistorico.js';
-import { consumptionUnits } from './serviceFamilies.js';
+import { consumptionUnits, groupByFamilia, type FamiliaGroup } from './serviceFamilies.js';
 import type { ServicesPayload } from './serviceTypes.js';
 
 export interface CessaoEquipamentoRow {
@@ -24,6 +24,7 @@ export interface CessaoEquipamentoRow {
 
 export interface TabelaCessaoEmergencial {
   rows: CessaoEquipamentoRow[];
+  familias: FamiliaGroup<CessaoEquipamentoRow>[];
   tetoMensal: number;
   somaMedias: number;
   somaCotas: number;
@@ -86,14 +87,21 @@ export function buildTabelaCessaoEmergencial(
         mesesHistorico: st?.mesesConsiderados ?? 0,
       };
     })
-    .filter((r) => r.mediaHistorica > 0 || r.cotaMensal > 0)
-    .sort((a, b) => b.mediaHistorica - a.mediaHistorica);
+    .filter((r) => r.mediaHistorica > 0 || r.cotaMensal > 0);
+
+  const familias = groupByFamilia(rows, payload.services).map((fam) => ({
+    ...fam,
+    itens: [...fam.itens].sort((a, b) => b.mediaHistorica - a.mediaHistorica),
+  }));
+
+  const rowsOrdenadas = familias.flatMap((f) => f.itens);
 
   return {
-    rows,
+    rows: rowsOrdenadas,
+    familias,
     tetoMensal,
-    somaMedias: rows.reduce((s, r) => s + r.mediaHistorica, 0),
-    somaCotas: rows.reduce((s, r) => s + r.cotaMensal, 0),
+    somaMedias: rowsOrdenadas.reduce((s, r) => s + r.mediaHistorica, 0),
+    somaCotas: rowsOrdenadas.reduce((s, r) => s + r.cotaMensal, 0),
     periodoRef: `${PERIODO_REFERENCIA_INICIO} – ${PERIODO_REFERENCIA_FIM}`,
     mesesUsados: mesesUsados.length ? [...mesesUsados] : [...MESES_REQUISICAO_HISTORICO],
   };
