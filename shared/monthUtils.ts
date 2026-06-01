@@ -91,6 +91,13 @@ export function formatMonthKeyPt(key: number): string {
   return label ? `${label}/${year}` : String(key);
 }
 
+/** Ex.: Mai/2026 + 3 → "Mai S3" */
+export function formatSemanaCurta(mes: string, semana: number): string {
+  const ym = getYearMonth(mes);
+  const abrev = ym ? NUM_TO_PT_LABEL[ym.month] : mes.trim().split(/[/\s-]/)[0] ?? mes;
+  return `${abrev} S${semana}`;
+}
+
 /** Período padrão do mapa de calor (série recente legível). */
 export const HEATMAP_RANGE_FROM = 202503; // Mar/2025
 export const HEATMAP_RANGE_TO = 202603; // Mar/2026

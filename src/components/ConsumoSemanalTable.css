@@ -1,0 +1,135 @@
+.csem-wrap {
+  margin-top: 0.5rem;
+}
+
+.csem-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.csem-dot {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.csem-dot--cota {
+  background: #f59e0b;
+}
+
+.csem-dot--media {
+  background: #dc2626;
+}
+
+.csem-dot--ambos {
+  background: linear-gradient(135deg, #f59e0b 50%, #dc2626 50%);
+}
+
+.csem-table-wrap {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.csem-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.csem-table th,
+.csem-table td {
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.csem-table th {
+  background: #f8fafc;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.csem-subhead th {
+  top: 1.6rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.csem-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #fff;
+  text-align: left !important;
+  min-width: 11rem;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.04);
+}
+
+.csem-table thead .csem-sticky {
+  background: #f8fafc;
+  z-index: 4;
+}
+
+.csem-nome {
+  font-weight: 500;
+}
+
+.csem-row-familia td {
+  background: #f1f5f9;
+}
+
+.csem-cell--zero {
+  color: #cbd5e1;
+}
+
+.csem-cell--cota {
+  background: #fffbeb;
+}
+
+.csem-cell--media {
+  background: #fef2f2;
+}
+
+.csem-cell--ambos {
+  background: #ffedd5;
+}
+
+.csem-cell-flag {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #b45309;
+  line-height: 1;
+}
+
+.csem-over {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.csem-muted {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.csem-table tfoot td {
+  background: #f8fafc;
+  border-top: 2px solid #cbd5e1;
+}

@@ -1,5 +1,7 @@
 import {
   buildMonitoramentoResumo,
+  MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
   resolveContextoPainelPublico,
   somaEnviosSemanas,
   weekDateRangeLabel,
@@ -13,7 +15,7 @@ import {
   suggestEmpenhoMeses,
 } from './empenhoControle.js';
 import { margemAteLimite } from './limitesControle.js';
-import { getYearMonth, parseMonthKey } from './monthUtils.js';
+import { getYearMonth, parseMonthKey, formatSemanaCurta } from './monthUtils.js';
 import {
   MARGEM_MITIGACAO_MENSAL,
   TETO_CONTRATUAL_MENSAL,
@@ -32,6 +34,8 @@ export const REDUCAO_SEMANA_PRESSAO_PCT = 55;
 export interface MitigacaoSemanaProposta {
   mes: string;
   semana: number;
+  /** Ex.: Mai S4, Jun S1 */
+  labelCurta: string;
   periodo: string;
   cestas: number;
 }
@@ -75,7 +79,11 @@ export interface CenarioMitigacao {
   /** Mês que estamos fechando (onde já houve gasto) */
   mesFechamento: string;
   semanasPlanejadas: number[];
+  /** Rótulos curtos das semanas planejadas (Mai S4, Jun S1…) */
+  semanasPlanejadasLabels: string[];
   periodosSemana: string[];
+  /** Última semana com lançamento (referência do ritmo) */
+  semanaReferenciaLabel: string;
   enviadoMesAteAgora: number;
   tetoOperacional: number;
   tetoComGordura: number;
@@ -122,6 +130,7 @@ export interface CenarioMitigacao {
   proximoMesSugerido: string | null;
   /** @deprecated use mesFechamento */
   mes: string;
+  semanaInicioControleLabel: string;
 }
 
 function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
@@ -141,6 +150,7 @@ function buildPropostasSemana(
     return {
       mes,
       semana,
+      labelCurta: formatSemanaCurta(mes, semana),
       periodo: ym
         ? weekDateRangeLabel(ym.year, ym.month, semana)
         : `S${semana}`,
@@ -574,7 +584,13 @@ export function buildCenarioMitigacao(
     yearByMes.set(mesFechamento, ymFech);
   }
 
-  const semanasPlanejadas = alvos.map((a) => a.semana);
+  const semanaReferenciaLabel = formatSemanaCurta(
+    mesFechamento,
+    resumo.semanaBaseRitmo,
+  );
+  const semanasPlanejadasLabels = alvos.map((a) =>
+    formatSemanaCurta(a.mes, a.semana),
+  );
   const enviadoMes = resumo.enviadoMesTotal;
   const saldoRestante1150 = margemAteLimite(enviadoMes, TETO_MENSAL_OPERACIONAL);
   const margemAte1200 = margemAteLimite(enviadoMes, TETO_CONTRATUAL_MENSAL);
@@ -744,25 +760,31 @@ export function buildCenarioMitigacao(
     resumoCurto = mensagemAjuda || 'Aguardando lançamentos salvos.';
   } else {
     resumoCurto =
-      `Já gastou ${fmt(enviadoMes)} em ${mesFechamento}. ${fmt(orcamentoDistribuir)} a distribuir (~${fmt(Math.round(orcamentoDistribuir / Math.max(1, numSemanas)))}/sem)` +
+      `Referência ${semanaReferenciaLabel}: ${fmt(enviadoMes)} acumulados. ${fmt(orcamentoDistribuir)} nas próximas ${numSemanas} sem.` +
+      (semanasPlanejadasLabels.length
+        ? ` (${semanasPlanejadasLabels.join(', ')})`
+        : '') +
       (semanaPressaoLabel
-        ? ` — S${alvos[semanaPressaoIdx]?.semana} com −${REDUCAO_SEMANA_PRESSAO_PCT}% na normal`
+        ? ` — ${formatSemanaCurta(alvos[semanaPressaoIdx]?.mes ?? mesFechamento, alvos[semanaPressaoIdx]?.semana ?? 0)} com −${REDUCAO_SEMANA_PRESSAO_PCT}%`
         : '') +
       (deficitVsInercial > 0
-        ? `; ainda faltam ${fmt(deficitVsInercial)} vs ritmo (não fecha o mês)`
+        ? `; faltam ${fmt(deficitVsInercial)} vs ritmo`
         : '') +
-      `. Fecha em ${fmt(fechamentoMesProjetado)}.`;
+      `.`;
   }
 
   return {
     mesFechamento,
     mes: mesFechamento,
-    semanasPlanejadas,
+    semanasPlanejadas: alvos.map((a) => a.semana),
+    semanasPlanejadasLabels,
+    semanaReferenciaLabel,
     periodosSemana: alvos.map((a) => {
       const ym = yearByMes.get(a.mes);
+      const curta = formatSemanaCurta(a.mes, a.semana);
       return ym
-        ? `${a.mes} S${a.semana} (${weekDateRangeLabel(ym.year, ym.month, a.semana)})`
-        : `S${a.semana}`;
+        ? `${curta} (${weekDateRangeLabel(ym.year, ym.month, a.semana)})`
+        : curta;
     }),
     enviadoMesAteAgora: enviadoMes,
     tetoOperacional: TETO_MENSAL_OPERACIONAL,
@@ -787,6 +809,10 @@ export function buildCenarioMitigacao(
     semanaBaseRitmo: resumo.semanaBaseRitmo,
     semanaInicioControle: resumo.semanaInicioControle,
     semanasHorizonte,
+    semanaInicioControleLabel: formatSemanaCurta(
+      MONITOR_CONTROLE_MES_INICIO,
+      MONITOR_CONTROLE_SEMANA_INICIO,
+    ),
     semanaPressaoIdx,
     semanaPressaoLabel,
     reducaoSemanaPressaoPct: REDUCAO_SEMANA_PRESSAO_PCT,
@@ -813,17 +839,20 @@ function cenarioSemanaLabel(
   alvo: AlvoSemanaMitigacao,
   yearByMes: Map<string, { year: number; month: number }>,
 ): string {
+  const curta = formatSemanaCurta(alvo.mes, alvo.semana);
   const ym = yearByMes.get(alvo.mes);
-  return ym
-    ? `${alvo.mes} S${alvo.semana} (${weekDateRangeLabel(ym.year, ym.month, alvo.semana)})`
-    : `S${alvo.semana}`;
+  const periodo = ym
+    ? weekDateRangeLabel(ym.year, ym.month, alvo.semana)
+    : '';
+  return periodo ? `${curta} (${periodo})` : curta;
 }
 
 export function totaisPorSemana(
   cenario: CenarioMitigacao,
-): { semana: number; periodo: string; total: number }[] {
+): { semana: number; label: string; periodo: string; total: number }[] {
   return cenario.periodosSemana.map((periodo, i) => ({
     semana: cenario.semanasPlanejadas[i] ?? i + 1,
+    label: cenario.semanasPlanejadasLabels[i] ?? `S${i + 1}`,
     periodo,
     total: cenario.equipamentos.reduce(
       (s, e) => s + (e.propostasSemana[i]?.cestas ?? 0),

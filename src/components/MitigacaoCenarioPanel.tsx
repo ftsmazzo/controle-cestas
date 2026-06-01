@@ -97,7 +97,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
         </div>
         <div className="mit-badges">
           <span className="mit-badge">
-            Fechando {cenario.mesFechamento} · base S{cenario.semanaBaseRitmo}
+            Referência {cenario.semanaReferenciaLabel}
           </span>
           <span className="mit-badge mit-badge--gordura">
             Gordura período:{' '}
@@ -157,10 +157,12 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
 
           <div className="mit-summary-grid">
             <article className="mit-summary-card mit-summary-card--inercial">
-              <span className="mit-summary-label">Já gasto ({cenario.mesFechamento})</span>
+              <span className="mit-summary-label">
+                Acumulado até {cenario.semanaReferenciaLabel}
+              </span>
               <p className="mit-summary-value">{num(cenario.enviadoMesAteAgora)}</p>
               <span className="mit-summary-hint">
-                Desde S{cenario.semanaInicioControle} no controle
+                Desde {cenario.semanaInicioControleLabel} no controle
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--proposta">
@@ -174,13 +176,11 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--fechamento">
-              <span className="mit-summary-label">Fechamento do mês</span>
+              <span className="mit-summary-label">Após plano (2 sem.)</span>
               <p className="mit-summary-value">{num(cenario.fechamentoMesProjetado)}</p>
               <span className="mit-summary-hint">
-                {num(cenario.enviadoMesAteAgora)} + {num(cenario.propostaTotal)} nas 2 sem.
-                {cenario.gorduraUsadaNoPlano > 0
-                  ? ` · gordura +${num(cenario.gorduraUsadaNoPlano)}`
-                  : ''}
+                {num(cenario.enviadoMesAteAgora)} + {num(cenario.propostaTotal)} (
+                {cenario.semanasPlanejadasLabels.join(' + ') || '—'})
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--saldo">
@@ -256,13 +256,11 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                   }
                 >
                   <span className="mit-week-label">
-                    S{t.semana} · {t.periodo}
+                    {t.label}
                     {i === cenario.semanaPressaoIdx ? ' · −55%' : ''}
                   </span>
                   <p className="mit-week-value">{num(t.total)}</p>
-                  <span className="mit-week-hint">
-                    envelope {num(cenario.budgetsSemana[i] ?? 0)} → proposta
-                  </span>
+                  <span className="mit-week-hint">{t.periodo.split('(')[1]?.replace(')', '') ?? t.periodo}</span>
                 </article>
               ))}
               <article className="mit-week-card mit-week-card--corte">
@@ -284,16 +282,16 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                   <th>Cota mês</th>
                   <th>Cota/sem</th>
                   <th>Espaço cota</th>
-                  {cenario.periodosSemana.map((p, i) => (
-                    <th key={i}>
-                      {p}
+                  {cenario.semanasPlanejadasLabels.map((label, i) => (
+                    <th key={i} title={cenario.periodosSemana[i]}>
+                      {label}
                     </th>
                   ))}
                   <th>Ritmo pediria</th>
                   <th>Proposta</th>
                   <th>Corte</th>
                   <th>% acima média</th>
-                  <th>Fecha mês</th>
+                  <th>Acum. pós</th>
                   <th>% cota</th>
                   <th>Impacto</th>
                 </tr>
@@ -394,10 +392,10 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           </div>
 
           <p className="hint mit-foot">
-            Orçamento = saldo até 1.150 + gordura do período. Distribuição normal = cota
-            semanal de cada equipamento. Aplica −55% na semana que mais estoura a normal;
-            se ainda passar do total, corta nos sinalizados acima da média. Os 200 de
-            gordura vão sendo usados ao longo do empenho — aqui entra o que resta.
+            Controle por <strong>semana civil</strong> (Mai S3 = ponto zero). Orçamento
+            das próximas semanas = saldo até 1.150 + gordura do período, rateado por
+            cota/sem. −55% na semana de maior pressão; depois corte em quem superou a
+            média.
           </p>
         </>
       )}
