@@ -56,6 +56,10 @@ export interface MitigacaoEquipamentoRow {
   fechamentoMes: number;
   fechamentoInercial: number;
   vsCotaMesPct: number;
+  /** % acima da média histórica no que já foi enviado (0 se abaixo) */
+  pctAcimaMedia: number;
+  /** % acima da cota no que já foi enviado (0 se abaixo) */
+  pctAcimaCota: number;
   pctReducaoRitmo: number;
   impacto: MitigacaoImpacto;
 }
@@ -74,7 +78,7 @@ export interface CenarioMitigacao {
   gorduraPeriodoTotal: number;
   gorduraPeriodoUsada: number;
   gorduraPeriodoRestante: number;
-  /** Gordura que entra neste plano (mês + período, respeitando 1.200) */
+  /** Gordura do período (200) aplicada neste plano */
   gorduraNoPlano: number;
   /** Total a distribuir nas próximas semanas = saldo1150 + gorduraNoPlano */
   orcamentoDistribuir: number;
@@ -221,78 +225,99 @@ interface DraftUnit {
   participacaoPct: number;
   ritmo: number;
   demanda: number;
+  pctAcimaMedia: number;
+  pctAcimaCota: number;
+  scoreCorte: number;
+}
+
+function pctAcimaReferencia(enviado: number, ref: number): number {
+  if (ref <= 0 || enviado <= ref) return 0;
+  return ((enviado - ref) / ref) * 100;
+}
+
+/** Quem mais estourou média e cota recebe maior peso de corte */
+function scorePrioridadeCorte(u: DraftUnit): number {
+  if (u.pctAcimaMedia <= 0 && u.pctAcimaCota <= 0) return 0;
+  return u.pctAcimaMedia * 2 + u.pctAcimaCota;
 }
 
 /**
- * Distribui o orçamento restante do mês para reequilibrar:
- * quem já estourou a cota não recebe mais; o restante rateia por déficit até a cota.
+ * Parte do ritmo inercial e aplica cortes proporcionais ao excesso vs média/cota.
+ * Quem já pediu acima da média E acima da cota não recebe nas próximas semanas.
  */
-function alocarReequilibrio(units: DraftUnit[], budget: number): Map<string, number> {
+function alocarComCortePorExcessoMedia(
+  units: DraftUnit[],
+  budget: number,
+): Map<string, number> {
   const out = new Map<string, number>();
   if (budget <= 0 || !units.length) {
     for (const u of units) out.set(u.servicoId, 0);
     return out;
   }
 
-  const elegiveis = units.filter((u) => u.espacoAteCota > 0);
-  for (const u of units.filter((u) => u.espacoAteCota <= 0)) {
-    out.set(u.servicoId, 0);
+  const bloqueados = new Set(
+    units
+      .filter((u) => u.pctAcimaMedia > 0 && u.pctAcimaCota > 0)
+      .map((u) => u.servicoId),
+  );
+
+  for (const u of units) {
+    out.set(u.servicoId, bloqueados.has(u.servicoId) ? 0 : u.demanda);
   }
 
-  if (!elegiveis.length) {
+  let total = [...out.values()].reduce((s, v) => s + v, 0);
+  if (total <= budget) {
+    let surplus = budget - total;
+    const candidatos = [...units]
+      .filter((u) => !bloqueados.has(u.servicoId) && u.pctAcimaMedia <= 0)
+      .sort((a, b) => b.espacoAteCota - a.espacoAteCota);
+    for (const u of candidatos) {
+      if (surplus <= 0) break;
+      const cur = out.get(u.servicoId) ?? 0;
+      const add = Math.min(surplus, Math.max(0, u.espacoAteCota - cur));
+      if (add > 0) {
+        out.set(u.servicoId, cur + add);
+        surplus -= add;
+      }
+    }
     return out;
   }
 
-  const totalEspaco = elegiveis.reduce((s, u) => s + u.espacoAteCota, 0);
-  let restante = budget;
+  let falta = total - budget;
+  const ordenados = [...units]
+    .filter((u) => (out.get(u.servicoId) ?? 0) > 0)
+    .sort((a, b) => b.scoreCorte - a.scoreCorte || b.pctAcimaMedia - a.pctAcimaMedia);
 
-  if (totalEspaco <= budget) {
-    for (const u of elegiveis) {
-      out.set(u.servicoId, u.espacoAteCota);
-      restante -= u.espacoAteCota;
-    }
-  } else {
-    const pesoTotal = elegiveis.reduce(
-      (s, u) => s + (u.participacaoPct > 0 ? u.participacaoPct : u.espacoAteCota),
+  while (falta > 0 && ordenados.length) {
+    const comScore = ordenados.filter((u) => u.scoreCorte > 0);
+    const alvos = comScore.length ? comScore : ordenados;
+    const pesoTotal = alvos.reduce(
+      (s, u) => s + Math.max(u.scoreCorte, comScore.length ? 1 : 0.001),
       0,
     );
-    for (const u of elegiveis) {
-      const peso = u.participacaoPct > 0 ? u.participacaoPct : u.espacoAteCota;
-      const bruto =
-        pesoTotal > 0
-          ? (budget * peso) / pesoTotal
-          : budget / elegiveis.length;
-      const alocado = Math.min(u.espacoAteCota, Math.round(bruto));
-      out.set(u.servicoId, alocado);
-      restante -= alocado;
-    }
-    if (restante > 0) {
-      const ordenados = [...elegiveis].sort(
-        (a, b) =>
-          b.espacoAteCota - (out.get(b.servicoId) ?? 0) -
-          (a.espacoAteCota - (out.get(a.servicoId) ?? 0)),
+    let cortou = 0;
+    for (const u of alvos) {
+      if (falta <= 0) break;
+      const cur = out.get(u.servicoId) ?? 0;
+      if (cur <= 0) continue;
+      const peso = comScore.length
+        ? Math.max(u.scoreCorte, 1)
+        : 0.001 + u.demanda;
+      const cut = Math.min(
+        cur,
+        Math.max(1, Math.round((falta * peso) / pesoTotal)),
+        falta,
       );
-      for (const u of ordenados) {
-        if (restante <= 0) break;
-        const cur = out.get(u.servicoId) ?? 0;
-        const add = Math.min(restante, u.espacoAteCota - cur);
-        if (add > 0) {
-          out.set(u.servicoId, cur + add);
-          restante -= add;
-        }
-      }
+      out.set(u.servicoId, cur - cut);
+      falta -= cut;
+      cortou += cut;
     }
-    if (restante < 0) {
-      let excesso = -restante;
-      for (const u of [...elegiveis].sort(
-        (a, b) => (out.get(b.servicoId) ?? 0) - (out.get(a.servicoId) ?? 0),
-      )) {
-        if (excesso <= 0) break;
-        const cur = out.get(u.servicoId) ?? 0;
-        const cut = Math.min(excesso, cur);
-        out.set(u.servicoId, cur - cut);
-        excesso -= cut;
-      }
+    if (cortou === 0) {
+      const u = ordenados.find((x) => (out.get(x.servicoId) ?? 0) > 0);
+      if (!u) break;
+      const cur = out.get(u.servicoId) ?? 0;
+      out.set(u.servicoId, cur - 1);
+      falta -= 1;
     }
   }
 
@@ -361,14 +386,9 @@ export function buildCenarioMitigacao(
     GORDURA_PERIODO_TOTAL - gorduraPeriodoUsada,
   );
 
-  const gorduraNoPlano = Math.min(
-    gorduraMesDisponivel,
-    gorduraPeriodoRestante,
-    Math.max(0, margemAte1200 - saldoRestante1150),
-  );
+  const gorduraNoPlano = gorduraPeriodoRestante;
   const orcamentoDistribuir = Math.min(
     saldoRestante1150 + gorduraNoPlano,
-    margemAte1200,
     autonomia.cestasDisponiveis,
   );
 
@@ -389,7 +409,10 @@ export function buildCenarioMitigacao(
         : eq?.enviadoSemanaAtual ?? 0;
     const demanda = Math.round(ritmo * alvos.length);
     const espacoAteCota = Math.max(0, cotaMes - enviado);
-    return {
+    const mediaHistorica = mediaMap.get(s.id) ?? 0;
+    const pctAcimaMedia = pctAcimaReferencia(enviado, mediaHistorica);
+    const pctAcimaCota = pctAcimaReferencia(enviado, cotaMes);
+    const draft: DraftUnit = {
       servicoId: s.id,
       servicoNome: s.nome,
       familiaCodigo: s.familiaCodigo ?? undefined,
@@ -397,15 +420,20 @@ export function buildCenarioMitigacao(
       enviado,
       cotaMes,
       espacoAteCota,
-      mediaHistorica: mediaMap.get(s.id) ?? 0,
+      mediaHistorica,
       participacaoPct: pctMap.get(s.id) ?? 0,
       ritmo,
       demanda,
+      pctAcimaMedia,
+      pctAcimaCota,
+      scoreCorte: 0,
     };
+    draft.scoreCorte = scorePrioridadeCorte(draft);
+    return draft;
   });
 
   const demandaInercialTotal = drafts.reduce((s, d) => s + d.demanda, 0);
-  const aloc = alocarReequilibrio(drafts, orcamentoDistribuir);
+  const aloc = alocarComCortePorExcessoMedia(drafts, orcamentoDistribuir);
 
   const equipamentos: MitigacaoEquipamentoRow[] = drafts
     .map((d) => {
@@ -433,6 +461,8 @@ export function buildCenarioMitigacao(
         fechamentoMes,
         fechamentoInercial,
         vsCotaMesPct: d.cotaMes > 0 ? (fechamentoMes / d.cotaMes) * 100 : 0,
+        pctAcimaMedia: d.pctAcimaMedia,
+        pctAcimaCota: d.pctAcimaCota,
         pctReducaoRitmo,
         impacto: impactoFromPct(pctReducaoRitmo, corte2sem),
       };
@@ -443,7 +473,7 @@ export function buildCenarioMitigacao(
   const corteTotal = equipamentos.reduce((s, r) => s + r.corte2sem, 0);
   const fechamentoMesProjetado = enviadoMes + propostaTotal;
   const fechamentoInercial = enviadoMes + demandaInercialTotal;
-  const gorduraUsadaNoPlano = gorduraUsadaNoMes(fechamentoMesProjetado);
+  const gorduraUsadaNoPlano = Math.max(0, fechamentoMesProjetado - TETO_MENSAL_OPERACIONAL);
   const saldoEmpenhoPosPlano = Math.max(0, empenho.restante - propostaTotal);
 
   const familias = groupByFamilia(equipamentos, payload.services);
@@ -484,13 +514,11 @@ export function buildCenarioMitigacao(
     resumoCurto = mensagemAjuda || 'Aguardando lançamentos salvos.';
   } else {
     resumoCurto =
-      `Já gastou ${fmt(enviadoMes)} em ${mesFechamento}. Restam ${fmt(saldoRestante1150)} até 1.150` +
-      (gorduraNoPlano > 0 ? ` + ${fmt(gorduraNoPlano)} gordura` : '') +
-      ` → distribuir ${fmt(orcamentoDistribuir)} nas próximas ${alvos.length} semana(s)` +
+      `Já gastou ${fmt(enviadoMes)} em ${mesFechamento}. ${fmt(saldoRestante1150)} até 1.150 + ${fmt(gorduraNoPlano)} gordura do período → ${fmt(orcamentoDistribuir)} a distribuir` +
       (demandaInercialTotal > orcamentoDistribuir
-        ? ` (ritmo pediria ${fmt(demandaInercialTotal)} — corte ${fmt(corteTotal)})`
+        ? ` (ritmo pediria ${fmt(demandaInercialTotal)}; cortes maiores em quem mais superou a média)`
         : '') +
-      `. Fecha o mês em ${fmt(fechamentoMesProjetado)}.`;
+      `. Fecha em ${fmt(fechamentoMesProjetado)}.`;
   }
 
   return {

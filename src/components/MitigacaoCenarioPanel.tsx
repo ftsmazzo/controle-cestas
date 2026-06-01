@@ -48,6 +48,16 @@ function renderUnitRow(r: MitigacaoEquipamentoRow, semanaCount: number) {
       <td className={r.corte2sem > 0 ? 'mit-corte' : 'mit-cell-muted'}>
         {r.corte2sem > 0 ? `−${num(r.corte2sem)}` : '—'}
       </td>
+      <td
+        className={
+          r.pctAcimaMedia > 0 ? 'mit-over mit-cell-prioridade' : 'mit-cell-muted'
+        }
+        title="Excesso vs média histórica mensal (já enviado)"
+      >
+        {r.mediaHistorica > 0 && r.pctAcimaMedia > 0
+          ? `+${num(r.pctAcimaMedia, 0)}%`
+          : '—'}
+      </td>
       <td>{num(r.fechamentoMes)}</td>
       <td className={r.vsCotaMesPct > 100 ? 'mit-over' : ''}>
         {r.cotaMensal > 0 ? `${num(r.vsCotaMesPct, 0)}%` : '—'}
@@ -122,7 +132,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
               {cenario.gorduraNoPlano > 0 && (
                 <>
                   {' '}
-                  + <strong>{num(cenario.gorduraNoPlano)}</strong> gordura
+                  + <strong>{num(cenario.gorduraNoPlano)}</strong> gordura do período
                 </>
               )}{' '}
               → <strong>{num(cenario.orcamentoDistribuir)}</strong> a distribuir nas
@@ -130,8 +140,9 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
             </p>
             {cenario.demandaInercialTotal > cenario.orcamentoDistribuir && (
               <p className="mit-formula-warn">
-                Ritmo atual pediria {num(cenario.demandaInercialTotal)} a mais — por
-                isso há corte de {num(cenario.corteTotal)} vs continuar no mesmo ritmo.
+                Ritmo atual pediria {num(cenario.demandaInercialTotal)} — cortes
+                concentrados em quem mais superou a média histórica e a cota (
+                −{num(cenario.corteTotal)} vs ritmo).
               </p>
             )}
           </div>
@@ -150,7 +161,8 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
               </span>
               <p className="mit-summary-value">{num(cenario.orcamentoDistribuir)}</p>
               <span className="mit-summary-hint">
-                {num(cenario.saldoRestante1150)} + {num(cenario.gorduraNoPlano)} gordura
+                {num(cenario.saldoRestante1150)} até 1.150 +{' '}
+                {num(cenario.gorduraNoPlano)} gordura período
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--fechamento">
@@ -261,6 +273,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                   <th>Ritmo pediria</th>
                   <th>Proposta</th>
                   <th>Corte</th>
+                  <th>% acima média</th>
                   <th>Fecha mês</th>
                   <th>% cota</th>
                   <th>Impacto</th>
@@ -307,11 +320,15 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                         <td className={corteFam > 0 ? 'mit-corte' : ''}>
                           {corteFam > 0 ? `−${num(corteFam)}` : '—'}
                         </td>
-                        <td colSpan={3} />
+                        <td colSpan={4} />
                       </tr>
                       {showChildren
                         ? fam.itens
-                            .sort((a, b) => b.corte2sem - a.corte2sem)
+                            .sort(
+                              (a, b) =>
+                                b.pctAcimaMedia - a.pctAcimaMedia ||
+                                b.corte2sem - a.corte2sem,
+                            )
                             .map((r) =>
                               renderUnitRow(r, cenario.periodosSemana.length),
                             )
@@ -347,6 +364,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                       '—'
                     )}
                   </td>
+                  <td />
                   <td>
                     <strong>{num(cenario.fechamentoMesProjetado)}</strong>
                   </td>
@@ -357,9 +375,10 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           </div>
 
           <p className="hint mit-foot">
-            O orçamento das próximas semanas é o que ainda cabe em 1.150 (+ gordura até
-            1.200), não um novo mês cheio. Quem já estourou a cota não recebe mais; o
-            restante reequilibra proporcionalmente quem ainda tem espaço na cota mensal.
+            Orçamento das próximas semanas = saldo até 1.150 + gordura do período (até
+            200 no empenho). Parte do ritmo inercial e aplica os maiores cortes em quem
+            já pediu acima da média histórica e acima da cota — quem estourou ambos não
+            recebe mais neste plano.
           </p>
         </>
       )}
