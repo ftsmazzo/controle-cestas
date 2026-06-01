@@ -143,10 +143,14 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
             </p>
             {cenario.demandaInercialTotal > cenario.orcamentoDistribuir && (
               <p className="mit-formula-warn">
-                Ritmo atual pediria {num(cenario.demandaInercialTotal)} — redistribuição
-                ponderada (todos recebem dentro da cota semanal/mensal; cortes maiores em
-                quem mais superou média, cota e semana: −{num(cenario.corteTotal)} vs
-                ritmo).
+                Normal pediria {num(cenario.demandaInercialTotal)} — com{' '}
+                {num(cenario.orcamentoDistribuir)} reduzimos o prejuízo, mas ainda faltam{' '}
+                {num(cenario.deficitVsInercial)} vs ritmo. Passo 1: −
+                {num(cenario.reducaoSemanaPressaoPct)}% na semana de maior pressão
+                {cenario.semanaPressaoLabel
+                  ? ` (${cenario.semanaPressaoLabel})`
+                  : ''}
+                . Passo 2 (se precisar): corte extra em quem superou a média.
               </p>
             )}
           </div>
@@ -180,10 +184,10 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--saldo">
-              <span className="mit-summary-label">Ritmo continuaria pedindo</span>
-              <p className="mit-summary-value">{num(cenario.demandaInercialTotal)}</p>
+              <span className="mit-summary-label">Ainda falta vs ritmo</span>
+              <p className="mit-summary-value">{num(cenario.deficitVsInercial)}</p>
               <span className="mit-summary-hint">
-                Fecharia em {num(cenario.fechamentoInercial)} — referência
+                Ritmo pediria {num(cenario.demandaInercialTotal)} — não fecha o mês
               </span>
             </article>
           </div>
@@ -242,13 +246,23 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
 
           {totaisSem.length > 0 && (
             <div className="mit-week-cards">
-              {totaisSem.map((t) => (
-                <article key={t.semana} className="mit-week-card">
+              {totaisSem.map((t, i) => (
+                <article
+                  key={t.semana}
+                  className={
+                    i === cenario.semanaPressaoIdx
+                      ? 'mit-week-card mit-week-card--pressao'
+                      : 'mit-week-card'
+                  }
+                >
                   <span className="mit-week-label">
                     S{t.semana} · {t.periodo}
+                    {i === cenario.semanaPressaoIdx ? ' · −55%' : ''}
                   </span>
                   <p className="mit-week-value">{num(t.total)}</p>
-                  <span className="mit-week-hint">cestas propostas</span>
+                  <span className="mit-week-hint">
+                    normal {num(cenario.totaisNormalPorSemana[i] ?? 0)} → proposta
+                  </span>
                 </article>
               ))}
               <article className="mit-week-card mit-week-card--corte">
@@ -380,10 +394,10 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           </div>
 
           <p className="hint mit-foot">
-            Orçamento = saldo até 1.150 + gordura do período (até 200). Cada equipamento
-            recebe uma fatia ponderada (participação histórica, atenuada por excessos vs
-            média, cota mensal e cota semanal). Nenhuma semana ultrapassa a cota/sem; o
-            total mensal respeita o espaço restante na cota.
+            Orçamento = saldo até 1.150 + gordura do período. Distribuição normal = cota
+            semanal de cada equipamento. Aplica −55% na semana que mais estoura a normal;
+            se ainda passar do total, corta nos sinalizados acima da média. Os 200 de
+            gordura vão sendo usados ao longo do empenho — aqui entra o que resta.
           </p>
         </>
       )}

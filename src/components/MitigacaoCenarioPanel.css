@@ -262,6 +262,11 @@
   background: #fff7ed;
 }
 
+.mit-week-card--pressao {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
 .mit-week-label {
   display: flex;
   align-items: center;

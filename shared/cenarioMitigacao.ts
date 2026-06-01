@@ -26,6 +26,9 @@ import type { ServicesPayload } from './serviceTypes.js';
 export const GORDURA_PERIODO_TOTAL =
   MARGEM_MITIGACAO_MENSAL * EMPENHO_DURACAO_MESES_PADRAO;
 
+/** Redução na semana de maior pressão (normal vs orçamento disponível) */
+export const REDUCAO_SEMANA_PRESSAO_PCT = 55;
+
 export interface MitigacaoSemanaProposta {
   mes: string;
   semana: number;
@@ -99,6 +102,13 @@ export interface CenarioMitigacao {
   semanaBaseRitmo: number;
   semanaInicioControle: number;
   semanasHorizonte: number;
+  /** Índice 0-based da semana que recebe o corte de 55% */
+  semanaPressaoIdx: number;
+  semanaPressaoLabel: string | null;
+  reducaoSemanaPressaoPct: number;
+  totaisNormalPorSemana: number[];
+  /** Quanto falta vs ritmo inercial nas 2 semanas (não resolve o mês inteiro) */
+  deficitVsInercial: number;
   equipamentos: MitigacaoEquipamentoRow[];
   familias: FamiliaGroup<MitigacaoEquipamentoRow>[];
   resumoCurto: string;
@@ -119,18 +129,12 @@ function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
   return 'leve';
 }
 
-function splitSemanas(
-  total: number,
-  cotaSemanal: number,
-  alvos: { mes: string; semana: number }[],
+function buildPropostasSemana(
+  valores: number[],
+  alvos: AlvoSemanaMitigacao[],
   yearByMes: Map<string, { year: number; month: number }>,
 ): MitigacaoSemanaProposta[] {
-  if (!alvos.length) return [];
-  let restante = Math.max(0, total);
-  return alvos.map(({ mes, semana }) => {
-    const cap = cotaSemanal > 0 ? cotaSemanal : restante;
-    const cestas = Math.min(restante, cap);
-    restante -= cestas;
+  return alvos.map(({ mes, semana }, i) => {
     const ym = yearByMes.get(mes);
     return {
       mes,
@@ -138,7 +142,7 @@ function splitSemanas(
       periodo: ym
         ? weekDateRangeLabel(ym.year, ym.month, semana)
         : `S${semana}`,
-      cestas,
+      cestas: valores[i] ?? 0,
     };
   });
 }
@@ -233,8 +237,6 @@ interface DraftUnit {
   pctAcimaMedia: number;
   pctAcimaCota: number;
   pctAcimaSemana: number;
-  scoreCorte: number;
-  meritoReceber: number;
 }
 
 function pctAcimaReferencia(enviado: number, ref: number): number {
@@ -261,118 +263,140 @@ function mediaExcessoSemanal(
   return n > 0 ? soma / n : 0;
 }
 
-/** Peso de corte: média (2×) + cota mensal + excesso semanal */
-function scorePrioridadeCorte(u: DraftUnit): number {
-  return u.pctAcimaMedia * 2 + u.pctAcimaCota + u.pctAcimaSemana * 1.5;
+/** Cota semanal da cessão = distribuição normal da semana */
+function normalSemanal(u: DraftUnit): number {
+  if (u.cotaSemanal > 0) return u.cotaSemanal;
+  return Math.max(0, Math.round(u.ritmo));
 }
 
-/** Mérito para receber: participação histórica atenuada pelo score de corte */
-function meritoReceber(u: DraftUnit): number {
-  const base = u.participacaoPct > 0 ? u.participacaoPct : u.cotaMes;
-  return base * (100 / (100 + scorePrioridadeCorte(u)));
-}
-
-interface LimiteAlocacao {
-  u: DraftUnit;
-  piso: number;
-  teto: number;
-  val: number;
+interface ResultadoDuasSemanas {
+  porUnidade: Map<string, number[]>;
+  semanaPressaoIdx: number;
+  totaisNormal: number[];
+  totaisProposta: number[];
 }
 
 /**
- * Distribuição ponderada: todos recebem dentro de [piso, teto],
- * respeitando cota semanal/mensal; cortes maiores em quem mais estourou.
+ * 1) Monta a distribuição normal (cota/sem) por equipamento e semana.
+ * 2) Aplica −55% na semana de maior pressão (normal acima do orçamento/semana).
+ * 3) Se ainda passar do orçamento, corta nos que superaram a média histórica.
  */
-function alocarMitigacaoPonderada(
+function alocarDuasSemanas(
   units: DraftUnit[],
   budget: number,
   numSemanas: number,
-): Map<string, number> {
-  const out = new Map<string, number>();
-  if (budget <= 0 || !units.length) {
-    for (const u of units) out.set(u.servicoId, 0);
-    return out;
+): ResultadoDuasSemanas {
+  const vazio: ResultadoDuasSemanas = {
+    porUnidade: new Map(),
+    semanaPressaoIdx: 0,
+    totaisNormal: [],
+    totaisProposta: [],
+  };
+  if (budget <= 0 || !units.length || numSemanas <= 0) return vazio;
+
+  const normal = new Map<string, number[]>();
+  const espaco = new Map(units.map((u) => [u.servicoId, u.espacoAteCota]));
+
+  for (let wi = 0; wi < numSemanas; wi++) {
+    for (const u of units) {
+      const restante = espaco.get(u.servicoId) ?? 0;
+      const n = Math.min(normalSemanal(u), restante);
+      const arr = normal.get(u.servicoId) ?? [];
+      arr[wi] = n;
+      espaco.set(u.servicoId, restante - n);
+      normal.set(u.servicoId, arr);
+    }
   }
 
-  const somaCotas = units.reduce((s, u) => s + u.cotaMes, 0);
-  const somaMerito = units.reduce((s, u) => s + u.meritoReceber, 0);
+  const totaisNormal = Array.from({ length: numSemanas }, (_, wi) =>
+    units.reduce((s, u) => s + (normal.get(u.servicoId)?.[wi] ?? 0), 0),
+  );
 
-  const propostas: LimiteAlocacao[] = units.map((u) => {
-    const tetoSemanal = u.cotaSemanal > 0 ? u.cotaSemanal * numSemanas : u.espacoAteCota;
-    const teto = Math.max(0, Math.min(u.espacoAteCota, tetoSemanal));
-    const pisoBruto =
-      u.cotaMes > 0 && somaCotas > 0
-        ? (u.cotaMes / somaCotas) * budget * 0.2
-        : somaMerito > 0
-          ? (u.meritoReceber / somaMerito) * budget * 0.15
-          : budget / units.length;
-    const piso = Math.min(teto, Math.max(0, Math.round(pisoBruto)));
-    const bruto =
-      somaMerito > 0
-        ? (u.meritoReceber / somaMerito) * budget
-        : budget / units.length;
-    const val = Math.min(teto, Math.max(piso, Math.round(bruto)));
-    return { u, piso, teto, val };
-  });
+  const budgetPorSemana = budget / numSemanas;
+  let semanaPressaoIdx = 0;
+  let maxPressao = Number.NEGATIVE_INFINITY;
+  for (let wi = 0; wi < numSemanas; wi++) {
+    const pressao = totaisNormal[wi] - budgetPorSemana;
+    if (pressao > maxPressao) {
+      maxPressao = pressao;
+      semanaPressaoIdx = wi;
+    }
+  }
 
-  let total = propostas.reduce((s, p) => s + p.val, 0);
+  const fatorPressao = 1 - REDUCAO_SEMANA_PRESSAO_PCT / 100;
+  const proposta = new Map<string, number[]>();
+  for (const u of units) {
+    const norm = normal.get(u.servicoId) ?? [];
+    proposta.set(
+      u.servicoId,
+      norm.map((n, wi) =>
+        wi === semanaPressaoIdx ? Math.round(n * fatorPressao) : n,
+      ),
+    );
+  }
 
+  const somaProposta = () =>
+    units.reduce(
+      (s, u) => s + (proposta.get(u.servicoId)?.reduce((a, b) => a + b, 0) ?? 0),
+      0,
+    );
+
+  let total = somaProposta();
   if (total > budget) {
     let falta = total - budget;
-    while (falta > 0) {
-      const flex = propostas.filter((p) => p.val > p.piso);
-      if (!flex.length) break;
-      const pesoTot = flex.reduce((s, p) => s + p.u.scoreCorte + 1, 0);
+    const estouro = [...units]
+      .filter((u) => u.pctAcimaMedia > 0)
+      .sort((a, b) => b.pctAcimaMedia - a.pctAcimaMedia);
+
+    while (falta > 0 && estouro.length) {
+      const pesoTot =
+        estouro.reduce((s, u) => s + u.pctAcimaMedia, 0) || estouro.length;
       let cortou = 0;
-      for (const p of flex.sort((a, b) => b.u.scoreCorte - a.u.scoreCorte)) {
+      for (const u of estouro) {
         if (falta <= 0) break;
-        const margem = p.val - p.piso;
-        if (margem <= 0) continue;
-        const peso = p.u.scoreCorte + 1;
+        const arr = proposta.get(u.servicoId)!;
+        const totalU = arr.reduce((a, b) => a + b, 0);
+        if (totalU <= 0) continue;
+        const peso = u.pctAcimaMedia > 0 ? u.pctAcimaMedia : 1;
         const cut = Math.min(
-          margem,
+          totalU,
           Math.max(1, Math.round((falta * peso) / pesoTot)),
           falta,
         );
-        p.val -= cut;
+        let restCut = cut;
+        for (let wi = numSemanas - 1; wi >= 0 && restCut > 0; wi--) {
+          const c = Math.min(arr[wi], restCut);
+          arr[wi] -= c;
+          restCut -= c;
+        }
         falta -= cut;
         cortou += cut;
       }
-      if (cortou === 0) {
-        const p = flex.find((x) => x.val > x.piso);
-        if (!p) break;
-        p.val -= 1;
-        falta -= 1;
-      }
+      if (cortou === 0) break;
     }
-  } else if (total < budget) {
-    let surplus = budget - total;
-    const candidatos = [...propostas]
-      .filter((p) => p.val < p.teto && p.u.pctAcimaMedia <= 0)
-      .sort((a, b) => b.teto - b.val - (a.teto - a.val));
-    for (const p of candidatos) {
-      if (surplus <= 0) break;
-      const add = Math.min(surplus, p.teto - p.val);
-      p.val += add;
-      surplus -= add;
-    }
-    if (surplus > 0) {
-      const rest = propostas.filter((p) => p.val < p.teto);
-      const mTot = rest.reduce((s, p) => s + p.u.meritoReceber, 0);
-      for (const p of rest.sort((a, b) => b.u.meritoReceber - a.u.meritoReceber)) {
-        if (surplus <= 0) break;
-        const share =
-          mTot > 0 ? Math.round((surplus * p.u.meritoReceber) / mTot) : 0;
-        const add = Math.min(surplus, p.teto - p.val, Math.max(share, 1));
-        if (add <= 0) continue;
-        p.val += add;
-        surplus -= add;
+
+    total = somaProposta();
+    if (total > budget) {
+      const fator = budget / total;
+      for (const u of units) {
+        const arr = proposta.get(u.servicoId)!;
+        for (let wi = 0; wi < numSemanas; wi++) {
+          arr[wi] = Math.round(arr[wi] * fator);
+        }
       }
     }
   }
 
-  for (const p of propostas) out.set(p.u.servicoId, p.val);
-  return out;
+  const totaisProposta = Array.from({ length: numSemanas }, (_, wi) =>
+    units.reduce((s, u) => s + (proposta.get(u.servicoId)?.[wi] ?? 0), 0),
+  );
+
+  return {
+    porUnidade: proposta,
+    semanaPressaoIdx,
+    totaisNormal,
+    totaisProposta,
+  };
 }
 
 export function buildCenarioMitigacao(
@@ -492,20 +516,22 @@ export function buildCenarioMitigacao(
       pctAcimaMedia,
       pctAcimaCota,
       pctAcimaSemana,
-      scoreCorte: 0,
-      meritoReceber: 0,
     };
-    draft.scoreCorte = scorePrioridadeCorte(draft);
-    draft.meritoReceber = meritoReceber(draft);
     return draft;
   });
 
   const demandaInercialTotal = drafts.reduce((s, d) => s + d.demanda, 0);
-  const aloc = alocarMitigacaoPonderada(drafts, orcamentoDistribuir, numSemanas);
+  const resultado = alocarDuasSemanas(drafts, orcamentoDistribuir, numSemanas);
+  const semanaPressaoIdx = resultado.semanaPressaoIdx;
+  const semanaPressaoLabel =
+    alvos[semanaPressaoIdx] != null
+      ? cenarioSemanaLabel(alvos[semanaPressaoIdx], yearByMes)
+      : null;
 
   const equipamentos: MitigacaoEquipamentoRow[] = drafts
     .map((d) => {
-      const proposta2sem = aloc.get(d.servicoId) ?? 0;
+      const semanasVal = resultado.porUnidade.get(d.servicoId) ?? [];
+      const proposta2sem = semanasVal.reduce((a, b) => a + b, 0);
       const corte2sem = Math.max(0, d.demanda - proposta2sem);
       const pctReducaoRitmo =
         d.demanda > 0 ? (corte2sem / d.demanda) * 100 : 0;
@@ -526,7 +552,7 @@ export function buildCenarioMitigacao(
         demandaInercial2sem: d.demanda,
         proposta2sem,
         corte2sem,
-        propostasSemana: splitSemanas(proposta2sem, d.cotaSemanal, alvos, yearByMes),
+        propostasSemana: buildPropostasSemana(semanasVal, alvos, yearByMes),
         fechamentoMes,
         fechamentoInercial,
         vsCotaMesPct: d.cotaMes > 0 ? (fechamentoMes / d.cotaMes) * 100 : 0,
@@ -541,6 +567,7 @@ export function buildCenarioMitigacao(
 
   const propostaTotal = equipamentos.reduce((s, r) => s + r.proposta2sem, 0);
   const corteTotal = equipamentos.reduce((s, r) => s + r.corte2sem, 0);
+  const deficitVsInercial = Math.max(0, demandaInercialTotal - propostaTotal);
   const fechamentoMesProjetado = enviadoMes + propostaTotal;
   const fechamentoInercial = enviadoMes + demandaInercialTotal;
   const gorduraUsadaNoPlano = Math.max(0, fechamentoMesProjetado - TETO_MENSAL_OPERACIONAL);
@@ -584,9 +611,12 @@ export function buildCenarioMitigacao(
     resumoCurto = mensagemAjuda || 'Aguardando lançamentos salvos.';
   } else {
     resumoCurto =
-      `Já gastou ${fmt(enviadoMes)} em ${mesFechamento}. ${fmt(saldoRestante1150)} até 1.150 + ${fmt(gorduraNoPlano)} gordura do período → ${fmt(orcamentoDistribuir)} a distribuir` +
-      (demandaInercialTotal > orcamentoDistribuir
-        ? ` (ritmo pediria ${fmt(demandaInercialTotal)}; cortes ponderados por excesso vs média, cota e semana)`
+      `Já gastou ${fmt(enviadoMes)} em ${mesFechamento}. ${fmt(orcamentoDistribuir)} a distribuir (~${fmt(Math.round(orcamentoDistribuir / Math.max(1, numSemanas)))}/sem)` +
+      (semanaPressaoLabel
+        ? ` — S${alvos[semanaPressaoIdx]?.semana} com −${REDUCAO_SEMANA_PRESSAO_PCT}% na normal`
+        : '') +
+      (deficitVsInercial > 0
+        ? `; ainda faltam ${fmt(deficitVsInercial)} vs ritmo (não fecha o mês)`
         : '') +
       `. Fecha em ${fmt(fechamentoMesProjetado)}.`;
   }
@@ -624,6 +654,11 @@ export function buildCenarioMitigacao(
     semanaBaseRitmo: resumo.semanaBaseRitmo,
     semanaInicioControle: resumo.semanaInicioControle,
     semanasHorizonte,
+    semanaPressaoIdx,
+    semanaPressaoLabel,
+    reducaoSemanaPressaoPct: REDUCAO_SEMANA_PRESSAO_PCT,
+    totaisNormalPorSemana: resultado.totaisNormal,
+    deficitVsInercial,
     equipamentos,
     familias,
     resumoCurto,
@@ -638,6 +673,16 @@ export function buildCenarioMitigacao(
 
 function fmt(n: number): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+}
+
+function cenarioSemanaLabel(
+  alvo: AlvoSemanaMitigacao,
+  yearByMes: Map<string, { year: number; month: number }>,
+): string {
+  const ym = yearByMes.get(alvo.mes);
+  return ym
+    ? `${alvo.mes} S${alvo.semana} (${weekDateRangeLabel(ym.year, ym.month, alvo.semana)})`
+    : `S${alvo.semana}`;
 }
 
 export function totaisPorSemana(
