@@ -404,25 +404,23 @@ export default function EmergencialMonitorPanel({
           </article>
           <article
             className={`emerg-kpi${
-              resumo.autonomiaSemanasSaldo != null &&
-              resumo.autonomiaSemanasSaldo < resumo.semanasRestantesNoMes + 1
-                ? ' emerg-kpi--over'
-                : ''
+              resumo.empenhoAcabaAntesDoPeriodo ? ' emerg-kpi--over' : ''
             }`}
           >
-            <span className="emerg-kpi-label">Saldo / autonomia</span>
-            <strong>{num(resumo.saldoAtual)}</strong>
+            <span className="emerg-kpi-label">Empenho / autonomia</span>
+            <strong>{num(resumo.cestasDisponiveisEmpenho)}</strong>
             <span className="emerg-kpi-sub">
               {resumo.autonomiaSemanasSaldo != null ? (
                 <>
-                  ~{num(resumo.autonomiaSemanasSaldo, 1)} sem.
+                  ~{num(resumo.autonomiaSemanasSaldo, 1)} sem. ao ritmo ~
+                  {num(resumo.ritmoSemanalReferencia, 0)}/sem
                   {resumo.autonomiaDiasSaldo != null &&
-                    ` (~${resumo.autonomiaDiasSaldo} dias)`}
-                  {resumo.autonomiaSemanasSaldo <
-                    resumo.semanasRestantesNoMes + 1 && ' · não chega ao fim do mês'}
+                    ` (${resumo.autonomiaDiasSaldo} dias)`}
+                  {resumo.empenhoAcabaAntesDoPeriodo &&
+                    ` · faltam ${resumo.semanasPeriodoRestantes} sem. no período`}
                 </>
               ) : (
-                'Informe saldo'
+                'Lance envios para calcular'
               )}
             </span>
           </article>

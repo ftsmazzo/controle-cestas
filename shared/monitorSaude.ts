@@ -1,5 +1,9 @@
 import { aggregateHistoryByMonth } from './processAnalysis.js';
-import { buildEmpenhoControle, type EmpenhoControleResumo } from './empenhoControle.js';
+import {
+  buildEmpenhoControle,
+  computeAutonomiaOperacional,
+  type EmpenhoControleResumo,
+} from './empenhoControle.js';
 import { forecastNextMonth } from './forecastPlan.js';
 import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
 import {
@@ -28,9 +32,17 @@ export interface SaudeDistribuicao {
   consumoReferenciaRateio: number;
   consumoFonteRateio: 'previsao' | 'historico' | 'meta' | 'ritmo';
   saldoAtual: number | null;
+  /** Meses que o empenho restante dura ao ritmo atual (referência) */
   autonomiaMeses: number | null;
   autonomiaSemanas: number | null;
-  gapMesesParaIdeal: number | null;
+  autonomiaDias: number | null;
+  cestasDisponiveis: number;
+  ritmoReferencia: number;
+  ritmoSemanaAtual: number;
+  duracaoMesesEmpenho: number;
+  semanasPeriodoRestantes: number;
+  semanasPeriodoTotal: number;
+  empenhoAcabaAntesDoPeriodo: boolean;
   nivelEstoque: SaudeNivel;
   nivelLimiteMes: SaudeNivel;
   nivelLimiteSemana: SaudeNivel;
@@ -63,10 +75,13 @@ function nivelLimiteParaSaude(pctUso: number): SaudeNivel {
   return 'vermelho';
 }
 
-function nivelFromMeses(meses: number | null): SaudeNivel {
-  if (meses == null) return 'amarelo';
-  if (meses >= MESES_SAUDE_IDEAIS) return 'verde';
-  if (meses >= 2) return 'amarelo';
+function nivelAutonomiaEmpenho(
+  autonomiaMeses: number | null,
+  mesesRestantesPeriodo: number,
+): SaudeNivel {
+  if (autonomiaMeses == null) return 'amarelo';
+  if (autonomiaMeses >= mesesRestantesPeriodo) return 'verde';
+  if (autonomiaMeses >= mesesRestantesPeriodo * 0.5) return 'amarelo';
   return 'vermelho';
 }
 
@@ -94,6 +109,11 @@ export type MonitorResumoSaude = Pick<
   | 'semanasRestantesNoMes'
   | 'semanaProjetadaEstouro'
   | 'autonomiaDiasSaldo'
+  | 'ritmoSemanalReferencia'
+  | 'cestasDisponiveisEmpenho'
+  | 'semanasPeriodoRestantes'
+  | 'semanasPeriodoTotal'
+  | 'empenhoAcabaAntesDoPeriodo'
   | 'saldoAtual'
   | 'autonomiaSemanasSaldo'
   | 'equipamentos'
@@ -122,6 +142,11 @@ interface MonitoramentoResumoShape {
   semanasRestantesNoMes: number;
   semanaProjetadaEstouro: number | null;
   autonomiaDiasSaldo: number | null;
+  ritmoSemanalReferencia: number;
+  cestasDisponiveisEmpenho: number;
+  semanasPeriodoRestantes: number;
+  semanasPeriodoTotal: number;
+  empenhoAcabaAntesDoPeriodo: boolean;
   saldoAtual: number | null;
   autonomiaSemanasSaldo: number | null;
   equipamentos: {
@@ -192,22 +217,31 @@ export function buildSaudeDistribuicao(
     estimateConsumoReferenciaRateio(payload, limiteMensal, dashboard);
 
   const empenho = buildEmpenhoControle(payload);
+  const autonomiaOp = computeAutonomiaOperacional(
+    payload,
+    resumo.ritmoSemanalMedio,
+    resumo.enviadoSemanaAtual,
+    resumo.mes,
+    resumo.semanaAtual,
+  );
 
   const saldo = resumo.saldoAtual;
-  const autonomiaMeses =
-    saldo != null && limiteMensal > 0 ? saldo / limiteMensal : null;
-  const autonomiaSemanasSaldo = resumo.autonomiaSemanasSaldo;
-  const autonomiaDiasSaldo = resumo.autonomiaDiasSaldo;
-  const autonomiaSemanas =
-    autonomiaSemanasSaldo ??
-    (autonomiaMeses != null
-      ? autonomiaMeses * (resumo.semanasNoMes || 4)
-      : null);
+  const duracaoMesesEmpenho = autonomiaOp.duracaoMesesEmpenho;
+  const autonomiaMeses = autonomiaOp.autonomiaMeses;
+  const autonomiaSemanas = autonomiaOp.autonomiaSemanas;
+  const autonomiaDias = autonomiaOp.autonomiaDias;
+  const cestasDisponiveis = autonomiaOp.cestasDisponiveis;
+  const ritmoReferencia = autonomiaOp.ritmoReferencia;
+  const ritmoSemanaAtual = autonomiaOp.ritmoSemanaAtual;
+  const semanasPeriodoRestantes = autonomiaOp.semanasPeriodoRestantes;
+  const semanasPeriodoTotal = autonomiaOp.semanasPeriodoTotal;
+  const empenhoAcabaAntesDoPeriodo = autonomiaOp.empenhoAcabaAntesDoPeriodo;
+  const mesesPeriodoRestantes = autonomiaOp.mesesPeriodoRestantes;
 
-  const gapMesesParaIdeal =
-    autonomiaMeses != null ? Math.max(0, mesesIdeais - autonomiaMeses) : null;
-
-  const nivelEstoque = nivelFromMeses(autonomiaMeses);
+  const nivelEstoque = nivelAutonomiaEmpenho(
+    autonomiaMeses,
+    mesesPeriodoRestantes,
+  );
   const pctUsoLimiteMes = resumo.pctMes;
   const pctUsoLimiteSemana = resumo.pctLimiteSemana;
   const nivelLimiteMes = nivelLimiteParaSaude(pctUsoLimiteMes);
@@ -219,8 +253,8 @@ export function buildSaudeDistribuicao(
   const margemSemana = resumo.margemSemana;
 
   const pctEstoque =
-    autonomiaMeses != null
-      ? Math.min(100, (autonomiaMeses / mesesIdeais) * 100)
+    autonomiaMeses != null && duracaoMesesEmpenho > 0
+      ? Math.min(100, (autonomiaMeses / duracaoMesesEmpenho) * 100)
       : 40;
   const scoreMes = scoreDentroDoLimite(pctUsoLimiteMes);
   const scoreSemana = scoreDentroDoLimite(pctUsoLimiteSemana);
@@ -250,10 +284,7 @@ export function buildSaudeDistribuicao(
   if (estouroProjetadoMes > 0 || pctProjecaoMes > 100) {
     indiceSaudeGeral = Math.min(indiceSaudeGeral, 40);
   }
-  if (
-    autonomiaSemanasSaldo != null &&
-    autonomiaSemanasSaldo < resumo.semanasRestantesNoMes + 1
-  ) {
+  if (empenhoAcabaAntesDoPeriodo) {
     indiceSaudeGeral = Math.min(indiceSaudeGeral, 35);
   }
   if (empenho.restante < 0) {
@@ -262,11 +293,9 @@ export function buildSaudeDistribuicao(
 
   const acoesSemana: string[] = [];
 
-  if (saldo == null) {
-    acoesSemana.push('Informar o saldo atual no Banco.');
-  } else if (gapMesesParaIdeal != null && gapMesesParaIdeal > 0) {
+  if (autonomiaSemanas != null && ritmoReferencia > 0) {
     acoesSemana.push(
-      `Preservar estoque: autonomia ~${num(autonomiaMeses)} mês(es) (teto ${num(limiteMensal)}/mês de saída).`,
+      `Empenho: ${num(cestasDisponiveis)} cestas restantes · ritmo ref. ~${num(ritmoReferencia)}/sem${ritmoSemanaAtual > resumo.ritmoSemanalMedio ? ` (semana atual ${num(ritmoSemanaAtual)})` : ''} · dura ~${autonomiaSemanas.toFixed(1)} sem.`,
     );
   }
 
@@ -280,12 +309,9 @@ export function buildSaudeDistribuicao(
     );
   }
 
-  if (
-    autonomiaSemanasSaldo != null &&
-    autonomiaSemanasSaldo < resumo.semanasRestantesNoMes + 1
-  ) {
+  if (empenhoAcabaAntesDoPeriodo && autonomiaSemanas != null) {
     acoesSemana.push(
-      `Saldo não chega ao fim do mês: ~${autonomiaSemanasSaldo.toFixed(1)} semana(s) (${autonomiaDiasSaldo ?? '—'} dias) ao ritmo ${num(resumo.ritmoSemanalMedio)}/sem — faltam ${resumo.semanasRestantesNoMes} semana(s).`,
+      `Crítico — empenho acaba em ~${autonomiaSemanas.toFixed(1)} semana(s) (${autonomiaDias ?? '—'} dias) ao ritmo atual; o período ainda tem ~${semanasPeriodoRestantes} semana(s).`,
     );
   }
 
@@ -344,20 +370,17 @@ export function buildSaudeDistribuicao(
   let resumoDecisao: string;
   if (estouroMes > 0 || estouroSemana > 0) {
     resumoDecisao = `Fora do controle: estouro ${estouroMes > 0 ? `mensal +${num(estouroMes)}` : ''}${estouroMes > 0 && estouroSemana > 0 ? ' · ' : ''}${estouroSemana > 0 ? `semanal +${num(estouroSemana)}` : ''} (teto ${num(limiteMensal)}/mês).`;
-  } else if (
-    autonomiaSemanasSaldo != null &&
-    autonomiaSemanasSaldo < resumo.semanasRestantesNoMes + 1
-  ) {
-    resumoDecisao = `Saldo acaba em ~${autonomiaSemanasSaldo.toFixed(1)} semana(s) (${autonomiaDiasSaldo ?? '—'} dias) ao ritmo ${num(resumo.ritmoSemanalMedio)}/sem — faltam ${resumo.semanasRestantesNoMes} semana(s) no mês. Reajuste já na próxima semana.`;
+  } else if (empenhoAcabaAntesDoPeriodo && autonomiaSemanas != null) {
+    resumoDecisao = `Empenho dura ~${autonomiaSemanas.toFixed(1)} semana(s) (~${autonomiaMeses?.toFixed(1) ?? '—'} meses) ao ritmo ~${num(ritmoReferencia)}/sem — o período ainda tem ~${semanasPeriodoRestantes} semana(s). Cortar volume na próxima semana.`;
   } else if (estouroProjetadoMes > 0) {
     resumoDecisao = `Dentro do teto hoje (${pctUsoLimiteMes.toFixed(0)}%), mas projeção ${pctProjecaoMes.toFixed(0)}% (+${num(estouroProjetadoMes)} cestas)${resumo.semanaProjetadaEstouro != null ? ` — estouro previsto na S${resumo.semanaProjetadaEstouro}` : ''}. Cortar volume na próxima semana.`;
   } else if (
     nivelLimiteMes === 'verde' &&
     nivelLimiteSemana === 'verde' &&
     autonomiaMeses != null &&
-    autonomiaMeses >= mesesIdeais
+    autonomiaMeses >= mesesPeriodoRestantes
   ) {
-    resumoDecisao = `Controle estável: ${pctUsoLimiteMes.toFixed(0)}% do teto mensal · ${pctUsoLimiteSemana.toFixed(0)}% da semana · ~${autonomiaMeses.toFixed(1)} mês(es) de estoque.`;
+    resumoDecisao = `Controle estável: ${pctUsoLimiteMes.toFixed(0)}% do teto mensal · ${pctUsoLimiteSemana.toFixed(0)}% da semana · empenho dura ~${autonomiaMeses.toFixed(1)} mês(es) ao ritmo atual.`;
   } else {
     resumoDecisao = `Uso ${pctUsoLimiteMes.toFixed(0)}% do teto ${num(limiteMensal)} · S${resumo.semanaAtual} ${pctUsoLimiteSemana.toFixed(0)}% · margem ${num(margemMes)} no mês · empenho ${num(empenho.restante)} restantes.`;
   }
@@ -371,7 +394,14 @@ export function buildSaudeDistribuicao(
     saldoAtual: saldo,
     autonomiaMeses,
     autonomiaSemanas,
-    gapMesesParaIdeal,
+    autonomiaDias,
+    cestasDisponiveis,
+    ritmoReferencia,
+    ritmoSemanaAtual,
+    duracaoMesesEmpenho,
+    semanasPeriodoRestantes,
+    semanasPeriodoTotal,
+    empenhoAcabaAntesDoPeriodo,
     nivelEstoque,
     nivelLimiteMes,
     nivelLimiteSemana,
@@ -390,8 +420,8 @@ export function buildSaudeDistribuicao(
     ritmoSemanalConsumo: resumo.ritmoSemanalMedio,
     semanasRestantesNoMes: resumo.semanasRestantesNoMes,
     semanaProjetadaEstouro: resumo.semanaProjetadaEstouro,
-    autonomiaSemanasSaldo,
-    autonomiaDiasSaldo,
+    autonomiaSemanasSaldo: autonomiaSemanas,
+    autonomiaDiasSaldo: autonomiaDias,
     empenho,
     acoesSemana,
     resumoDecisao,

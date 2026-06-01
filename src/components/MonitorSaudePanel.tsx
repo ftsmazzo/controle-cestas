@@ -24,11 +24,7 @@ const FONTE_RATEIO_LABEL: Record<SaudeDistribuicao['consumoFonteRateio'], string
 
 function nivelGeral(saude: SaudeDistribuicao): SaudeNivel {
   if (saude.estouroMes > 0 || saude.estouroSemana > 0) return 'vermelho';
-  if (
-    saude.estouroProjetadoMes > 0 ||
-    (saude.autonomiaSemanasSaldo != null &&
-      saude.autonomiaSemanasSaldo < saude.semanasRestantesNoMes + 1)
-  ) {
+  if (saude.estouroProjetadoMes > 0 || saude.empenhoAcabaAntesDoPeriodo) {
     return 'vermelho';
   }
   if (saude.nivelLimiteMes === 'vermelho' || saude.nivelLimiteSemana === 'vermelho') {
@@ -58,9 +54,10 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
 
   const nivel = nivelGeral(saude);
 
-  const pctBar = saude.autonomiaMeses != null
-    ? Math.min(100, (saude.autonomiaMeses / saude.mesesIdeais) * 100)
-    : 0;
+  const pctBar =
+    saude.autonomiaMeses != null && saude.duracaoMesesEmpenho > 0
+      ? Math.min(100, (saude.autonomiaMeses / saude.duracaoMesesEmpenho) * 100)
+      : 0;
 
   return (
     <section className={`panel monitor-saude monitor-saude--${nivel}`}>
@@ -72,28 +69,31 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
       </div>
       <p className="hint monitor-saude-lead">{saude.resumoDecisao}</p>
 
-      {(saude.autonomiaSemanasSaldo != null || saude.pctProjecaoMes > 0) && (
+      {(saude.autonomiaSemanas != null || saude.pctProjecaoMes > 0) && (
         <div className={`monitor-saude-prazo monitor-saude-prazo--${nivel}`}>
-          <h4>Prazo para decisão (semana e mês)</h4>
-          {saude.autonomiaSemanasSaldo != null && (
+          <h4>Prazo para decisão (empenho · 4 meses)</h4>
+          {saude.autonomiaSemanas != null && (
             <p className="monitor-saude-prazo-destaque">
               <strong>
-                Cestas no Banco acabam em ~{num(saude.autonomiaSemanasSaldo, 1)} semana(s)
+                Com ritmo ~{num(saude.ritmoReferencia, 0)}/sem, o empenho dura ~
+                {num(saude.autonomiaSemanas, 1)} semana(s)
               </strong>
-              {saude.autonomiaDiasSaldo != null && (
-                <> (~{saude.autonomiaDiasSaldo} dias)</>
-              )}
-              {` ao ritmo ${num(saude.ritmoSemanalConsumo, 0)}/sem`}
-              {saude.semanasRestantesNoMes > 0 && (
+              {saude.autonomiaDias != null && <> (~{saude.autonomiaDias} dias)</>}
+              {saude.ritmoSemanaAtual > saude.ritmoSemanalConsumo && (
                 <>
                   {' '}
-                  · faltam <strong>{saude.semanasRestantesNoMes}</strong> semana(s) no mês
+                  (semana atual: {num(saude.ritmoSemanaAtual, 0)}/sem)
                 </>
               )}
-              {saude.autonomiaSemanasSaldo < saude.semanasRestantesNoMes + 1 && (
+              <span className="monitor-saude-prazo-sub">
+                {' '}
+                · {num(saude.cestasDisponiveis, 0)} cestas restantes no período
+              </span>
+              {saude.empenhoAcabaAntesDoPeriodo && (
                 <span className="monitor-saude-prazo-alerta">
                   {' '}
-                  — saldo não chega ao fim do mês
+                  — acaba antes do fim dos {saude.duracaoMesesEmpenho} meses (faltam ~
+                  {num(saude.semanasPeriodoRestantes, 0)} sem. no contrato)
                 </span>
               )}
             </p>
@@ -124,34 +124,35 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
         <div className="monitor-saude-autonomia-labels">
           <span>0</span>
           <span className="monitor-saude-meta-line">
-            Estoque ideal {saude.mesesIdeais} meses
+            Duração do empenho ({saude.duracaoMesesEmpenho} meses)
           </span>
-          <span>{saude.mesesIdeais}+ m</span>
+          <span>{saude.duracaoMesesEmpenho} m</span>
         </div>
-        <div className="monitor-saude-track" role="img" aria-label="Autonomia em meses">
+        <div
+          className="monitor-saude-track"
+          role="img"
+          aria-label="Meses de empenho ao ritmo atual"
+        >
           <div
-            className="monitor-saude-fill"
+            className={`monitor-saude-fill monitor-saude-fill--${nivel}`}
             style={{ width: `${pctBar}%` }}
-          />
-          <div
-            className="monitor-saude-ideal"
-            style={{ left: '100%' }}
-            title={`${saude.mesesIdeais} meses ideais`}
           />
         </div>
         <p className="monitor-saude-autonomia-valor">
           {saude.autonomiaMeses != null ? (
             <>
-              <strong>{num(saude.autonomiaMeses)}</strong> meses de estoque
-              {saude.gapMesesParaIdeal != null && saude.gapMesesParaIdeal > 0 && (
-                <span className="monitor-saude-gap">
-                  {' '}
-                  (faltam {num(saude.gapMesesParaIdeal)} para {MESES_SAUDE_IDEAIS})
-                </span>
-              )}
+              <strong>{num(saude.autonomiaMeses)}</strong> meses ao ritmo atual
+              <span className="monitor-saude-gap">
+                {' '}
+                (período:{' '}
+                {num(saude.semanasPeriodoTotal - saude.semanasPeriodoRestantes, 0)} sem.
+                decorridas ·{' '}
+                {num(saude.semanasPeriodoRestantes, 0)} restantes de{' '}
+                {num(saude.semanasPeriodoTotal, 0)})
+              </span>
             </>
           ) : (
-            'Informe saldo para calcular meses de autonomia'
+            'Lance envios semanais para calcular autonomia ao ritmo'
           )}
         </p>
       </div>
@@ -257,8 +258,8 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
 
       <div className="monitor-saude-legend">
         <span>
-          <i className="dot dot-estoque" /> Estoque (35%): saldo ÷ teto{' '}
-          {num(saude.limiteMensal, 0)}/mês
+          <i className="dot dot-estoque" /> Empenho (35%): meses ao ritmo ÷{' '}
+          {saude.duracaoMesesEmpenho} meses do contrato
         </span>
         <span>
           <i className="dot dot-ritmo" /> Teto mês (25%) · projeção (15%) · semana S

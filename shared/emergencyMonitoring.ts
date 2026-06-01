@@ -1,4 +1,5 @@
 import { allocatePlans } from './allocation.js';
+import { computeAutonomiaOperacional } from './empenhoControle.js';
 import {
   estouroAcimaLimite,
   margemAteLimite,
@@ -112,6 +113,12 @@ export interface MonitoramentoResumo {
   /** Semana civil em que o teto mensal estoura (projeção) */
   semanaProjetadaEstouro: number | null;
   autonomiaDiasSaldo: number | null;
+  /** Ritmo pessimista: max(média, semana atual) */
+  ritmoSemanalReferencia: number;
+  cestasDisponiveisEmpenho: number;
+  semanasPeriodoRestantes: number;
+  semanasPeriodoTotal: number;
+  empenhoAcabaAntesDoPeriodo: boolean;
   metaAcumuladaEsperada: number;
   enviadoAcumulado: number;
   pctRitmoGeral: number;
@@ -569,12 +576,20 @@ export function buildMonitoramentoResumo(
 
   const ritmoSemanal = ritmoSemanalMedio || limiteSemanal;
   const saldo = mon.saldoAtual;
-  const autonomiaSemanasSaldo =
-    saldo != null && ritmoSemanal > 0 ? saldo / ritmoSemanal : null;
-  const autonomiaDiasSaldo =
-    autonomiaSemanasSaldo != null
-      ? Math.round(autonomiaSemanasSaldo * 7)
-      : null;
+  const autonomiaOp = computeAutonomiaOperacional(
+    payload,
+    ritmoSemanalMedio,
+    enviadoSemanaAtual,
+    mes,
+    semanaAtual,
+  );
+  const autonomiaSemanasSaldo = autonomiaOp.autonomiaSemanas;
+  const autonomiaDiasSaldo = autonomiaOp.autonomiaDias;
+  const ritmoSemanalReferencia = autonomiaOp.ritmoReferencia;
+  const cestasDisponiveisEmpenho = autonomiaOp.cestasDisponiveis;
+  const semanasPeriodoRestantes = autonomiaOp.semanasPeriodoRestantes;
+  const semanasPeriodoTotal = autonomiaOp.semanasPeriodoTotal;
+  const empenhoAcabaAntesDoPeriodo = autonomiaOp.empenhoAcabaAntesDoPeriodo;
   const faltam = margemMes;
   const projecaoSemanasAteMeta =
     ritmoSemanal > 0 && margemMes > 0
@@ -637,15 +652,20 @@ export function buildMonitoramentoResumo(
     });
   }
 
-  if (
+  if (empenhoAcabaAntesDoPeriodo && autonomiaSemanasSaldo != null) {
+    alertas.push({
+      nivel: 'critico',
+      titulo: 'Empenho não chega ao fim do período',
+      descricao: `Com ~${ritmoSemanalReferencia.toFixed(0)} cestas/sem, as ${cestasDisponiveisEmpenho} restantes duram ~${autonomiaSemanasSaldo.toFixed(1)} semana(s) (${autonomiaDiasSaldo ?? '—'} dias); o contrato prevê ~${semanasPeriodoRestantes} semana(s) ainda (${semanasPeriodoTotal} no total). Reduza já na próxima semana.`,
+    });
+  } else if (
     autonomiaSemanasSaldo != null &&
-    autonomiaSemanasSaldo < semanasRestantesNoMes + 1 &&
-    saldo != null
+    autonomiaSemanasSaldo < semanasRestantesNoMes + 1
   ) {
     alertas.push({
       nivel: 'critico',
-      titulo: 'Saldo não chega ao fim do mês',
-      descricao: `Com ~${ritmoSemanalMedio.toFixed(0)} cestas/sem, o saldo ${saldo} acaba em ~${autonomiaSemanasSaldo.toFixed(1)} semana(s) (${autonomiaDiasSaldo ?? '—'} dias); faltam ${semanasRestantesNoMes + 1} semana(s) no mês.`,
+      titulo: 'Ritmo estoura o mês civil antes do fim',
+      descricao: `Ao ritmo ~${ritmoSemanalReferencia.toFixed(0)}/sem, as cestas do mês acabam em ~${autonomiaSemanasSaldo.toFixed(1)} semana(s); faltam ${semanasRestantesNoMes} no mês.`,
     });
   }
 
@@ -740,6 +760,11 @@ export function buildMonitoramentoResumo(
     semanasRestantesNoMes,
     semanaProjetadaEstouro,
     autonomiaDiasSaldo,
+    ritmoSemanalReferencia,
+    cestasDisponiveisEmpenho,
+    semanasPeriodoRestantes,
+    semanasPeriodoTotal,
+    empenhoAcabaAntesDoPeriodo,
     metaAcumuladaEsperada,
     enviadoAcumulado,
     pctRitmoGeral,

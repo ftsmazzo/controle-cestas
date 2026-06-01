@@ -1,14 +1,130 @@
 import {
   MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
+  weeksInCalendarMonth,
   type EmergencialMonitoramento,
 } from './emergencyMonitoring.js';
-import { formatMonthKeyPt, parseMonthKey } from './monthUtils.js';
+import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
 import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from './requisicaoHistorico.js';
 import type { MonthlyPlan, ServicesPayload } from './serviceTypes.js';
 
 /** Empenho emergencial padrão (4 meses × ~1.150, ajustável no mês) */
 export const EMPENHO_CESTAS_TOTAL_PADRAO = 4800;
 export const EMPENHO_DURACAO_MESES_PADRAO = 4;
+/** Conversão semanas → meses no calendário operacional */
+export const SEMANAS_POR_MES_CALENDARIO = 4.33;
+
+export interface AutonomiaOperacional {
+  cestasDisponiveis: number;
+  empenhoRestante: number;
+  ritmoSemanalMedio: number;
+  ritmoSemanaAtual: number;
+  ritmoReferencia: number;
+  autonomiaSemanas: number | null;
+  autonomiaMeses: number | null;
+  autonomiaDias: number | null;
+  semanasPeriodoTotal: number;
+  semanasPeriodoDecorridas: number;
+  semanasPeriodoRestantes: number;
+  mesesPeriodoRestantes: number;
+  duracaoMesesEmpenho: number;
+  empenhoAcabaAntesDoPeriodo: boolean;
+}
+
+/** Semanas do empenho (ponto zero → fim dos meses do contrato) */
+export function semanasPeriodoEmpenho(
+  payload: ServicesPayload,
+  mesReferencia: string,
+  semanaReferencia: number,
+): { total: number; decorridas: number; restantes: number } {
+  const duracao =
+    payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO;
+  const meses =
+    payload.emergencial.empenhoMeses ?? suggestEmpenhoMeses(duracao);
+  const mon = payload.emergencial.monitoramento;
+  const mesInicio = mon.mesInicioControle ?? MONITOR_CONTROLE_MES_INICIO;
+  const semInicio = mon.semanaInicioControle ?? MONITOR_CONTROLE_SEMANA_INICIO;
+  const kRef = parseMonthKey(mesReferencia);
+  const kIni = parseMonthKey(mesInicio);
+
+  let total = 0;
+  let decorridas = 0;
+
+  for (const mes of meses) {
+    const ym = getYearMonth(mes);
+    if (!ym) continue;
+    const k = parseMonthKey(mes);
+    const semanasNoMes = weeksInCalendarMonth(ym.year, ym.month);
+
+    for (let w = 1; w <= semanasNoMes; w++) {
+      if (k < kIni) continue;
+      if (k === kIni && w < semInicio) continue;
+
+      total++;
+      if (k < kRef || (k === kRef && w <= semanaReferencia)) decorridas++;
+    }
+  }
+
+  return {
+    total: Math.max(1, total),
+    decorridas,
+    restantes: Math.max(0, total - decorridas),
+  };
+}
+
+/** Quanto tempo o empenho restante dura ao ritmo atual (semana atual pesa se for maior que a média) */
+export function computeAutonomiaOperacional(
+  payload: ServicesPayload,
+  ritmoSemanalMedio: number,
+  enviadoSemanaAtual: number,
+  mesReferencia: string,
+  semanaReferencia: number,
+): AutonomiaOperacional {
+  const empenho = buildEmpenhoControle(payload);
+  const saldo = payload.emergencial.monitoramento.saldoAtual;
+  const empenhoRestante = empenho.restante;
+  const cestasDisponiveis =
+    saldo != null ? Math.min(empenhoRestante, saldo) : empenhoRestante;
+
+  const ritmoReferencia =
+    enviadoSemanaAtual > 0
+      ? Math.max(ritmoSemanalMedio, enviadoSemanaAtual)
+      : ritmoSemanalMedio;
+
+  const duracaoMeses =
+    payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO;
+  const periodo = semanasPeriodoEmpenho(payload, mesReferencia, semanaReferencia);
+
+  const autonomiaSemanas =
+    ritmoReferencia > 0 ? cestasDisponiveis / ritmoReferencia : null;
+  const autonomiaMeses =
+    autonomiaSemanas != null
+      ? autonomiaSemanas / SEMANAS_POR_MES_CALENDARIO
+      : null;
+  const autonomiaDias =
+    autonomiaSemanas != null ? Math.round(autonomiaSemanas * 7) : null;
+
+  const empenhoAcabaAntesDoPeriodo =
+    autonomiaSemanas != null &&
+    autonomiaSemanas < periodo.restantes - 0.5;
+
+  return {
+    cestasDisponiveis,
+    empenhoRestante,
+    ritmoSemanalMedio,
+    ritmoSemanaAtual: enviadoSemanaAtual,
+    ritmoReferencia,
+    autonomiaSemanas,
+    autonomiaMeses,
+    autonomiaDias,
+    semanasPeriodoTotal: periodo.total,
+    semanasPeriodoDecorridas: periodo.decorridas,
+    semanasPeriodoRestantes: periodo.restantes,
+    mesesPeriodoRestantes: periodo.restantes / SEMANAS_POR_MES_CALENDARIO,
+    duracaoMesesEmpenho: duracaoMeses,
+    empenhoAcabaAntesDoPeriodo,
+  };
+}
 
 export function incrementMonthKey(key: number): number {
   const year = Math.floor(key / 100);
