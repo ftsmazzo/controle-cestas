@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { computeServiceStats } from '@shared/allocation';
+import { consumptionUnits } from '@shared/serviceFamilies';
 import { parseMonthKey } from '@shared/monthUtils';
 import { yearsDetectedInHistory } from '@shared/syncFromServices';
 import type { ServiceDef, ServicesPayload } from '@shared/serviceTypes';
@@ -52,10 +53,15 @@ export default function EquipamentosPanel({
     [data],
   );
 
+  const unidades = useMemo(
+    () => (data ? consumptionUnits(data.services) : []),
+    [data],
+  );
+
   const stats = useMemo(() => {
     if (!data?.history.length) return [];
-    return computeServiceStats(data.history, data.services.map((s) => s.id));
-  }, [data]);
+    return computeServiceStats(data.history, unidades.map((s) => s.id));
+  }, [data, unidades]);
 
   const historyByMonth = useMemo(() => {
     if (!data) return [];
@@ -251,7 +257,7 @@ export default function EquipamentosPanel({
         </>
       )}
 
-      {showEquip && data && data.services.length > 0 && (
+      {showEquip && data && unidades.length > 0 && (
         <>
           <section className="panel">
             <h3>Equipamentos — fixos e cotas</h3>
@@ -271,7 +277,7 @@ export default function EquipamentosPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {data.services.map((s) => {
+                  {unidades.map((s) => {
                     const st = stats.find((x) => x.servicoId === s.id);
                     return (
                       <tr key={s.id}>

@@ -1,6 +1,7 @@
 import { mergeAppSettings } from './appSettings.js';
 import { mergeEmergencialMonitoring } from './emergencyMonitoring.js';
 import { ensureFamiliaHierarchy, enrichServiceDef } from './serviceFamilies.js';
+import { repairServiceCatalog } from './serviceRepair.js';
 import { defaultEmergencialConfig, defaultRegularConfig } from './processTypes.js';
 import { sanitizeProcessPlans } from './processSanitize.js';
 import type { ProcessoEmergencialConfig } from './processTypes.js';
@@ -17,7 +18,8 @@ function normalizeUnit(s: ServiceDef): ServiceDef {
 export function normalizeServicesPayload(
   raw: Partial<ServicesPayload> & Pick<ServicesPayload, 'services' | 'history'>,
 ): ServicesPayload {
-  const history = raw.history ?? [];
+  const repaired = repairServiceCatalog(raw.services ?? [], raw.history ?? []);
+  const history = repaired.history;
   const settings = mergeAppSettings(raw.settings);
   const base = { history, settings };
   let emergencial: ProcessoEmergencialConfig = {
@@ -73,7 +75,7 @@ export function normalizeServicesPayload(
   regular.totalContratoAnual = settings.contratoAnual;
 
   return {
-    services: ensureFamiliaHierarchy((raw.services ?? []).map(normalizeUnit)),
+    services: ensureFamiliaHierarchy(repaired.services.map(normalizeUnit)),
     history,
     plans,
     emergencial,

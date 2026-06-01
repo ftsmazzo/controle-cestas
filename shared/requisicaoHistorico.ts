@@ -14,6 +14,8 @@ import {
   slugServiceId,
 } from './serviceFamilies.js';
 import { parseMonthKey } from './monthUtils.js';
+import { repairServiceCatalog } from './serviceRepair.js';
+import type { MonthlyPlan } from './serviceTypes.js';
 import type {
   EmergencialMonitoramento,
   EntradaSemanalEquipamento,
@@ -122,6 +124,23 @@ export interface CoderpHistoricoImportResult {
   mesesPreenchidos: string[];
   notasRedistribuicao: string[];
   avisos: string[];
+  reparoCadastro?: string[];
+}
+
+function ensurePlanoEmergencialMes(
+  plans: MonthlyPlan[],
+  mes: string,
+  total: number,
+): MonthlyPlan[] {
+  const k = parseMonthKey(mes);
+  const next = [...plans];
+  const i = next.findIndex((p) => parseMonthKey(p.mes) === k);
+  if (i >= 0) {
+    next[i] = { ...next[i], totalDisponivel: total };
+  } else {
+    next.push({ mes, totalDisponivel: total });
+  }
+  return next;
 }
 
 /**
@@ -175,7 +194,27 @@ export function applyCoderpHistoricoImport(
   }
   history = [...historyByKey.values()];
 
+  const repaired = repairServiceCatalog(services, history);
+  services = ensureFamiliaHierarchy(repaired.services);
+  history = repaired.history;
+  const reparoCadastro: string[] = [];
+  if (repaired.promoted.length) {
+    reparoCadastro.push(
+      `Unidades reclassificadas: ${repaired.promoted.slice(0, 6).join(', ')}.`,
+    );
+  }
+  if (repaired.removed.length) {
+    reparoCadastro.push(
+      `Duplicatas removidas: ${repaired.removed.slice(0, 6).join(', ')}.`,
+    );
+  }
+
   const mon = clearEntradasMonitoramento(payload.emergencial.monitoramento);
+  const plansEmerg = ensurePlanoEmergencialMes(
+    payload.emergencial.plans,
+    MES_REFERENCIA_SEGURO,
+    TOTAL_MENSAL_EMERGENCIAL_PADRAO,
+  );
 
   return {
     payload: {
@@ -189,13 +228,7 @@ export function applyCoderpHistoricoImport(
           ...mon,
           mesAtivo: MES_REFERENCIA_SEGURO,
         },
-        plans: payload.emergencial.plans.map((p) =>
-          parseMonthKey(p.mes) === parseMonthKey(MES_REFERENCIA_SEGURO)
-            ? { ...p, totalDisponivel: TOTAL_MENSAL_EMERGENCIAL_PADRAO }
-            : p.totalDisponivel > 0
-              ? p
-              : { ...p, totalDisponivel: TOTAL_MENSAL_EMERGENCIAL_PADRAO },
-        ),
+        plans: plansEmerg,
       },
     },
     linhasAplicadas,
@@ -203,6 +236,7 @@ export function applyCoderpHistoricoImport(
     mesesPreenchidos: meses,
     notasRedistribuicao: notas,
     avisos,
+    reparoCadastro,
   };
 }
 

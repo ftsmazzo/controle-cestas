@@ -69,6 +69,7 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
       novosEquipamentos,
       mesesPreenchidos,
       notasRedistribuicao,
+      reparoCadastro,
     } = applyCoderpHistoricoImport(data, preview);
     onApply(payload);
     const esperadas = normalizeCoderpImportRows(preview.rows).unidades.length;
@@ -81,10 +82,11 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
         (notasRedistribuicao.length
           ? `${notasRedistribuicao[0]} `
           : '') +
+        (reparoCadastro?.length ? `${reparoCadastro.join(' ')} ` : '') +
         (novosEquipamentos.length
           ? `Novos: ${novosEquipamentos.slice(0, 4).join(', ')}. `
           : '') +
-        'Envios semanais do monitoramento foram zerados. Salve e use a grade abaixo só para controle semanal.',
+        'Clique em Salvar monitoramento para gravar no banco. Envios semanais foram zerados.',
     );
     setPreview(null);
   };
