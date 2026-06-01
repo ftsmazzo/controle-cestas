@@ -1,119 +1,148 @@
-import { resolveJanelaAnaliseMeses } from '@shared/methodologyCalendar';
+import { useMemo } from 'react';
+import { buildMonitoramentoResumo } from '@shared/emergencyMonitoring';
+import { buildEmpenhoControle } from '@shared/empenhoControle';
+import { computeAutonomiaOperacional } from '@shared/empenhoControle';
 import {
+  PERIODO_REFERENCIA_FIM,
+  PERIODO_REFERENCIA_INICIO,
+  TETO_MENSAL_OPERACIONAL,
+  TETO_CONTRATUAL_MENSAL,
+} from '@shared/processoEmergencial';
+import {
+  Activity,
   CalendarRange,
   Package,
   ShieldAlert,
-  Wallet,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import DecisionDashboard from '../../components/DecisionDashboard';
+import CessaoEquipamentosTable from '../../components/CessaoEquipamentosTable';
 
-function num(n: number | null, dec = 1): string {
-  if (n === null || Number.isNaN(n)) return '—';
+function num(n: number | null | undefined, dec = 1): string {
+  if (n == null || Number.isNaN(n)) return '—';
   return n.toLocaleString('pt-BR', { maximumFractionDigits: dec });
 }
 
-function riskModifier(risco: string): string {
-  if (risco === 'Verde') return 'verde';
-  if (risco === 'Vermelho') return 'vermelho';
-  return 'amarelo';
+function saudePill(
+  autonomiaMeses: number | null,
+  mesesRestantes: number,
+  empenhoAcabaAntes: boolean,
+): { label: string; mod: 'verde' | 'amarelo' | 'vermelho' } {
+  if (empenhoAcabaAntes) return { label: 'VERMELHO', mod: 'vermelho' };
+  if (autonomiaMeses == null) return { label: 'AMARELO', mod: 'amarelo' };
+  if (autonomiaMeses >= mesesRestantes) return { label: 'VERDE', mod: 'verde' };
+  if (autonomiaMeses >= mesesRestantes * 0.5) return { label: 'AMARELO', mod: 'amarelo' };
+  return { label: 'VERMELHO', mod: 'vermelho' };
 }
 
 export default function DecisionHomePage() {
-  const { loading, dashboard, snapshot, payload } = useData();
+  const { loading, payload } = useData();
+
+  const emergencial = useMemo(() => {
+    if (!payload) return null;
+    const resumo = buildMonitoramentoResumo(payload);
+    const empenho = buildEmpenhoControle(payload);
+    const autonomia = computeAutonomiaOperacional(
+      payload,
+      resumo.ritmoSemanalMedio,
+      resumo.enviadoSemanaAtual,
+      resumo.mes,
+      resumo.semanaAnalise,
+    );
+    const pill = saudePill(
+      autonomia.autonomiaMeses,
+      autonomia.mesesPeriodoRestantes,
+      autonomia.empenhoAcabaAntesDoPeriodo,
+    );
+    return { resumo, empenho, autonomia, pill };
+  }, [payload]);
 
   if (loading) return null;
 
-  if (!dashboard) {
+  if (!payload || !emergencial) {
     return (
       <section className="panel empty">
-        <h3>Sem dados publicados</h3>
+        <h3>Processo emergencial não configurado</h3>
         <p className="hint">
-          Em <a href="/admin/importar">/admin → Importar</a> envie a planilha por equipamento.
-          Use <strong>Limpar tudo</strong> antes se quiser recomeçar do zero.
+          Acesse <a href="/admin/monitoramento">Admin → Monitor</a> e use{' '}
+          <strong>Preparar processo</strong> para iniciar o acompanhamento.
         </p>
       </section>
     );
   }
 
-  const janela = resolveJanelaAnaliseMeses(payload?.settings?.methodology);
-  const autonomia = dashboard.kpis.autonomiaMeses;
-  const risco = dashboard.kpis.riscoRuptura;
-  const riskMod = riskModifier(risco);
-
-  const janelaLabel =
-    janela != null && janela > 0
-      ? `Últimos ${janela} meses válidos`
-      : 'Todos os meses válidos';
+  const { empenho, autonomia, pill } = emergencial;
 
   return (
     <>
-      <section className={`home-kpi-strip home-kpi-strip--${riskMod}`}>
+      <section className={`home-kpi-strip home-kpi-strip--${pill.mod}`}>
         <article className="home-kpi-tile home-kpi-tile--primary">
           <span className="home-kpi-icon" aria-hidden>
             <ShieldAlert size={20} />
           </span>
-          <span className="home-kpi-label">Autonomia de estoque</span>
-          {autonomia != null ? (
+          <span className="home-kpi-label">Autonomia ao ritmo atual</span>
+          {autonomia.autonomiaMeses != null ? (
             <p className="home-kpi-value-line">
-              <span className="home-kpi-number">{num(autonomia)}</span>
+              <span className="home-kpi-number">{num(autonomia.autonomiaMeses)}</span>
               <span className="home-kpi-unit">meses</span>
             </p>
           ) : (
             <p className="home-kpi-value-line home-kpi-value-line--muted">
               <span className="home-kpi-number">—</span>
-              <span className="home-kpi-hint">
-                Informe o saldo em <a href="/admin/contratos">Admin → Contratos</a>
-              </span>
+              <span className="home-kpi-hint">Lance semanas no Monitor</span>
             </p>
           )}
-          <span className={`home-kpi-pill home-kpi-pill--${riskMod}`}>{risco}</span>
+          <span className={`home-kpi-pill home-kpi-pill--${pill.mod}`}>{pill.label}</span>
         </article>
 
         <article className="home-kpi-tile">
           <span className="home-kpi-icon" aria-hidden>
-            <Wallet size={20} />
+            <Activity size={20} />
           </span>
-          <span className="home-kpi-label">Contrato</span>
+          <span className="home-kpi-label">Teto operacional</span>
           <p className="home-kpi-value-line">
-            <span className="home-kpi-number">
-              {num(payload?.settings?.contratoMensal ?? 1200, 0)}
-            </span>
+            <span className="home-kpi-number">{num(TETO_MENSAL_OPERACIONAL, 0)}</span>
             <span className="home-kpi-unit">/mês</span>
           </p>
+          <span className="home-kpi-hint">
+            Contrato {num(TETO_CONTRATUAL_MENSAL, 0)} · margem 50/mês
+          </span>
         </article>
 
         <article className="home-kpi-tile">
           <span className="home-kpi-icon" aria-hidden>
             <CalendarRange size={20} />
           </span>
-          <span className="home-kpi-label">Janela de análise</span>
+          <span className="home-kpi-label">Referência histórica</span>
           <p className="home-kpi-value-line">
-            <span className="home-kpi-text">{janelaLabel}</span>
+            <span className="home-kpi-text">
+              {PERIODO_REFERENCIA_INICIO} – {PERIODO_REFERENCIA_FIM}
+            </span>
           </p>
         </article>
 
-        {snapshot.saldoEstoque != null && (
-          <article className="home-kpi-tile">
-            <span className="home-kpi-icon" aria-hidden>
-              <Package size={20} />
-            </span>
-            <span className="home-kpi-label">Saldo em estoque</span>
-            <p className="home-kpi-value-line">
-              <span className="home-kpi-number">{num(snapshot.saldoEstoque, 0)}</span>
-              <span className="home-kpi-unit">cestas</span>
-            </p>
-          </article>
-        )}
+        <article className="home-kpi-tile">
+          <span className="home-kpi-icon" aria-hidden>
+            <Package size={20} />
+          </span>
+          <span className="home-kpi-label">Saldo empenho</span>
+          <p className="home-kpi-value-line">
+            <span className="home-kpi-number">{num(empenho.restante, 0)}</span>
+            <span className="home-kpi-unit">cestas</span>
+          </p>
+          <span className="home-kpi-hint">
+            de {num(empenho.totalEmpenho, 0)} · usado {num(empenho.totalConsumido, 0)}
+          </span>
+        </article>
       </section>
 
-      <DecisionDashboard
-        dashboard={dashboard}
-        contratoMensal={payload?.settings?.contratoMensal ?? 1200}
-        janelaAnaliseMeses={janela}
-        history={payload?.history ?? []}
-        services={payload?.services ?? []}
-      />
+      <CessaoEquipamentosTable payload={payload} />
+
+      <p className="hint decision-foot-link">
+        Acompanhamento semanal detalhado:{' '}
+        <a href="/contrato-emergencial">Monitor emergencial</a>
+        {' · '}
+        <a href="/admin/monitoramento">Admin</a>
+      </p>
     </>
   );
 }
