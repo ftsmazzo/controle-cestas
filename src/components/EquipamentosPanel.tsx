@@ -263,7 +263,7 @@ export default function EquipamentosPanel({
             <h3>Equipamentos — fixos e cotas</h3>
             <p className="hint">
               Marque <strong>Fixo</strong> ou informe <strong>Cota fixa</strong> (ex.: SAICA 40/mês)
-              antes de usar Distribuir mês na consulta pública.
+              para o rateio no painel de decisão e no monitor emergencial.
             </p>
             <div className="table-wrap">
               <table>
@@ -330,7 +330,7 @@ export default function EquipamentosPanel({
             <section className="panel">
               <h3>Totais mensais (soma dos equipamentos)</h3>
               <p className="hint">
-                Estes valores alimentam o painel de decisão e o Registro de Preço.
+                Estes valores alimentam o painel de decisão e a aba Consumo.
               </p>
               <div className="table-wrap">
                 <table>

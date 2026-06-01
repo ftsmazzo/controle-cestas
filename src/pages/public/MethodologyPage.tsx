@@ -1,4 +1,13 @@
-import { NOTA_METODOLOGICA_RESUMO } from '@shared/methodology';
+import {
+  METODOLOGIA_CONTROLE_SEMANAL,
+  METODOLOGIA_EMPENHO_TETOS,
+  METODOLOGIA_EXCLUSOES,
+  METODOLOGIA_MITIGACAO,
+  METODOLOGIA_PONTO_ZERO,
+  METODOLOGIA_PROCESSO_EMERGENCIAL,
+  METODOLOGIA_REFERENCIA_CESSAO,
+  NOTA_METODOLOGICA_RESUMO,
+} from '@shared/methodology';
 import { NOTA_COVID_2022, NOTA_RACIONAMENTO_2023 } from '@shared/methodologyCalendar';
 import { APRESENTACAO_TEXTO } from '@shared/calculations';
 import { useData } from '../../context/DataContext';
@@ -13,25 +22,46 @@ const TAG_LABELS: Record<string, string> = {
 };
 
 export default function MethodologyPage() {
-  const { loading, methodologyTable, payload } = useData();
+  const { loading, methodologyTable } = useData();
 
   if (loading) return null;
-
-  const janela = payload?.settings?.methodology.janelaMediaMeses ?? 8;
 
   return (
     <>
       <section className="panel">
-        <h2>Metodologia e limites dos dados</h2>
-        <p>{NOTA_METODOLOGICA_RESUMO}</p>
+        <h2>Metodologia — processo emergencial</h2>
+        <p>{METODOLOGIA_PROCESSO_EMERGENCIAL}</p>
+        <p className="hint">{NOTA_METODOLOGICA_RESUMO}</p>
+      </section>
+
+      <section className="panel">
+        <h3>Empenho e tetos</h3>
+        <p>{METODOLOGIA_EMPENHO_TETOS}</p>
+      </section>
+
+      <section className="panel">
+        <h3>Ponto zero e controle semanal</h3>
+        <p>{METODOLOGIA_PONTO_ZERO}</p>
+        <p className="hint">{METODOLOGIA_CONTROLE_SEMANAL}</p>
+      </section>
+
+      <section className="panel">
+        <h3>Cotas de referência (cessão)</h3>
+        <p>{METODOLOGIA_REFERENCIA_CESSAO}</p>
+      </section>
+
+      <section className="panel">
+        <h3>Cenário de mitigação</h3>
+        <p>{METODOLOGIA_MITIGACAO}</p>
+      </section>
+
+      <section className="panel">
+        <h3>Períodos excluídos do modelo</h3>
+        <p>{METODOLOGIA_EXCLUSOES}</p>
         <ul className="steps-list">
           <li>{NOTA_COVID_2022}</li>
           <li>{NOTA_RACIONAMENTO_2023}</li>
         </ul>
-        <p className="hint">
-          Janela para média na distribuição: <strong>últimos {janela} meses válidos</strong>{' '}
-          (configurável em /admin → Metodologia).
-        </p>
       </section>
 
       {methodologyTable.length > 0 && (
@@ -65,14 +95,6 @@ export default function MethodologyPage() {
       <section className="panel apresentacao">
         <h3>Texto para apresentação</h3>
         <p>{APRESENTACAO_TEXTO}</p>
-      </section>
-
-      <section className="panel">
-        <h3>Fase futura — atendimentos SEMAS</h3>
-        <p className="hint">
-          Após estabilizar consumo e metodologia, será possível correlacionar volume de
-          famílias/atendimentos com consumo de cestas por serviço.
-        </p>
       </section>
     </>
   );

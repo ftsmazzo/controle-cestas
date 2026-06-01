@@ -219,4 +219,6 @@ export function mediaMovelUltimos3Validos(rows: ProcessedMonthRow[]): number | n
 export { contractScenarios } from './simulation.js';
 
 export const APRESENTACAO_TEXTO =
-  'A análise considera o histórico mensal de consumo, excluindo da modelagem períodos de COVID/2022-Q1, racionamento/2023, ruptura Abr/2026 e parcial Mai/2026. A previsão utiliza regressão linear apenas sobre meses válidos. O contrato de referência é 1.200 cestas/mês (14.400/ano), comparado à média válida, picos e projeção até o fim do ano.';
+  'Controle emergencial Mai–Ago/2026: empenho 4.800 cestas, teto operacional 1.150/mês e contratual 1.200/mês. ' +
+  'Ponto zero Mai/2026 S3; cotas por equipamento a partir de Set/2025–Mar/2026, excluindo COVID/2022, racionamento/2023 e ruptura Abr/2026. ' +
+  'Acompanhamento semanal de envios, mitigação com gordura de 200 no período e ajuste de ritmo quando o mês pressiona o teto.';

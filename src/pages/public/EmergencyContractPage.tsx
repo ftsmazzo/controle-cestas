@@ -1,11 +1,8 @@
-import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import EmergencialMonitorPanel from '../../components/EmergencialMonitorPanel';
-import EmergencialPanel from '../../components/EmergencialPanel';
 
 export default function EmergencyContractPage() {
   const { loading, payload, dashboard } = useData();
-  const [showDistrib, setShowDistrib] = useState(false);
 
   if (loading) return null;
 
@@ -19,32 +16,11 @@ export default function EmergencyContractPage() {
   }
 
   return (
-    <>
-      <EmergencialMonitorPanel
-        data={payload}
-        readOnly
-        decisionDashboard={dashboard}
-        onUpdate={() => {}}
-      />
-
-      <section className="panel">
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => setShowDistrib((v) => !v)}
-        >
-          {showDistrib ? 'Ocultar' : 'Ver'} simulação de distribuição
-        </button>
-      </section>
-
-      {showDistrib && (
-        <EmergencialPanel
-          data={payload}
-          readOnly
-          onUpdate={() => {}}
-          decisionDashboard={dashboard}
-        />
-      )}
-    </>
+    <EmergencialMonitorPanel
+      data={payload}
+      readOnly
+      decisionDashboard={dashboard}
+      onUpdate={() => {}}
+    />
   );
 }

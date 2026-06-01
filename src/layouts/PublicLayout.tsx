@@ -6,9 +6,7 @@ import './Shell.css';
 const NAV = [
   ['/', 'Painel de decisão'],
   ['/historico', 'Consumo'],
-  ['/distribuir', 'Distribuir mês'],
   ['/contrato-emergencial', 'Monitor emergencial'],
-  ['/registro-preco', 'Registro de Preço'],
   ['/metodologia', 'Metodologia'],
 ] as const;
 
@@ -23,7 +21,7 @@ export default function PublicLayout() {
           <div>
             <h1>Dashboard de Cestas Básicas</h1>
             <p className="subtitle">
-              Decisão, previsão e controle de consumo — SEMAS
+              Controle semanal do processo emergencial — SEMAS
             </p>
           </div>
           <div className="header-badges">

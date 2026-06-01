@@ -75,13 +75,14 @@ export default function AdminMethodologyPage() {
     <section className="panel">
       <h2>Metodologia e períodos</h2>
       <p className="hint">
-        Ajuste abaixo e clique em <strong>Salvar</strong>. O período de estudo alimenta o mapa de
-        calor na consulta pública. A janela de análise define a previsão no painel de decisão.
+        Ajuste abaixo e clique em <strong>Salvar</strong>. O período de estudo alimenta a aba
+        Consumo e as cotas de referência. A janela de análise define a tendência no painel de
+        decisão.
       </p>
 
       <div className="config-grid">
         <label>
-          Período de estudo (mapa de calor)
+          Período de estudo (Consumo e cotas)
           <select
             value={periodoDraft}
             onChange={(e) => setPeriodoDraft(e.target.value)}

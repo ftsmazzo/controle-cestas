@@ -12,11 +12,9 @@ import AdminSyncPage from './pages/admin/AdminSyncPage';
 import AdminAssistancePage from './pages/admin/AdminAssistancePage';
 import AdminMonitorEmergencialPage from './pages/admin/AdminMonitorEmergencialPage';
 import DecisionHomePage from './pages/public/DecisionHomePage';
-import DistributeMonthPage from './pages/public/DistributeMonthPage';
 import EmergencyContractPage from './pages/public/EmergencyContractPage';
 import HistoryPage from './pages/public/HistoryPage';
 import MethodologyPage from './pages/public/MethodologyPage';
-import PriceRegistryPage from './pages/public/PriceRegistryPage';
 
 export default function AppRouter() {
   return (
@@ -27,9 +25,7 @@ export default function AppRouter() {
           <Route element={<PublicLayout />}>
             <Route index element={<DecisionHomePage />} />
             <Route path="historico" element={<HistoryPage />} />
-            <Route path="distribuir" element={<DistributeMonthPage />} />
             <Route path="contrato-emergencial" element={<EmergencyContractPage />} />
-            <Route path="registro-preco" element={<PriceRegistryPage />} />
             <Route path="metodologia" element={<MethodologyPage />} />
           </Route>
 
