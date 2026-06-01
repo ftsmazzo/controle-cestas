@@ -1,3 +1,19 @@
+.monitor-section {
+  margin-bottom: 1.25rem;
+}
+
+.monitor-section-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.monitor-section-title span {
+  color: var(--muted);
+  font-weight: 600;
+  margin-right: 0.35rem;
+}
+
 .emerg-monitor-kpis--ok {
   border-left: 4px solid #16a34a;
 }
