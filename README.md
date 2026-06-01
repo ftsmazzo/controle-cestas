@@ -51,6 +51,17 @@ Executadas **automaticamente** cada vez que o container sobe (`server/migrate.ts
 - Abra o site, importe planilha ou “Carregar exemplo”
 - Badge **PostgreSQL conectado** no canto superior
 
+## Monitor emergencial (produção semanal)
+
+O Banco de Alimentos registra em **/admin/monitoramento** (área administrativa):
+
+- **Saldo** atual de cestas no almoxarifado
+- **Envios semanais por equipamento** (CRAS 1, CREAS II, SAICA…), no formato das planilhas em `Docs/` (4–5 semanas por mês)
+
+A consulta pública em **Monitor emergencial** exibe ritmo vs. meta, alertas de ruptura e metas por equipamento derivadas da **distribuição projetada** do processo emergencial (não agrega só “CRAS”).
+
+Semanas civis: 1–7, 8–14, 15–21, 22–28, 29–fim do mês.
+
 ## Por serviço (distribuição)
 
 Aba **Por serviço** no dashboard:

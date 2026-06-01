@@ -7,6 +7,7 @@ const ADMIN_NAV = [
   ['/admin/equipamentos', 'Equipamentos'],
   ['/admin/metodologia', 'Metodologia'],
   ['/admin/contratos', 'Contratos'],
+  ['/admin/monitoramento', 'Monitor emergencial'],
   ['/admin/sincronizar', 'Sincronizar'],
   ['/admin/atendimentos', 'Atendimentos (futuro)'],
 ] as const;

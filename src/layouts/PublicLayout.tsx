@@ -7,7 +7,7 @@ const NAV = [
   ['/', 'Painel de decisão'],
   ['/historico', 'Consumo'],
   ['/distribuir', 'Distribuir mês'],
-  ['/contrato-emergencial', 'Contrato emergencial'],
+  ['/contrato-emergencial', 'Monitor emergencial'],
   ['/registro-preco', 'Registro de Preço'],
   ['/metodologia', 'Metodologia'],
 ] as const;

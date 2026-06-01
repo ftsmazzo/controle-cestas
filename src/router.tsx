@@ -10,6 +10,7 @@ import AdminImportPage from './pages/admin/AdminImportPage';
 import AdminMethodologyPage from './pages/admin/AdminMethodologyPage';
 import AdminSyncPage from './pages/admin/AdminSyncPage';
 import AdminAssistancePage from './pages/admin/AdminAssistancePage';
+import AdminMonitorEmergencialPage from './pages/admin/AdminMonitorEmergencialPage';
 import DecisionHomePage from './pages/public/DecisionHomePage';
 import DistributeMonthPage from './pages/public/DistributeMonthPage';
 import EmergencyContractPage from './pages/public/EmergencyContractPage';
@@ -45,6 +46,10 @@ export default function AppRouter() {
             <Route path="equipamentos" element={<AdminEquipmentsPage />} />
             <Route path="metodologia" element={<AdminMethodologyPage />} />
             <Route path="contratos" element={<AdminContractsPage />} />
+            <Route
+              path="monitoramento"
+              element={<AdminMonitorEmergencialPage />}
+            />
             <Route path="sincronizar" element={<AdminSyncPage />} />
             <Route path="atendimentos" element={<AdminAssistancePage />} />
           </Route>

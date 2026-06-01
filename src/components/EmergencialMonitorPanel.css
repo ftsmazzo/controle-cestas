@@ -1,0 +1,147 @@
+.emerg-monitor-kpis--ok {
+  border-left: 4px solid #16a34a;
+}
+
+.emerg-monitor-kpis--atencao {
+  border-left: 4px solid #ca8a04;
+  background: #fffbeb;
+}
+
+.emerg-monitor-kpis--critico {
+  border-left: 4px solid #dc2626;
+  background: #fef2f2;
+}
+
+.emerg-monitor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin: 1rem 0;
+}
+
+.emerg-monitor-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.emerg-monitor-toolbar input,
+.emerg-monitor-toolbar select {
+  min-width: 10rem;
+  padding: 0.4rem 0.5rem;
+}
+
+.emerg-saldo-ts {
+  font-size: 0.8rem;
+  color: var(--muted);
+  align-self: center;
+}
+
+.emerg-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.emerg-kpi {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border);
+}
+
+.emerg-kpi-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.emerg-kpi strong {
+  display: block;
+  font-size: 1.25rem;
+  margin-top: 0.2rem;
+}
+
+.emerg-kpi-sub {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.emerg-monitor-table-wrap {
+  overflow-x: auto;
+}
+
+.emerg-monitor-table {
+  font-size: 0.85rem;
+}
+
+.emerg-monitor-table .sem-head {
+  text-align: center;
+  min-width: 4rem;
+}
+
+.emerg-monitor-table .sem-range {
+  display: block;
+  font-weight: 400;
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.emerg-monitor-table .cell-edit-week {
+  background: #eff6ff;
+}
+
+.cell-qty-input {
+  width: 3.5rem;
+  padding: 0.2rem;
+  text-align: center;
+}
+
+.row-status-critico td:first-child {
+  border-left: 3px solid #dc2626;
+}
+
+.row-status-atencao td:first-child {
+  border-left: 3px solid #ca8a04;
+}
+
+.badge-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge-atencao {
+  background: #fef08a;
+  color: #854d0e;
+}
+
+.badge-critico {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.badge-sem_meta {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.hint-inline {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.falta-positiva {
+  color: #9a3412;
+  font-weight: 600;
+}
+
+.emerg-meta-ref {
+  background: #f8fafc;
+}

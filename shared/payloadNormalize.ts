@@ -1,6 +1,8 @@
 import { mergeAppSettings } from './appSettings.js';
+import { mergeEmergencialMonitoring } from './emergencyMonitoring.js';
 import { defaultEmergencialConfig, defaultRegularConfig } from './processTypes.js';
 import { sanitizeProcessPlans } from './processSanitize.js';
+import type { ProcessoEmergencialConfig } from './processTypes.js';
 import type { ServiceDef, ServicesPayload } from './serviceTypes.js';
 
 function normalizeUnit(s: ServiceDef): ServiceDef {
@@ -17,11 +19,38 @@ export function normalizeServicesPayload(
   const history = raw.history ?? [];
   const settings = mergeAppSettings(raw.settings);
   const base = { history, settings };
-  let emergencial = raw.emergencial ?? defaultEmergencialConfig(base);
+  let emergencial: ProcessoEmergencialConfig = {
+    ...defaultEmergencialConfig(base),
+    ...(raw.emergencial ?? {}),
+  };
+  emergencial.monitoramento = mergeEmergencialMonitoring(
+    raw.emergencial?.monitoramento,
+    emergencial.monitoramento,
+  );
   let regular = raw.regular ?? defaultRegularConfig(base);
   const sanitized = sanitizeProcessPlans(base, emergencial, regular);
-  emergencial = sanitized.emergencial;
+  emergencial = {
+    ...sanitized.emergencial,
+    monitoramento: mergeEmergencialMonitoring(
+      raw.emergencial?.monitoramento,
+      sanitized.emergencial.monitoramento,
+    ),
+  };
   regular = sanitized.regular;
+
+  if (
+    emergencial.monitoramento.saldoAtual == null &&
+    settings.saldoEstoque != null
+  ) {
+    emergencial.monitoramento = {
+      ...emergencial.monitoramento,
+      saldoAtual: settings.saldoEstoque,
+    };
+  }
+  if (emergencial.monitoramento.saldoAtual != null) {
+    settings.saldoEstoque = emergencial.monitoramento.saldoAtual;
+    regular.saldoAtual = emergencial.monitoramento.saldoAtual;
+  }
   const plans =
     raw.plans && raw.plans.length > 0 ? raw.plans : emergencial.plans;
 

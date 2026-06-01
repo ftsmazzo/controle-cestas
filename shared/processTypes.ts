@@ -1,6 +1,12 @@
+import {
+  defaultEmergencialMonitoring,
+  type EmergencialMonitoramento,
+} from './emergencyMonitoring.js';
 import { suggestPlanningMonths, excludedMonthKeysFromRows } from './planningMonths.js';
 import { processedRowsFromPayload, validMonthKeysForPayload } from './payloadAnalysis.js';
 import type { MonthlyPlan, ServicesPayload } from './serviceTypes.js';
+
+export type { EmergencialMonitoramento, EntradaSemanalEquipamento } from './emergencyMonitoring.js';
 
 /** Processo emergencial: ex. 1.200 cestas/mês por 4 meses — distribuição por equipamento */
 export interface ProcessoEmergencialConfig {
@@ -9,6 +15,8 @@ export interface ProcessoEmergencialConfig {
   cestasPorMes: number;
   plans: MonthlyPlan[];
   observacao: string;
+  /** Acompanhamento semanal em produção (envios por equipamento + saldo Banco) */
+  monitoramento: EmergencialMonitoramento;
 }
 
 /** Processo regular: registro/leito de 12 meses — totais mensais, previsão e risco contratual */
@@ -76,6 +84,7 @@ export function defaultEmergencialConfig(
     cestasPorMes: 1200,
     plans: months.map((mes) => ({ mes, totalDisponivel: 1200 })),
     observacao: 'Processo emergencial — distribuir por equipamento para evitar ruptura.',
+    monitoramento: defaultEmergencialMonitoring(),
   };
 }
 
