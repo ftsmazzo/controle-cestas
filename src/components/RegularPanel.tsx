@@ -13,6 +13,7 @@ import { contractScenarios } from '@shared/simulation';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { saveServices } from '../lib/servicesApi';
 import SimulationPanel from './SimulationPanel';
+import PrintableTable from './ui/PrintableTable';
 import './ProcessPanels.css';
 
 function num(n: number | null, dec = 0): string {
@@ -282,7 +283,11 @@ export default function RegularPanel({
         <>
           <section className="panel">
             <h3>Referência por mês do plano de registro</h3>
-            <div className="table-wrap">
+            <PrintableTable
+              title="Referência por mês do plano de registro"
+              subtitle="Histórico, previsão e valor planejado"
+              orientation="landscape"
+            >
               <table>
                 <thead>
                   <tr>
@@ -305,7 +310,7 @@ export default function RegularPanel({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </PrintableTable>
           </section>
           <SimulationPanel
             dashboard={simDashboard}

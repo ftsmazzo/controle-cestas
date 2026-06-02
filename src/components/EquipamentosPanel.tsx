@@ -7,6 +7,7 @@ import type { ServiceDef, ServicesPayload } from '@shared/serviceTypes';
 import { syncDashboardFromServices } from '../lib/api';
 import { clearServices, importServices, saveServices } from '../lib/servicesApi';
 import { demoServiceData, parseServiceWorkbook } from '../lib/serviceExcelParser';
+import PrintableTable from './ui/PrintableTable';
 import './ServicesPanel.css';
 
 function num(n: number): string {
@@ -265,7 +266,11 @@ export default function EquipamentosPanel({
               Marque <strong>Fixo</strong> ou informe <strong>Cota fixa</strong> (ex.: SAICA 40/mês)
               para o rateio no painel de decisão e no monitor emergencial.
             </p>
-            <div className="table-wrap">
+            <PrintableTable
+              title="Equipamentos — fixos e cotas"
+              subtitle="Cadastro usado no painel de decisão e no monitor emergencial"
+              orientation="landscape"
+            >
               <table>
                 <thead>
                   <tr>
@@ -313,7 +318,7 @@ export default function EquipamentosPanel({
                   })}
                 </tbody>
               </table>
-            </div>
+            </PrintableTable>
             <button
               type="button"
               className="primary-btn"
@@ -332,7 +337,11 @@ export default function EquipamentosPanel({
               <p className="hint">
                 Estes valores alimentam o painel de decisão e a aba Consumo.
               </p>
-              <div className="table-wrap">
+              <PrintableTable
+                title="Totais mensais (soma dos equipamentos)"
+                subtitle="Histórico agregado por mês"
+                orientation="portrait"
+              >
                 <table>
                   <thead>
                     <tr>
@@ -349,7 +358,7 @@ export default function EquipamentosPanel({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </PrintableTable>
             </section>
           )}
         </>

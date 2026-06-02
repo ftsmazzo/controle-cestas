@@ -2,6 +2,7 @@ import { Fragment, useMemo } from 'react';
 import { buildTabelaCessaoEmergencial } from '@shared/tabelaCessaoEmergencial';
 import type { CessaoEquipamentoRow } from '@shared/tabelaCessaoEmergencial';
 import type { ServicesPayload } from '@shared/serviceTypes';
+import PrintableTable from './ui/PrintableTable';
 import './CessaoEquipamentosTable.css';
 
 function num(n: number, dec = 0): string {
@@ -102,7 +103,12 @@ export default function CessaoEquipamentosTable({ payload }: Props) {
         </div>
       </header>
 
-      <div className="table-wrap cessao-table-wrap">
+      <PrintableTable
+        title="Cessão por equipamento"
+        subtitle={`Média ${tabela.periodoRef} vs cota ao teto ${num(tabela.tetoMensal)}/mês`}
+        wrapClassName="cessao-table-wrap"
+        orientation="landscape"
+      >
         <table className="cessao-table">
           <thead>
             <tr>
@@ -192,7 +198,7 @@ export default function CessaoEquipamentosTable({ payload }: Props) {
             </tr>
           </tfoot>
         </table>
-      </div>
+      </PrintableTable>
     </section>
   );
 }

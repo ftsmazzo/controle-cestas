@@ -1,0 +1,82 @@
+.printable-table {
+  margin-top: 0.5rem;
+}
+
+.printable-table__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #fff 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.printable-table__headings {
+  flex: 1;
+  min-width: 160px;
+}
+
+.printable-table__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.printable-table__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.printable-table__actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.printable-table__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid #c7d2fe;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.printable-table__btn:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+  color: var(--primary-hover);
+}
+
+.printable-table__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.printable-table__legend-slot {
+  margin-bottom: 0.45rem;
+}
+
+.printable-table .table-wrap {
+  margin-top: 0;
+}
+
+@media print {
+  .printable-table__toolbar {
+    display: none !important;
+  }
+}

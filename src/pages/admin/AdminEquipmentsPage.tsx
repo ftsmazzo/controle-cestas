@@ -1,6 +1,7 @@
 import { familiaUnits, consumptionUnits } from '@shared/hierarchy';
 import { childrenOf } from '@shared/serviceFamilies';
 import EquipamentosPanel from '../../components/EquipamentosPanel';
+import PrintableTable from '../../components/ui/PrintableTable';
 import { useData } from '../../context/DataContext';
 
 export default function AdminEquipmentsPage() {
@@ -20,7 +21,11 @@ export default function AdminEquipmentsPage() {
             monitoramento semanal usam só as <strong>unidades</strong>, não o total
             agregado da família.
           </p>
-          <div className="table-wrap">
+          <PrintableTable
+            title="Granularidade — famílias e unidades"
+            subtitle="CRAS e CREAS abertos em unidades de consumo"
+            orientation="portrait"
+          >
             <table>
               <thead>
                 <tr>
@@ -55,7 +60,7 @@ export default function AdminEquipmentsPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </PrintableTable>
         </section>
       )}
       <EquipamentosPanel

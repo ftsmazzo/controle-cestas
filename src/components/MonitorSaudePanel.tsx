@@ -8,6 +8,7 @@ import {
 import type { MonitoramentoResumo } from '@shared/emergencyMonitoring';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import type { DashboardState } from '@shared/types';
+import PrintableTable from './ui/PrintableTable';
 import './MonitorSaudePanel.css';
 
 function num(n: number | null | undefined, dec = 1): string {
@@ -219,7 +220,11 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
 
       <div className="monitor-saude-empenho">
         <h4>Empenho {saude.empenho.totalEmpenho.toLocaleString('pt-BR')} cestas</h4>
-        <div className="table-wrap">
+        <PrintableTable
+          title={`Empenho — ${saude.empenho.totalEmpenho.toLocaleString('pt-BR')} cestas`}
+          subtitle="Limite, enviado e saldo por mês do período"
+          orientation="portrait"
+        >
           <table>
             <thead>
               <tr>
@@ -244,7 +249,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
               ))}
             </tbody>
           </table>
-        </div>
+        </PrintableTable>
       </div>
 
       <div className="monitor-saude-acoes">

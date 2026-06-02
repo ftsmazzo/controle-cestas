@@ -5,6 +5,7 @@ import { weekDateRangeLabel } from '@shared/emergencyMonitoring';
 import { getYearMonth } from '@shared/monthUtils';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { parseRegistroSemanalPdfFile } from '../lib/registroSemanalPdfImport';
+import PrintableTable from './ui/PrintableTable';
 
 interface Props {
   data: ServicesPayload;
@@ -147,7 +148,11 @@ export default function RegistroSemanalPdfImport({
             Prévia para <strong>S{semana}</strong> ({rangeLabel}) —{' '}
             {rowsSemana.length} linha(s):
           </p>
-          <div className="table-wrap">
+          <PrintableTable
+            title={`Prévia envio semanal — S${semana}`}
+            subtitle={rangeLabel}
+            orientation="landscape"
+          >
             <table>
               <thead>
                 <tr>
@@ -181,7 +186,7 @@ export default function RegistroSemanalPdfImport({
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </PrintableTable>
           <button
             type="button"
             className="primary-btn"

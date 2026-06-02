@@ -20,6 +20,7 @@ import RegistroSemanalPdfImport from './RegistroSemanalPdfImport';
 import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from '@shared/requisicaoHistorico';
 import { TETO_MENSAL_OPERACIONAL } from '@shared/processoEmergencial';
 import type { DashboardState } from '@shared/types';
+import PrintableTable from './ui/PrintableTable';
 import './EmergencialMonitorPanel.css';
 
 function num(n: number | null | undefined, dec = 0): string {
@@ -516,7 +517,12 @@ export default function EmergencialMonitorPanel({
             Emergencial.
           </p>
         )}
-        <div className="table-wrap emerg-monitor-table-wrap">
+        <PrintableTable
+          title={`Distribuição por setor — ${resumo.mes}`}
+          subtitle={`Semana de análise S${resumo.semanaAnalise} · envio real via PDF`}
+          wrapClassName="emerg-monitor-table-wrap"
+          orientation="landscape"
+        >
           <table className="emerg-monitor-table">
             <thead>
               <tr>
@@ -626,7 +632,7 @@ export default function EmergencialMonitorPanel({
               </tr>
             </tfoot>
           </table>
-        </div>
+        </PrintableTable>
         <p className="hint">
           Envios reais por semana (colunas verdes = já lançadas). Ao mudar a semana no seletor, o
           histórico permanece. <strong>% sem.</strong> = teto na S{resumo.semanaAnalise}.{' '}
@@ -645,7 +651,11 @@ export default function EmergencialMonitorPanel({
             Cotas por setor a partir do histórico sem racionamento — só orienta o rateio do teto{' '}
             {num(TETO_MENSAL_OPERACIONAL)}/mês.
           </p>
-          <div className="table-wrap">
+          <PrintableTable
+            title="Referência de rateio (Set/25–Mar/26)"
+            subtitle={`Cotas orientativas ao teto ${num(TETO_MENSAL_OPERACIONAL)}/mês`}
+            orientation="landscape"
+          >
             <table>
               <thead>
                 <tr>
@@ -674,7 +684,7 @@ export default function EmergencialMonitorPanel({
                 })}
               </tbody>
             </table>
-          </div>
+          </PrintableTable>
         </details>
       )}
 

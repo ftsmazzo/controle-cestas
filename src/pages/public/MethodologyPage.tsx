@@ -11,6 +11,7 @@ import {
 import { NOTA_COVID_2022, NOTA_RACIONAMENTO_2023 } from '@shared/methodologyCalendar';
 import { APRESENTACAO_TEXTO } from '@shared/calculations';
 import { useData } from '../../context/DataContext';
+import PrintableTable from '../../components/ui/PrintableTable';
 
 const TAG_LABELS: Record<string, string> = {
   covid_tail: 'Legado COVID (2022 Q1)',
@@ -67,7 +68,11 @@ export default function MethodologyPage() {
       {methodologyTable.length > 0 && (
         <section className="panel">
           <h3>Meses com tratamento especial</h3>
-          <div className="table-wrap">
+          <PrintableTable
+            title="Meses com tratamento especial"
+            subtitle="Classificação metodológica e uso no modelo de cotas"
+            orientation="portrait"
+          >
             <table>
               <thead>
                 <tr>
@@ -88,7 +93,7 @@ export default function MethodologyPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </PrintableTable>
         </section>
       )}
 

@@ -17,6 +17,7 @@ import type { DashboardState } from '@shared/types';
 import { calculateAllocation, saveServices } from '../lib/servicesApi';
 import AllocationResumoBox from './AllocationResumoBox';
 import DecisionNumbersLegend from './DecisionNumbersLegend';
+import PrintableTable from './ui/PrintableTable';
 import './ProcessPanels.css';
 
 function num(n: number): string {
@@ -302,7 +303,11 @@ export default function EmergencialPanel({
 
       <section className="panel">
         <h3>Análise de risco — emergencial</h3>
-        <div className="table-wrap">
+        <PrintableTable
+          title="Análise de risco — emergencial"
+          subtitle="Total informado vs referência por equipamentos"
+          orientation="landscape"
+        >
           <table>
             <thead>
               <tr>
@@ -325,7 +330,7 @@ export default function EmergencialPanel({
               ))}
             </tbody>
           </table>
-        </div>
+        </PrintableTable>
         <p className="hint" style={{ marginTop: '0.5rem' }}>
           Ref. equipamentos = soma das médias por equipamento na janela (ex.{' '}
           {decisionNums?.mesesSomaMediasEquip.slice(0, 3).join(', ')}…). Não confundir com
@@ -348,7 +353,11 @@ export default function EmergencialPanel({
                 {month.mes} — {num(month.totalDisponivel)} cestas
               </h4>
               <AllocationResumoBox resultado={month} />
-              <div className="table-wrap">
+              <PrintableTable
+                title={`Distribuição — ${month.mes}`}
+                subtitle={`${num(month.totalDisponivel)} cestas no mês`}
+                orientation="landscape"
+              >
                 <table>
                   <thead>
                     <tr>
@@ -371,7 +380,7 @@ export default function EmergencialPanel({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </PrintableTable>
             </div>
           ))}
         </section>

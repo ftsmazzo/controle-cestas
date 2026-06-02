@@ -8,6 +8,7 @@ import {
 } from '@shared/monthUtils';
 import type { ServiceMonthRecord } from '@shared/serviceTypes';
 import type { ServiceDef } from '@shared/serviceTypes';
+import PrintableTable from './ui/PrintableTable';
 import './ConsumptionHeatmap.css';
 
 function num(n: number): string {
@@ -83,7 +84,12 @@ export default function ConsumptionHeatmap({
       <p className="hint heatmap-period">
         Período: <strong>{periodLabel}</strong> ({months.length} meses)
       </p>
-      <div className="heatmap-wrap">
+      <PrintableTable
+        title="Mapa de calor — consumo mensal"
+        subtitle={`Período: ${periodLabel} (${months.length} meses)`}
+        wrapClassName="heatmap-wrap"
+        orientation="landscape"
+      >
         <table className="heatmap-table">
           <thead>
             <tr>
@@ -116,7 +122,7 @@ export default function ConsumptionHeatmap({
             ))}
           </tbody>
         </table>
-      </div>
+      </PrintableTable>
     </div>
   );
 }

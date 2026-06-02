@@ -11,6 +11,7 @@ import {
 import type { CoderpParseResult } from '@shared/coderpPdfParser';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { parseCoderpPdfFile } from '../lib/coderpPdfImport';
+import PrintableTable from './ui/PrintableTable';
 
 interface Props {
   data: ServicesPayload;
@@ -152,7 +153,11 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
           <p className="hint">
             <strong>Após redistribuição</strong> (o que será gravado):
           </p>
-          <div className="table-wrap">
+          <PrintableTable
+            title="Prévia Coderp — após redistribuição"
+            subtitle="Unidades e totais que serão gravados no histórico"
+            orientation="landscape"
+          >
             <table>
               <thead>
                 <tr>
@@ -173,10 +178,14 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </PrintableTable>
           <details className="hint" style={{ marginTop: '0.75rem' }}>
             <summary>Linhas brutas do PDF</summary>
-            <div className="table-wrap">
+            <PrintableTable
+              title="Linhas brutas do PDF Coderp"
+              subtitle="Requisitante e unidade detectada pelo parser"
+              orientation="landscape"
+            >
               <table>
                 <thead>
                   <tr>
@@ -195,7 +204,7 @@ export default function CoderpPdfImport({ data, onApply, readOnly }: Props) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </PrintableTable>
           </details>
           <button type="button" className="primary-btn" onClick={aplicar}>
             Importar histórico de requisição

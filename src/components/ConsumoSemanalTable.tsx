@@ -1,5 +1,11 @@
 import { Fragment } from 'react';
 import type { ConsumoSemanalEmergencial } from '@shared/consumoSemanalEmergencial';
+import {
+  MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
+} from '@shared/emergencyMonitoring';
+import { formatSemanaCurta } from '@shared/monthUtils';
+import PrintableTable from './ui/PrintableTable';
 import './ConsumoSemanalTable.css';
 
 function num(n: number, dec = 0): string {
@@ -59,21 +65,29 @@ export default function ConsumoSemanalTable({ dados }: Props) {
     );
   }
 
+  const legend = (
+    <div className="csem-legend">
+      <span>
+        <i className="csem-dot csem-dot--cota" /> Acima da cota semanal
+      </span>
+      <span>
+        <i className="csem-dot csem-dot--media" /> Acima da média semanal
+      </span>
+      <span>
+        <i className="csem-dot csem-dot--ambos" /> Acima dos dois
+      </span>
+    </div>
+  );
+
   return (
     <div className="csem-wrap">
-      <div className="csem-legend">
-        <span>
-          <i className="csem-dot csem-dot--cota" /> Acima da cota semanal
-        </span>
-        <span>
-          <i className="csem-dot csem-dot--media" /> Acima da média semanal
-        </span>
-        <span>
-          <i className="csem-dot csem-dot--ambos" /> Acima dos dois
-        </span>
-      </div>
-
-      <div className="table-wrap csem-table-wrap">
+      <PrintableTable
+        title="Consumo semanal por equipamento"
+        subtitle={`Controle a partir de ${formatSemanaCurta(MONITOR_CONTROLE_MES_INICIO, MONITOR_CONTROLE_SEMANA_INICIO)} · ${dados.periodoLabel}`}
+        legend={legend}
+        wrapClassName="csem-table-wrap"
+        orientation="landscape"
+      >
         <table className="csem-table">
           <thead>
             <tr>
@@ -177,7 +191,7 @@ export default function ConsumoSemanalTable({ dados }: Props) {
             </tr>
           </tfoot>
         </table>
-      </div>
+      </PrintableTable>
     </div>
   );
 }

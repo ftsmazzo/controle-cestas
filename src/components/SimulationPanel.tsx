@@ -7,6 +7,7 @@ import {
   type ScenarioPreset,
   type ScenarioRisk,
 } from '@shared/simulation';
+import PrintableTable from './ui/PrintableTable';
 import './SimulationPanel.css';
 
 function parseInputInt(s: string): number | null {
@@ -182,7 +183,11 @@ export default function SimulationPanel({
         </div>
       )}
 
-      <div className="table-wrap">
+      <PrintableTable
+        title="Cenários de contrato"
+        subtitle="Comparativo de consumo mensal e duração do estoque"
+        orientation="landscape"
+      >
         <table className="sim-table">
           <thead>
             <tr>
@@ -223,7 +228,7 @@ export default function SimulationPanel({
             )}
           </tbody>
         </table>
-      </div>
+      </PrintableTable>
     </section>
   );
 }

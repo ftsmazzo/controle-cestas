@@ -7,6 +7,7 @@ import {
 } from '@shared/cenarioMitigacao';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { Scale, Sparkles, TrendingDown } from 'lucide-react';
+import PrintableTable from './ui/PrintableTable';
 import './MitigacaoCenarioPanel.css';
 
 function num(n: number, dec = 0): string {
@@ -273,7 +274,12 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
             </div>
           )}
 
-          <div className="table-wrap mit-table-wrap">
+          <PrintableTable
+            title="Plano de mitigação por equipamento"
+            subtitle={`Referência ${cenario.semanaReferenciaLabel} · orçamento ${num(cenario.orcamentoDistribuir)} cestas nas próximas semanas`}
+            wrapClassName="mit-table-wrap"
+            orientation="landscape"
+          >
             <table className="mit-table">
               <thead>
                 <tr>
@@ -389,7 +395,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </PrintableTable>
 
           <p className="hint mit-foot">
             Controle por <strong>semana civil</strong> (Mai S3 = ponto zero). Orçamento

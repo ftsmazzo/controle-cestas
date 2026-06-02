@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { buildEvolucaoSaldoEmpenho } from '@shared/processoEmergencial';
 import type { ServicesPayload } from '@shared/serviceTypes';
+import PrintableTable from './ui/PrintableTable';
 import './MonitorSaldoEvolucao.css';
 
 function num(n: number, dec = 0): string {
@@ -41,7 +42,11 @@ export default function MonitorSaldoEvolucao({ data }: Props) {
         <strong>{num(ultimo?.saldoRestante ?? total)}</strong> cestas restantes de{' '}
         {num(total)} ({num(pctUsado, 0)}% consumido)
       </p>
-      <div className="table-wrap">
+      <PrintableTable
+        title="Evolução do saldo do empenho"
+        subtitle={`${num(total)} cestas · ${num(pctUsado, 0)}% consumido`}
+        orientation="portrait"
+      >
         <table className="monitor-saldo-table">
           <thead>
             <tr>
@@ -64,7 +69,7 @@ export default function MonitorSaldoEvolucao({ data }: Props) {
             ))}
           </tbody>
         </table>
-      </div>
+      </PrintableTable>
     </div>
   );
 }
