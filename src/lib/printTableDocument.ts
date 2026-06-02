@@ -150,7 +150,7 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function openPrintTableDocument(options: PrintTableDocumentOptions): boolean {
+function buildPrintHtml(options: PrintTableDocumentOptions): string {
   const {
     title,
     subtitle,
@@ -160,11 +160,6 @@ export function openPrintTableDocument(options: PrintTableDocumentOptions): bool
     extraCss = '',
   } = options;
 
-  const win = window.open('', '_blank', 'noopener,noreferrer');
-  if (!win) {
-    return false;
-  }
-
   const now = new Date().toLocaleString('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short',
@@ -172,7 +167,7 @@ export function openPrintTableDocument(options: PrintTableDocumentOptions): bool
   const pageRule =
     orientation === 'portrait' ? '@page { size: A4 portrait; margin: 14mm 12mm; }' : '';
 
-  const doc = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -201,17 +196,59 @@ export function openPrintTableDocument(options: PrintTableDocumentOptions): bool
     ${tableHtml}
     <p class="print-doc__footer">Documento gerado pelo Dashboard de Cestas Básicas — uso interno SEMAS</p>
   </div>
-  <script>
-    window.onload = function() {
-      window.focus();
-      window.print();
-    };
-  </script>
 </body>
 </html>`;
+}
 
-  win.document.open();
-  win.document.write(doc);
-  win.document.close();
+/** Imprime via iframe oculto — não exige pop-ups no navegador */
+export function openPrintTableDocument(options: PrintTableDocumentOptions): boolean {
+  if (typeof document === 'undefined') return false;
+
+  const html = buildPrintHtml(options);
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('title', 'Impressão de tabela');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText =
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const doc = win?.document;
+  if (!win || !doc) {
+    iframe.remove();
+    return false;
+  }
+
+  const removeIframe = () => {
+    try {
+      iframe.remove();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  let printed = false;
+  const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
+    try {
+      win.focus();
+      win.print();
+    } catch {
+      removeIframe();
+      return;
+    }
+    win.addEventListener('afterprint', removeIframe, { once: true });
+    window.setTimeout(removeIframe, 60_000);
+  };
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  iframe.onload = () => window.setTimeout(triggerPrint, 50);
+  window.setTimeout(triggerPrint, 400);
+
   return true;
 }

@@ -47,9 +47,7 @@ export default function PrintableTable({
     });
 
     if (!ok) {
-      window.alert(
-        'Não foi possível abrir a janela de impressão. Permita pop-ups para este site.',
-      );
+      window.alert('Não foi possível iniciar a impressão. Tente novamente.');
     }
   }, [title, subtitle, orientation, extraPrintCss]);
 
