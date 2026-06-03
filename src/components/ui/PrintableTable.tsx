@@ -1,5 +1,6 @@
 import { useCallback, useId, useRef, type ReactNode } from 'react';
-import { Printer } from 'lucide-react';
+import { FileSpreadsheet, Printer } from 'lucide-react';
+import { exportTableToExcel } from '../../lib/exportTableExcel';
 import { openPrintTableDocument } from '../../lib/printTableDocument';
 import './PrintableTable.css';
 
@@ -7,6 +8,8 @@ export interface PrintableTableProps {
   /** Título no relatório impresso e na barra da tabela */
   title: string;
   subtitle?: string;
+  /** Nome do arquivo .xlsx (sem extensão) */
+  exportFileName?: string;
   /** Legenda (cores, siglas) — incluída na impressão */
   legend?: ReactNode;
   orientation?: 'landscape' | 'portrait';
@@ -19,6 +22,7 @@ export interface PrintableTableProps {
 export default function PrintableTable({
   title,
   subtitle,
+  exportFileName,
   legend,
   orientation = 'landscape',
   wrapClassName = '',
@@ -51,6 +55,25 @@ export default function PrintableTable({
     }
   }, [title, subtitle, orientation, extraPrintCss]);
 
+  const handleExportExcel = useCallback(() => {
+    const root = contentRef.current;
+    if (!root) return;
+
+    const table = root.querySelector('table');
+    if (!table) return;
+
+    const ok = exportTableToExcel({
+      table,
+      title,
+      subtitle,
+      fileName: exportFileName,
+    });
+
+    if (!ok) {
+      window.alert('Não foi possível exportar a tabela para Excel.');
+    }
+  }, [title, subtitle, exportFileName]);
+
   return (
     <div className={`printable-table ${className}`.trim()}>
       <div className="printable-table__toolbar">
@@ -63,13 +86,23 @@ export default function PrintableTable({
         <div className="printable-table__actions">
           <button
             type="button"
+            className="printable-table__btn printable-table__btn--excel"
+            onClick={handleExportExcel}
+            aria-labelledby={titleId}
+            title={`Exportar Excel: ${title}`}
+          >
+            <FileSpreadsheet size={15} aria-hidden />
+            Exportar Excel
+          </button>
+          <button
+            type="button"
             className="printable-table__btn"
             onClick={handlePrint}
             aria-labelledby={titleId}
             title={`Imprimir: ${title}`}
           >
             <Printer size={15} aria-hidden />
-            Imprimir tabela
+            Imprimir
           </button>
         </div>
       </div>
