@@ -40,7 +40,7 @@ function renderUnitRow(r: MitigacaoEquipamentoRow, semanaCount: number) {
         className="mit-cell-muted"
         title={
           r.cotaMensalUnica
-            ? 'Cota mensal única — fora do rateio semanal'
+            ? 'Cota mensal única — entra no teto do ciclo (94), sem rateio semanal'
             : 'Teto por semana (cota ÷ 4 sem. operacionais)'
         }
       >
@@ -100,7 +100,11 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
   const cenario = useMemo(() => buildCenarioMitigacao(payload, 2), [payload]);
   const totaisSem = useMemo(() => totaisPorSemana(cenario), [cenario]);
 
-  const maxBar = cenario.tetoComGordura;
+  const maxBar = cenario.tetoMaximoCiclo ?? cenario.tetoComGordura;
+  const usaPlanoJun =
+    cenario.cicloAtual === 1 &&
+    cenario.planoJunS1Total > 0 &&
+    cenario.entregaInvertidaJun;
 
   return (
     <section className="panel mit-panel">
@@ -118,10 +122,23 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           <span className="mit-badge">
             Referência {cenario.semanaReferenciaLabel}
           </span>
-          {cenario.entregaInvertidaJun && (
-            <span className="mit-badge mit-badge--gordura" title="Plano ajustado: volumes Jun S1/S2 trocados conforme entrega real">
-              Jun S1↔S2 invertido
+          {usaPlanoJun ? (
+            <span
+              className="mit-badge mit-badge--gordura"
+              title="Plano aprovado com gordura: Jun S1 valores maiores, Jun S2 corte drástico"
+            >
+              Plano Jun S1 {num(cenario.planoJunS1Total)} · S2{' '}
+              {num(cenario.planoJunS2Total)}
             </span>
+          ) : (
+            cenario.entregaInvertidaJun && (
+              <span
+                className="mit-badge mit-badge--gordura"
+                title="Volumes Jun S1/S2 trocados conforme entrega real"
+              >
+                Jun S1↔S2 invertido
+              </span>
+            )
           )}
           <span className="mit-badge mit-badge--gordura">
             Gordura período:{' '}
@@ -153,17 +170,15 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
         <>
           <div className="mit-formula-box">
             <p>
-              <strong>{num(cenario.tetoOperacional)}</strong> teto ciclo −{' '}
-              <strong>{num(cenario.enviadoCicloAteAgora)}</strong> já gasto ={' '}
-              <strong>{num(cenario.saldoRestante1150)}</strong> restantes
-              {cenario.gorduraNoPlano > 0 && (
-                <>
-                  {' '}
-                  + <strong>{num(cenario.gorduraNoPlano)}</strong> gordura do período
-                </>
-              )}{' '}
-              → <strong>{num(cenario.orcamentoDistribuir)}</strong> a distribuir nas
-              próximas {cenario.semanasPlanejadas.length} semana(s)
+              <strong>{num(cenario.tetoMaximoCiclo)}</strong> teto do ciclo
+              {cenario.cicloAtual === 1 ? ' (1.150 + 200 gordura)' : ''} −{' '}
+              <strong>{num(cenario.reservaCotasFixas)}</strong> fixas (SAICA/WARAOS/Mãos
+              Dadas) − <strong>{num(cenario.enviadoCicloAteAgora)}</strong> já gasto ={' '}
+              <strong>{num(cenario.saldoRestante1150)}</strong> saldo ciclo ·{' '}
+              <strong>{num(cenario.orcamentoFlexivel)}</strong> flexível restante →{' '}
+              <strong>{num(cenario.orcamentoDistribuir)}</strong> nas próximas{' '}
+              {cenario.semanasPlanejadas.length} semana(s)
+              {usaPlanoJun ? ' (plano aprovado Jun)' : ''}
             </p>
             {cenario.demandaInercialTotal > cenario.orcamentoDistribuir && (
               <p className="mit-formula-warn">
@@ -219,8 +234,8 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           <div className="mit-bar-chart">
             <div className="mit-bar-labels">
               <span>0</span>
-              <span>{num(cenario.tetoOperacional)} operacional</span>
-              <span>{num(cenario.tetoComGordura)} contrato</span>
+              <span>{num(cenario.tetoOperacional)} base</span>
+              <span>{num(cenario.tetoMaximoCiclo)} teto ciclo</span>
             </div>
             <div className="mit-bar-track">
               <div

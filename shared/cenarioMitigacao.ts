@@ -29,8 +29,10 @@ import {
   gorduraUsadaPeriodoOperacional,
   proximasSemanasOperacionais,
   refSemanaOperacionalCivil,
+  saldoAteTetoCiclo,
   saldoCicloOperacional,
   semanasAlvoMitigacao,
+  tetoMaximoCicloOperacional,
   trocarValoresSemanas,
 } from './operationalWeeks.js';
 import {
@@ -38,7 +40,15 @@ import {
   TETO_CONTRATUAL_MENSAL,
   TETO_MENSAL_OPERACIONAL,
 } from './processoEmergencial.js';
-import { isServicoCotaMensalUnica } from './coderpRequisitanteRules.js';
+import {
+  isServicoCotaMensalUnica,
+  TOTAL_RESERVA_COTA_MENSAL_UNICA,
+} from './coderpRequisitanteRules.js';
+import {
+  planoJunSemana,
+  TOTAL_PLANO_JUN_S1,
+  TOTAL_PLANO_JUN_S2,
+} from './planoAprovadoCiclo1.js';
 import { consumptionUnits, groupByFamilia, type FamiliaGroup } from './serviceFamilies.js';
 import { buildTabelaCessaoEmergencial } from './tabelaCessaoEmergencial.js';
 import type { ServicesPayload } from './serviceTypes.js';
@@ -157,6 +167,15 @@ export interface CenarioMitigacao {
   enviadoCicloAteAgora: number;
   /** Plano Jun S1/S2 invertido para refletir entrega real */
   entregaInvertidaJun: boolean;
+  /** Teto máximo do ciclo (1.350 no ciclo 1, 1.150 nos demais) */
+  tetoMaximoCiclo: number;
+  /** SAICA + WARAOS + Mãos Dadas reservados no teto (94) */
+  reservaCotasFixas: number;
+  /** Orçamento flexível (teto − fixas − já enviado flexível) */
+  orcamentoFlexivel: number;
+  /** Totais do plano aprovado Jun (referência) */
+  planoJunS1Total: number;
+  planoJunS2Total: number;
 }
 
 function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
@@ -225,6 +244,50 @@ function planejarProximasSemanas(
     w = 1;
   }
   return out;
+}
+
+/** Substitui propostas de Jun S1/S2 pelo plano aprovado (S1 maior, S2 corte drástico) */
+function aplicarPlanoAprovadoJun(
+  alvos: AlvoSemanaMitigacao[],
+  resultado: ResultadoDuasSemanas,
+  units: DraftUnit[],
+): ResultadoDuasSemanas {
+  const junKey = parseMonthKey('Jun/2026');
+  const idxS1 = alvos.findIndex(
+    (a) => parseMonthKey(a.mes) === junKey && a.semana === 1,
+  );
+  const idxS2 = alvos.findIndex(
+    (a) => parseMonthKey(a.mes) === junKey && a.semana === 2,
+  );
+  if (idxS1 < 0 || idxS2 < 0) return resultado;
+
+  const porUnidade = new Map<string, number[]>();
+  for (const [id, vals] of resultado.porUnidade) {
+    porUnidade.set(id, [...vals]);
+  }
+  for (const u of units) {
+    if (isServicoCotaMensalUnica(u.servicoNome)) continue;
+    const v1 = planoJunSemana(u.servicoNome, 1);
+    const v2 = planoJunSemana(u.servicoNome, 2);
+    if (v1 == null && v2 == null) continue;
+    const cur = [...(porUnidade.get(u.servicoId) ?? Array(alvos.length).fill(0))];
+    if (v1 != null) cur[idxS1] = v1;
+    if (v2 != null) cur[idxS2] = v2;
+    porUnidade.set(u.servicoId, cur);
+  }
+
+  const totaisProposta = [...resultado.totaisProposta];
+  let t1 = 0;
+  let t2 = 0;
+  for (const u of units) {
+    if (isServicoCotaMensalUnica(u.servicoNome)) continue;
+    t1 += planoJunSemana(u.servicoNome, 1) ?? 0;
+    t2 += planoJunSemana(u.servicoNome, 2) ?? 0;
+  }
+  totaisProposta[idxS1] = t1;
+  totaisProposta[idxS2] = t2;
+
+  return { ...resultado, porUnidade, totaisProposta };
 }
 
 function aplicarInversaoJun(
@@ -749,12 +812,8 @@ export function buildCenarioMitigacao(
   );
   const enviadoCiclo = cicloInfo.enviado;
   const enviadoMes = enviadoCiclo;
-  const saldoRestante1150 = saldoCicloOperacional(enviadoCiclo);
-  const margemAte1200 = margemAteLimite(enviadoCiclo, TETO_CONTRATUAL_MENSAL);
-  const gorduraMesDisponivel = Math.min(
-    MARGEM_MITIGACAO_MENSAL,
-    Math.max(0, margemAte1200 - saldoRestante1150),
-  );
+  const tetoMaximoCiclo = tetoMaximoCicloOperacional(cicloInfo.ciclo);
+  const saldoRestante1150 = saldoAteTetoCiclo(enviadoCiclo, tetoMaximoCiclo);
   const gorduraPeriodoUsada = gorduraUsadaPeriodo(
     payload,
     mesFechamento,
@@ -765,12 +824,9 @@ export function buildCenarioMitigacao(
     0,
     GORDURA_PERIODO_TOTAL - gorduraPeriodoUsada,
   );
-
-  const gorduraNoPlano = gorduraPeriodoRestante;
-  const orcamentoDistribuir = Math.min(
-    saldoRestante1150 + gorduraNoPlano,
-    autonomia.cestasDisponiveis,
-  );
+  const gorduraNoPlano =
+    cicloInfo.ciclo === 1 ? Math.min(GORDURA_PERIODO_TOTAL, gorduraPeriodoRestante) : 0;
+  const gorduraMesDisponivel = gorduraNoPlano;
 
   const units = consumptionUnits(payload.services);
   const numSemanas = alvos.length;
@@ -846,6 +902,26 @@ export function buildCenarioMitigacao(
     return draft;
   });
 
+  let reservaFixas = 0;
+  let enviadoFixasCiclo = 0;
+  let enviadoFlexCiclo = 0;
+  for (const d of drafts) {
+    if (isServicoCotaMensalUnica(d.servicoNome)) {
+      reservaFixas += d.cotaMes;
+      enviadoFixasCiclo += d.enviado;
+    } else {
+      enviadoFlexCiclo += d.enviado;
+    }
+  }
+  if (reservaFixas <= 0) reservaFixas = TOTAL_RESERVA_COTA_MENSAL_UNICA;
+  const tetoFlex = Math.max(0, tetoMaximoCiclo - reservaFixas);
+  const saldoFlex = Math.max(0, tetoFlex - enviadoFlexCiclo);
+  const orcamentoDistribuir = Math.min(
+    saldoFlex,
+    autonomia.cestasDisponiveis,
+  );
+  const orcamentoFlexivel = saldoFlex;
+
   const demandaInercialTotal = drafts.reduce((s, d) => s + d.demanda, 0);
   let resultado = alocarDuasSemanas(
     drafts,
@@ -857,7 +933,10 @@ export function buildCenarioMitigacao(
     empenhoMeses,
   );
   const entregaInvertidaJun = deveInverterJunSemanas(alvos) != null;
-  if (entregaInvertidaJun) {
+  const usaPlanoAprovadoJun = cicloInfo.ciclo === 1 && entregaInvertidaJun;
+  if (usaPlanoAprovadoJun) {
+    resultado = aplicarPlanoAprovadoJun(alvos, resultado, drafts);
+  } else if (entregaInvertidaJun) {
     resultado = aplicarInversaoJun(alvos, resultado);
   }
   const semanaPressaoIdx = resultado.semanaPressaoIdx;
@@ -946,18 +1025,25 @@ export function buildCenarioMitigacao(
 
   const precisaMitigacao =
     demandaInercialTotal > orcamentoDistribuir ||
-    fechamentoInercial > TETO_CICLO_OPERACIONAL;
+    fechamentoInercial > tetoMaximoCiclo;
 
   let resumoCurto = '';
   if (!temDados) {
     resumoCurto = mensagemAjuda || 'Aguardando lançamentos salvos.';
   } else {
     resumoCurto =
-      `${labelCicloOperacional(cicloInfo.ciclo)} · ref. ${semanaReferenciaLabel}: ${fmt(enviadoCiclo)} no ciclo. ${fmt(orcamentoDistribuir)} nas próximas ${numSemanas} sem.` +
-      (semanasPlanejadasLabels.length
-        ? ` (${semanasPlanejadasLabels.join(', ')})`
+      `${labelCicloOperacional(cicloInfo.ciclo)} · teto ${fmt(tetoMaximoCiclo)}` +
+      (cicloInfo.ciclo === 1 ? ' (1.150+200 gordura)' : '') +
+      ` · fixas ${fmt(reservaFixas)} no teto · ref. ${semanaReferenciaLabel}: ${fmt(enviadoCiclo)} no ciclo.` +
+      (usaPlanoAprovadoJun
+        ? ` Plano aprovado Jun: S1 ${fmt(TOTAL_PLANO_JUN_S1)} · S2 ${fmt(TOTAL_PLANO_JUN_S2)}.`
+        : ` ${fmt(orcamentoDistribuir)} nas próximas ${numSemanas} sem.` +
+          (semanasPlanejadasLabels.length
+            ? ` (${semanasPlanejadasLabels.join(', ')})`
+            : '')) +
+      (entregaInvertidaJun && !usaPlanoAprovadoJun
+        ? ' · entrega Jun S1/S2 invertida'
         : '') +
-      (entregaInvertidaJun ? ' · entrega Jun S1/S2 invertida' : '') +
       (semanaPressaoLabel
         ? ` — ${semanaPressaoLabel} com −${REDUCAO_SEMANA_PRESSAO_PCT}%`
         : '') +
@@ -978,7 +1064,12 @@ export function buildCenarioMitigacao(
     ),
     enviadoMesAteAgora: enviadoCiclo,
     tetoOperacional: TETO_CICLO_OPERACIONAL,
-    tetoComGordura: TETO_CONTRATUAL_MENSAL,
+    tetoComGordura: tetoMaximoCiclo,
+    tetoMaximoCiclo,
+    reservaCotasFixas: reservaFixas,
+    orcamentoFlexivel,
+    planoJunS1Total: TOTAL_PLANO_JUN_S1,
+    planoJunS2Total: TOTAL_PLANO_JUN_S2,
     saldoRestante1150,
     gorduraMesDisponivel,
     gorduraPeriodoTotal: GORDURA_PERIODO_TOTAL,
@@ -987,7 +1078,7 @@ export function buildCenarioMitigacao(
     gorduraNoPlano,
     orcamentoDistribuir,
     orcamentoRestanteOperacional: saldoRestante1150,
-    orcamentoRestanteComGordura: margemAte1200,
+    orcamentoRestanteComGordura: saldoRestante1150,
     demandaInercialTotal,
     propostaTotal,
     corteTotal,

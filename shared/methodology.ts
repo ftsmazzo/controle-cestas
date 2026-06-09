@@ -40,7 +40,8 @@ export const METODOLOGIA_REFERENCIA_CESSAO =
   `Cotas por equipamento derivam do histórico de referência ${PERIODO_REFERENCIA_INICIO}–${PERIODO_REFERENCIA_FIM}: ` +
   'média mensal válida por serviço, rateio proporcional ao total mensal e conversão em cota semanal (cota do ciclo ÷ 4 semanas operacionais). ' +
   'Equipamentos marcados como fixos ou com cota fixa informada têm prioridade no rateio. ' +
-  'SAICA, WARAOS e Mãos Dadas recebem cota mensal única e ficam fora do rateio e dos alertas semanais.';
+  'SAICA, WARAOS e Mãos Dadas (94 cestas/ciclo) entram no teto de 1.150, com lançamento mensal único — fora do rateio semanal. ' +
+  'Ciclo 1 pode usar até 200 de gordura (teto 1.350); do ciclo 2 em diante o teto volta a 1.150.';
 
 export const METODOLOGIA_CONTROLE_SEMANAL =
   'O teto de 1.150 vale por ciclo de 4 semanas operacionais (qua–ter), não por mês civil. ' +

@@ -12,6 +12,7 @@ import {
   indiceOperacionalCivil,
   labelCicloOperacional,
   refSemanaOperacionalCivil,
+  tetoMaximoCicloOperacional,
 } from './operationalWeeks.js';
 import {
   estouroAcimaLimite,
@@ -1001,9 +1002,9 @@ export function buildMonitoramentoResumo(
     const semanasCicloComDado =
       indiceBase != null ? indiceBase - inicioCicloOp + 1 : cicloInfo.semanasNoCiclo;
 
-    metaMesTotal = TETO_CICLO_OPERACIONAL;
+    metaMesTotal = tetoMaximoCicloOperacional(cicloAtual);
     limiteSemanal = Math.round(
-      TETO_CICLO_OPERACIONAL / SEMANAS_POR_CICLO_OPERACIONAL,
+      metaMesTotal / SEMANAS_POR_CICLO_OPERACIONAL,
     );
     enviadoMesTotal = cicloInfo.enviado;
     enviadoAteBaseRitmo = cicloInfo.enviado;

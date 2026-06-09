@@ -14,6 +14,11 @@ export const COTA_MENSAL_FIXA: Record<string, number> = {
   [UNIDADE_MAOS_DADAS]: 40,
 };
 
+/** Reserva no teto do ciclo (1.150) — lançamento único, sem rateio semanal */
+export const TOTAL_RESERVA_COTA_MENSAL_UNICA = Object.values(
+  COTA_MENSAL_FIXA,
+).reduce((s, v) => s + v, 0);
+
 function norm(s: string): string {
   return s
     .trim()
@@ -62,7 +67,7 @@ export function isUnidadeFixaEspecial(nome: string): boolean {
   return cotaFixaPorUnidade(nome) != null;
 }
 
-/** Recebem a cota mensal de uma vez — não entram em teto/corte semanal */
+/** Recebem a cota mensal de uma vez — entram no teto do ciclo, fora do rateio semanal */
 export const UNIDADES_COTA_MENSAL_UNICA = [
   UNIDADE_SAICA,
   UNIDADE_WARAOS,

@@ -9,7 +9,16 @@ import {
   suggestEmpenhoMeses,
 } from './empenhoControle.js';
 import { getYearMonth, parseMonthKey } from './monthUtils.js';
-import { TETO_MENSAL_OPERACIONAL } from './processoEmergencial.js';
+import {
+  MARGEM_MITIGACAO_MENSAL,
+  TETO_MENSAL_OPERACIONAL,
+} from './processoEmergencial.js';
+
+/** Gordura do período (200) só pode compor o teto do 1º ciclo operacional */
+export const CICLO_GORDURA_PERMITIDO = 1;
+
+/** 50 × 4 meses = 200 cestas de gordura no empenho */
+export const GORDURA_PERIODO_CICLO = MARGEM_MITIGACAO_MENSAL * 4;
 import { totalEnviadoNaSemana } from './emergencyMonitoring.js';
 
 /** Semanas por ciclo de teto (1.150) — não é mês civil */
@@ -218,7 +227,18 @@ export function enviadoCicloOperacionalAte(
 }
 
 export function saldoCicloOperacional(enviadoNoCiclo: number): number {
-  return Math.max(0, TETO_CICLO_OPERACIONAL - enviadoNoCiclo);
+  return saldoAteTetoCiclo(enviadoNoCiclo, TETO_CICLO_OPERACIONAL);
+}
+
+/** Teto máximo do ciclo: ciclo 1 = 1.150 + 200 gordura (1.350); demais = 1.150 */
+export function tetoMaximoCicloOperacional(ciclo: number): number {
+  return ciclo === CICLO_GORDURA_PERMITIDO
+    ? TETO_CICLO_OPERACIONAL + GORDURA_PERIODO_CICLO
+    : TETO_CICLO_OPERACIONAL;
+}
+
+export function saldoAteTetoCiclo(enviadoNoCiclo: number, teto: number): number {
+  return Math.max(0, teto - enviadoNoCiclo);
 }
 
 export function labelCicloOperacional(ciclo: number): string {
