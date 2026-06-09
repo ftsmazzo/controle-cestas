@@ -6,6 +6,7 @@ import {
   type SaudeNivel,
 } from '@shared/monitorSaude';
 import type { MonitoramentoResumo } from '@shared/emergencyMonitoring';
+import { labelFonteProjecao } from '@shared/projecaoOperacionalCiclo';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import type { DashboardState } from '@shared/types';
 import PrintableTable from './ui/PrintableTable';
@@ -114,6 +115,12 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
                 <>
                   {' '}
                   · teto estoura na <strong>S{saude.semanaProjetadaEstouro}</strong>
+                </>
+              )}
+              {resumo.projecaoFonte && (
+                <>
+                  {' '}
+                  · base: {labelFonteProjecao(resumo.projecaoFonte)}
                 </>
               )}
             </p>

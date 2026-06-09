@@ -19,6 +19,8 @@ import {
 import { parseMonthKey } from './monthUtils.js';
 import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from './requisicaoHistorico.js';
 import type { ServicesPayload } from './serviceTypes.js';
+import { labelFonteProjecao } from './projecaoOperacionalCiclo.js';
+import type { FonteProjecaoOperacional } from './projecaoOperacionalCiclo.js';
 import type { DashboardState } from './types.js';
 
 export const MESES_SAUDE_IDEAIS = 4;
@@ -122,6 +124,11 @@ export type MonitorResumoSaude = Pick<
   | 'saldoAtual'
   | 'autonomiaSemanasSaldo'
   | 'equipamentos'
+  | 'usaCicloOperacional'
+  | 'usaPlanoOperacional'
+  | 'projecaoFonte'
+  | 'novoCicloPlanejamento'
+  | 'labelCiclo'
 >;
 
 interface MonitoramentoResumoShape {
@@ -166,6 +173,11 @@ interface MonitoramentoResumoShape {
     pctProjecaoMes: number;
     alertaEquip: string | null;
   }[];
+  usaCicloOperacional?: boolean;
+  usaPlanoOperacional?: boolean;
+  projecaoFonte?: FonteProjecaoOperacional;
+  novoCicloPlanejamento?: boolean;
+  labelCiclo?: string;
 }
 
 function estimateConsumoReferenciaRateio(
@@ -325,9 +337,21 @@ export function buildSaudeDistribuicao(
     );
   }
 
-  if (estouroProjetadoMes > 0 && estouroMes === 0) {
+  if (
+    estouroProjetadoMes > 0 &&
+    estouroMes === 0 &&
+    !resumo.usaPlanoOperacional
+  ) {
     acoesSemana.push(
       `Projeção estoura o teto antes do fim do mês (+${num(estouroProjetadoMes)} cestas)${resumo.semanaProjetadaEstouro != null ? ` — previsto na S${resumo.semanaProjetadaEstouro}` : ''}. Cortar já na próxima semana.`,
+    );
+  } else if (
+    resumo.usaPlanoOperacional &&
+    estouroProjetadoMes === 0 &&
+    resumo.usaCicloOperacional
+  ) {
+    acoesSemana.push(
+      `Fechamento operacional ${num(resumo.projecaoMesTotal)} no teto do ciclo (${resumo.projecaoFonte ? labelFonteProjecao(resumo.projecaoFonte as FonteProjecaoOperacional) : 'plano'}) — ritmo inercial não guia a projeção.`,
     );
   }
 
@@ -382,6 +406,12 @@ export function buildSaudeDistribuicao(
     resumoDecisao = `Fora do controle: estouro ${estouroMes > 0 ? `mensal +${num(estouroMes)}` : ''}${estouroMes > 0 && estouroSemana > 0 ? ' · ' : ''}${estouroSemana > 0 ? `semanal +${num(estouroSemana)}` : ''} (teto ${num(limiteMensal)}/mês).`;
   } else if (empenhoAcabaAntesDoPeriodo && autonomiaSemanas != null) {
     resumoDecisao = `Empenho dura ~${autonomiaSemanas.toFixed(1)} semana(s) (~${autonomiaMeses?.toFixed(1) ?? '—'} meses) ao ritmo ~${num(ritmoReferencia)}/sem — o período ainda tem ~${semanasPeriodoRestantes} semana(s). Cortar volume na próxima semana.`;
+  } else if (
+    resumo.usaPlanoOperacional &&
+    estouroProjetadoMes === 0 &&
+    resumo.usaCicloOperacional
+  ) {
+    resumoDecisao = `Controle nos trilhos: ${num(resumo.enviadoMesTotal)} enviadas no ${resumo.labelCiclo ?? 'ciclo'} · fechamento operacional ${num(resumo.projecaoMesTotal)} (${pctProjecaoMes.toFixed(0)}% do teto) — plano aprovado, não projeção inercial.`;
   } else if (estouroProjetadoMes > 0) {
     resumoDecisao = `Dentro do teto hoje (${pctUsoLimiteMes.toFixed(0)}%), mas projeção ${pctProjecaoMes.toFixed(0)}% (+${num(estouroProjetadoMes)} cestas)${resumo.semanaProjetadaEstouro != null ? ` — estouro previsto na S${resumo.semanaProjetadaEstouro}` : ''}. Cortar volume na próxima semana.`;
   } else if (

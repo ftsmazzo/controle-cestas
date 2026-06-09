@@ -25,6 +25,7 @@ import {
   periodoOperacionalCivil,
   refSemanaOperacionalCivil,
 } from '@shared/operationalWeeks';
+import { labelFonteProjecao } from '@shared/projecaoOperacionalCiclo';
 import type { DashboardState } from '@shared/types';
 import PrintableTable from './ui/PrintableTable';
 import './EmergencialMonitorPanel.css';
@@ -354,7 +355,19 @@ export default function EmergencialMonitorPanel({
         {resumoAnalise.modoPlanejamento && (
           <p className="alerta-box alerta-nivel-moderado">
             Planejando <strong>{resumoAnalise.labelSemanaAnalise}</strong> (sem lançamento ainda).
-            Histórico no ciclo: <strong>{num(resumoAnalise.enviadoAteBaseRitmo)}</strong> cestas.
+            {resumoAnalise.novoCicloPlanejamento ? (
+              <>
+                {' '}
+                Novo ciclo — contagem reinicia no teto{' '}
+                <strong>{num(resumoAnalise.metaMesTotal)}</strong>.
+              </>
+            ) : (
+              <>
+                {' '}
+                Acumulado no ciclo até a última semana lançada:{' '}
+                <strong>{num(resumoAnalise.enviadoMesTotal)}</strong> cestas.
+              </>
+            )}
           </p>
         )}
         <p className="hint">
@@ -534,13 +547,15 @@ export default function EmergencialMonitorPanel({
             <strong>{num(resumoAnalise.projecaoMesTotal)}</strong>
             <span className="emerg-kpi-sub">
               {num(resumoAnalise.pctProjecaoMes, 0)}% do teto
-              {resumoAnalise.semanaProjetadaEstouro != null
-                ? ` · estouro S${resumoAnalise.semanaProjetadaEstouro}`
-                : resumoAnalise.estouroProjetadoMes > 0
-                  ? ` · +${num(resumoAnalise.estouroProjetadoMes)}`
-                  : ''}
-              {' '}
-              · ritmo ~{num(resumoAnalise.ritmoSemanalMedio, 0)}/sem
+              {resumoAnalise.estouroProjetadoMes > 0
+                ? ` · +${num(resumoAnalise.estouroProjetadoMes)}`
+                : ''}
+              {resumoAnalise.projecaoFonte
+                ? ` · ${labelFonteProjecao(resumoAnalise.projecaoFonte)}`
+                : ''}
+              {resumoAnalise.usaPlanoOperacional
+                ? ''
+                : ` · ritmo desenv. ~${num(resumoAnalise.ritmoSemanalMedio, 0)}/sem`}
             </span>
           </article>
         </div>
