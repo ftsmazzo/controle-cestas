@@ -1,5 +1,8 @@
 import { useMemo } from 'react';
-import { buildEvolucaoSaldoEmpenho } from '@shared/processoEmergencial';
+import {
+  buildEvolucaoSaldoEmpenho,
+  EMPENHO_OPERACIONAL_TOTAL,
+} from '@shared/processoEmergencial';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import PrintableTable from './ui/PrintableTable';
 import './MonitorSaldoEvolucao.css';
@@ -14,10 +17,7 @@ interface Props {
 
 export default function MonitorSaldoEvolucao({ data }: Props) {
   const rows = useMemo(() => buildEvolucaoSaldoEmpenho(data), [data]);
-  const total =
-    data.emergencial.empenhoTotalCestas ??
-    rows[0]?.saldoRestante ??
-    4800;
+  const total = rows[0]?.saldoRestante ?? EMPENHO_OPERACIONAL_TOTAL;
   const ultimo = rows[rows.length - 1];
   const pctUsado =
     total > 0 && ultimo ? ((total - ultimo.saldoRestante) / total) * 100 : 0;

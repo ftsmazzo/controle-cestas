@@ -151,8 +151,8 @@ export function prepararProcessoEmergencialOperacional(
 export function buildEvolucaoSaldoEmpenho(
   payload: ServicesPayload,
 ): SaldoSemanaRow[] {
-  const total =
-    payload.emergencial.empenhoTotalCestas ?? EMPENHO_OPERACIONAL_TOTAL;
+  /** Empenho do processo — 5.000 cestas em 16 semanas (não soma dos tetos 4.800) */
+  const total = EMPENHO_OPERACIONAL_TOTAL;
   const mon = payload.emergencial.monitoramento;
   const meses =
     payload.emergencial.empenhoMeses ??

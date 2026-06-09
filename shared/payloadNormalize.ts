@@ -35,8 +35,7 @@ export function normalizeServicesPayload(
   let emergencial: ProcessoEmergencialConfig = {
     ...defaultEmergencialConfig(base),
     ...(raw.emergencial ?? {}),
-    empenhoTotalCestas:
-      raw.emergencial?.empenhoTotalCestas ?? EMPENHO_CESTAS_TOTAL_PADRAO,
+    empenhoTotalCestas: EMPENHO_CESTAS_TOTAL_PADRAO,
     empenhoMeses: raw.emergencial?.empenhoMeses?.length
       ? raw.emergencial.empenhoMeses
       : empenhoMesesDefault,

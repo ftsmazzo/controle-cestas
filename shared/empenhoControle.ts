@@ -186,9 +186,7 @@ export function buildEmpenhoControle(
   },
 ): EmpenhoControleResumo {
   const totalEmpenho =
-    options?.totalEmpenho ??
-    payload.emergencial.empenhoTotalCestas ??
-    EMPENHO_CESTAS_TOTAL_PADRAO;
+    options?.totalEmpenho ?? EMPENHO_CESTAS_TOTAL_PADRAO;
   const metaOperacionalPadrao =
     options?.metaMensalPadrao ??
     payload.emergencial.cestasPorMes ??
