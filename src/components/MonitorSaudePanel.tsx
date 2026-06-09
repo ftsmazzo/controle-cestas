@@ -101,7 +101,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           )}
           {saude.pctProjecaoMes > 0 && (
             <p className="monitor-saude-prazo-proj">
-              Projeção fim do mês:{' '}
+              Projeção fim do {resumo.usaCicloOperacional ? 'ciclo' : 'mês'}:{' '}
               <strong>{num(saude.projecaoMesTotal, 0)}</strong> cestas (
               {num(saude.pctProjecaoMes, 0)}% do teto)
               {saude.estouroProjetadoMes > 0 && (
@@ -167,7 +167,9 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
         <article
           className={`monitor-saude-card${saude.estouroMes > 0 ? ' monitor-saude-card--over' : ''}`}
         >
-          <span className="monitor-saude-card-label">Teto mensal</span>
+          <span className="monitor-saude-card-label">
+            {resumo.usaCicloOperacional ? 'Teto do ciclo' : 'Teto mensal'}
+          </span>
           <strong>{num(saude.limiteMensal, 0)}</strong>
           <span className="monitor-saude-card-sub">
             uso {num(saude.pctUsoLimiteMes, 0)}% · {num(saude.enviadoMes, 0)} enviadas
@@ -180,7 +182,9 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           className={`monitor-saude-card${saude.estouroSemana > 0 ? ' monitor-saude-card--over' : ''}`}
         >
           <span className="monitor-saude-card-label">
-            Teto semana {resumo.semanaAnalise}
+            {resumo.usaCicloOperacional
+              ? `Teto ${resumo.labelSemanaAnalise ?? `S${resumo.semanaNoCiclo ?? resumo.semanaAnalise}`}`
+              : `Teto semana ${resumo.semanaAnalise}`}
           </span>
           <strong>{num(saude.limiteSemanal, 0)}</strong>
           <span className="monitor-saude-card-sub">
@@ -190,7 +194,9 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
         <article
           className={`monitor-saude-card${saude.estouroProjetadoMes > 0 ? ' monitor-saude-card--over' : ''}`}
         >
-          <span className="monitor-saude-card-label">Projeção fim do mês</span>
+          <span className="monitor-saude-card-label">
+            {resumo.usaCicloOperacional ? 'Projeção fim do ciclo' : 'Projeção fim do mês'}
+          </span>
           <strong>{num(saude.projecaoMesTotal, 0)}</strong>
           <span className="monitor-saude-card-sub">
             {num(saude.pctProjecaoMes, 0)}% do teto

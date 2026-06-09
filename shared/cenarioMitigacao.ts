@@ -26,9 +26,11 @@ import {
   formatSemanaOperacionalCurta,
   indiceOperacionalCivil,
   labelCicloOperacional,
+  gorduraUsadaPeriodoOperacional,
   proximasSemanasOperacionais,
   refSemanaOperacionalCivil,
   saldoCicloOperacional,
+  semanasAlvoMitigacao,
   trocarValoresSemanas,
 } from './operationalWeeks.js';
 import {
@@ -264,11 +266,20 @@ function gorduraUsadaNoMes(enviado: number): number {
   return Math.max(0, enviado - TETO_MENSAL_OPERACIONAL);
 }
 
-function gorduraUsadaPeriodo(payload: ServicesPayload, mesAtual: string): number {
+function gorduraUsadaPeriodo(
+  payload: ServicesPayload,
+  mesAtual: string,
+  semanaRef: number,
+  empenhoMeses: string[],
+): number {
+  const mon = payload.emergencial.monitoramento;
+  const idx = indiceOperacionalCivil(mesAtual, semanaRef, empenhoMeses);
+  if (idx != null) {
+    return gorduraUsadaPeriodoOperacional(mon, idx, empenhoMeses);
+  }
   const meses =
     payload.emergencial.empenhoMeses ??
     payload.emergencial.plans.map((p) => p.mes);
-  const mon = payload.emergencial.monitoramento;
   const kAtual = parseMonthKey(mesAtual);
   let total = 0;
   for (const mes of meses) {
@@ -277,6 +288,50 @@ function gorduraUsadaPeriodo(payload: ServicesPayload, mesAtual: string): number
     total += gorduraUsadaNoMes(enviadoMesMonitoramento(mes, mon));
   }
   return total;
+}
+
+/** Define as 2 semanas do plano (ex.: Jun S1 + Jun S2 até fechar a dupla) */
+function resolverAlvosMitigacao(
+  mesFechamento: string,
+  resumo: ReturnType<typeof buildMonitoramentoResumo>,
+  horizonte: number,
+  empenhoMeses: string[],
+): Array<{ mes: string; semana: number; indiceOperacional: number }> {
+  const idxJunS1 = indiceOperacionalCivil('Jun/2026', 1, empenhoMeses);
+  const idxJunS2 = indiceOperacionalCivil('Jun/2026', 2, empenhoMeses);
+  const idxBase = indiceOperacionalCivil(
+    mesFechamento,
+    resumo.semanaBaseRitmo,
+    empenhoMeses,
+  );
+
+  if (
+    idxBase != null &&
+    idxJunS1 != null &&
+    idxJunS2 != null &&
+    idxBase >= idxJunS1 - 1 &&
+    idxBase < idxJunS2
+  ) {
+    return semanasAlvoMitigacao(
+      'Jun/2026',
+      1,
+      horizonte,
+      empenhoMeses,
+      'inclusive',
+    );
+  }
+
+  const modo = resumo.modoPlanejamento ? 'inclusive' : 'apos';
+  const semanaInicio = resumo.modoPlanejamento
+    ? resumo.semanaAnalise
+    : resumo.semanaBaseRitmo;
+  return semanasAlvoMitigacao(
+    mesFechamento,
+    semanaInicio,
+    horizonte,
+    empenhoMeses,
+    modo,
+  );
 }
 
 interface DraftUnit {
@@ -627,6 +682,7 @@ export function buildCenarioMitigacao(
   const resumo = buildMonitoramentoResumo(payload, {
     mesReferencia: ctx.mes,
     semanaReferencia: ctx.semanaReferencia,
+    usarCicloOperacional: true,
   });
 
   const mesFechamento = resumo.mes;
@@ -636,9 +692,9 @@ export function buildCenarioMitigacao(
       : suggestEmpenhoMeses(
           payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO,
         );
-  const proximasOp = proximasSemanasOperacionais(
+  const proximasOp = resolverAlvosMitigacao(
     mesFechamento,
-    resumo.semanaBaseRitmo,
+    resumo,
     semanasHorizonte,
     empenhoMeses,
   );
@@ -699,7 +755,12 @@ export function buildCenarioMitigacao(
     MARGEM_MITIGACAO_MENSAL,
     Math.max(0, margemAte1200 - saldoRestante1150),
   );
-  const gorduraPeriodoUsada = gorduraUsadaPeriodo(payload, mesFechamento);
+  const gorduraPeriodoUsada = gorduraUsadaPeriodo(
+    payload,
+    mesFechamento,
+    resumo.semanaBaseRitmo,
+    empenhoMeses,
+  );
   const gorduraPeriodoRestante = Math.max(
     0,
     GORDURA_PERIODO_TOTAL - gorduraPeriodoUsada,

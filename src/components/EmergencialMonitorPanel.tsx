@@ -6,6 +6,7 @@ import {
   buildMonitoramentoResumo,
   leadingDaysBeforeFirstMondayWeek,
   registerSaldoSemanal,
+  resolveContextoOperacionalAnalise,
   upsertWeeklyQty,
   weekDateRangeLabel,
   type EmergencialMonitoramento,
@@ -53,9 +54,53 @@ export default function EmergencialMonitorPanel({
 }: Props) {
   const [semanaEdit, setSemanaEdit] = useState(MONITOR_CONTROLE_SEMANA_INICIO);
 
-  const resumo = useMemo(
-    () => buildMonitoramentoResumo(data, { semanaReferencia: semanaEdit }),
-    [data, semanaEdit],
+  const mesAtivo =
+    data.emergencial.monitoramento.mesAtivo ?? MONITOR_CONTROLE_MES_INICIO;
+
+  const empenhoMesesLista = useMemo(
+    () =>
+      data.emergencial.empenhoMeses?.length
+        ? data.emergencial.empenhoMeses
+        : suggestEmpenhoMeses(
+            data.emergencial.duracaoMeses,
+            MONITOR_CONTROLE_MES_INICIO,
+          ),
+    [data],
+  );
+
+  const ctxAnalise = useMemo(
+    () =>
+      resolveContextoOperacionalAnalise(
+        data.emergencial.monitoramento,
+        mesAtivo,
+        semanaEdit,
+        empenhoMesesLista,
+      ),
+    [data.emergencial.monitoramento, mesAtivo, semanaEdit, empenhoMesesLista],
+  );
+
+  /** KPIs, saúde e alertas — ciclo operacional no último lançamento (ou semana à frente) */
+  const resumoAnalise = useMemo(
+    () =>
+      buildMonitoramentoResumo(data, {
+        mesReferencia: ctxAnalise.mes,
+        semanaReferencia: ctxAnalise.semana,
+        mesExibicao: mesAtivo,
+        usarCicloOperacional: true,
+      }),
+    [data, ctxAnalise, mesAtivo],
+  );
+
+  /** Grade de lançamentos — mês civil selecionado na aba */
+  const resumoTabela = useMemo(
+    () =>
+      buildMonitoramentoResumo(data, {
+        mesReferencia: mesAtivo,
+        semanaReferencia: semanaEdit,
+        mesExibicao: mesAtivo,
+        usarCicloOperacional: false,
+      }),
+    [data, mesAtivo, semanaEdit],
   );
 
   const mesesMonitor = useMemo(() => {
@@ -78,7 +123,7 @@ export default function EmergencialMonitorPanel({
     );
   }, [data]);
 
-  const ym = getYearMonth(resumo.mes);
+  const ym = getYearMonth(resumoTabela.mes);
   const year = ym?.year ?? new Date().getFullYear();
   const month = ym?.month ?? new Date().getMonth() + 1;
   const diasAntesPrimeiraSemana = useMemo(
@@ -127,7 +172,7 @@ export default function EmergencialMonitorPanel({
     patchMonitoring(
       registerSaldoSemanal(
         data.emergencial.monitoramento,
-        resumo.mes,
+        resumoTabela.mes,
         semanaEdit,
         saldo,
       ),
@@ -163,11 +208,11 @@ export default function EmergencialMonitorPanel({
             ? num(eq.metaSemanal)
             : '—'}
       </td>
-      {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map((w) => {
+      {Array.from({ length: resumoTabela.semanasNoMes }, (_, i) => i + 1).map((w) => {
         const val = eq.semanas[w] ?? 0;
         const isEdit = !readOnly && w === semanaEdit;
-        const preControle = w < resumo.semanaInicioControle;
-        const isAnalise = w === resumo.semanaAnalise;
+        const preControle = w < resumoTabela.semanaInicioControle;
+        const isAnalise = w === semanaEdit;
         const hasDados = val > 0;
         return (
           <td
@@ -268,7 +313,7 @@ export default function EmergencialMonitorPanel({
   ) => {
     const mon = upsertWeeklyQty(
       data.emergencial.monitoramento,
-      resumo.mes,
+      mesAtivo,
       semana,
       servicoId,
       quantidade,
@@ -277,19 +322,19 @@ export default function EmergencialMonitorPanel({
   };
 
   const riskClass =
-    resumo.estouroMes > 0 ||
-    resumo.estouroSemana > 0 ||
-    resumo.pctMes > 100 ||
-    resumo.estouroProjetadoMes > 0
+    resumoAnalise.estouroMes > 0 ||
+    resumoAnalise.estouroSemana > 0 ||
+    resumoAnalise.pctMes > 100 ||
+    resumoAnalise.estouroProjetadoMes > 0
       ? 'critico'
-      : resumo.pctMes > 90 ||
-          resumo.pctLimiteSemana > 90 ||
-          resumo.pctProjecaoMes > 92
+      : resumoAnalise.pctMes > 90 ||
+          resumoAnalise.pctLimiteSemana > 90 ||
+          resumoAnalise.pctProjecaoMes > 92
         ? 'atencao'
         : 'ok';
 
   const semanaCabecalho = (w: number) => {
-    const ref = refSemanaOperacionalCivil(resumo.mes, w);
+    const ref = refSemanaOperacionalCivil(resumoTabela.mes, w, empenhoMesesLista);
     if (ref) return { titulo: ref.label, periodo: ref.periodo };
     return { titulo: `S${w}`, periodo: weekDateRangeLabel(year, month, w) };
   };
@@ -299,35 +344,33 @@ export default function EmergencialMonitorPanel({
       {/* —— 1 · Situação agora —— */}
       <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass} monitor-section`}>
         <h2 className="monitor-section-title">
-          <span>1 ·</span> Situação agora — {resumo.mes}
+          <span>1 ·</span> Situação agora — {resumoAnalise.labelCiclo ?? resumoAnalise.mes}
         </h2>
-        {resumo.ultimaSemanaComDados === 0 && resumo.enviadoMesTotal === 0 && (
+        {resumoAnalise.ultimaSemanaComDados === 0 && resumoAnalise.enviadoMesTotal === 0 && (
           <p className="alerta-box alerta-nivel-alto">
-            Nenhum envio lançado em <strong>{resumo.mes}</strong>. Importe o PDF RME da semana ou
-            confira se o <strong>mês monitorado</strong> está correto.
+            Nenhum envio lançado no período. Importe o PDF RME da semana e salve.
           </p>
         )}
-        {resumo.modoPlanejamento && (
+        {resumoAnalise.modoPlanejamento && (
           <p className="alerta-box alerta-nivel-moderado">
-            Monitorando <strong>S{resumo.semanaAnalise}</strong> (sem lançamento ainda). Histórico
-            até <strong>S{resumo.ultimaSemanaComDados}</strong>:{' '}
-            <strong>{num(resumo.enviadoAteBaseRitmo)}</strong> cestas no mês — projeções e ritmo
-            usam esse histórico para orientar a próxima semana.
+            Planejando <strong>{resumoAnalise.labelSemanaAnalise}</strong> (sem lançamento ainda).
+            Histórico no ciclo: <strong>{num(resumoAnalise.enviadoAteBaseRitmo)}</strong> cestas.
           </p>
         )}
         <p className="hint">
-          Teto <strong>{num(TETO_MENSAL_OPERACIONAL)}</strong>/mês · empenho{' '}
-          <strong>{num(data.emergencial.empenhoTotalCestas ?? 4800)}</strong> · ponto zero S
-          {semanaCabecalho(resumo.semanaInicioControle).titulo} (
-          {semanaCabecalho(resumo.semanaInicioControle).periodo}).{' '}
-          {readOnly ? 'Consulta.' : 'Importe o PDF da semana abaixo e salve.'}
+          Análise no <strong>último lançamento salvo</strong> ({resumoAnalise.mes} S
+          {resumoAnalise.semanaAnalise}
+          {resumoAnalise.labelSemanaAnalise ? ` · ${resumoAnalise.labelSemanaAnalise}` : ''}) — teto{' '}
+          <strong>{num(TETO_MENSAL_OPERACIONAL)}</strong>/ciclo (4 sem. operacionais). Aba{' '}
+          <strong>{mesAtivo}</strong> = só lançamentos da grade.{' '}
+          {readOnly ? 'Consulta.' : 'Importe o PDF abaixo e salve.'}
         </p>
 
         <div className="emerg-monitor-toolbar">
           <label>
-            Mês monitorado
+            Mês da grade (lançamentos)
             <select
-              value={resumo.mes}
+              value={mesAtivo}
               disabled={readOnly}
               onChange={(e) => setMesAtivo(e.target.value)}
             >
@@ -344,13 +387,13 @@ export default function EmergencialMonitorPanel({
               value={semanaEdit}
               onChange={(e) => setSemanaEdit(Number(e.target.value))}
             >
-              {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
+              {Array.from({ length: resumoTabela.semanasNoMes }, (_, i) => i + 1).map(
                 (w) => (
                   <option key={w} value={w}>
                     {semanaCabecalho(w).titulo} ({semanaCabecalho(w).periodo})
-                    {w < resumo.semanaInicioControle ? ' — pré-controle' : ''}
-                    {w === resumo.semanaAnalise ? ' — em análise' : ''}
-                    {w === resumo.semanaAtual && w !== resumo.semanaAnalise
+                    {w < resumoTabela.semanaInicioControle ? ' — pré-controle' : ''}
+                    {w === semanaEdit ? ' — editando' : ''}
+                    {w === resumoTabela.semanaAtual && w !== semanaEdit
                       ? ' — civil hoje'
                       : ''}
                   </option>
@@ -372,11 +415,11 @@ export default function EmergencialMonitorPanel({
                     semanaInicioControle: Number(e.target.value),
                     mesInicioControle:
                       data.emergencial.monitoramento.mesInicioControle ??
-                      resumo.mes,
+                      mesAtivo,
                   })
                 }
               >
-                {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
+                {Array.from({ length: resumoTabela.semanasNoMes }, (_, i) => i + 1).map(
                   (w) => (
                     <option key={w} value={w}>
                       {semanaCabecalho(w).titulo} ({semanaCabecalho(w).periodo})
@@ -404,17 +447,17 @@ export default function EmergencialMonitorPanel({
               }}
             />
           </label>
-          {resumo.saldoAtualizadoEm && (
+          {resumoAnalise.saldoAtualizadoEm && (
             <span className="emerg-saldo-ts">
               Atualizado:{' '}
-              {new Date(resumo.saldoAtualizadoEm).toLocaleString('pt-BR')}
+              {new Date(resumoAnalise.saldoAtualizadoEm).toLocaleString('pt-BR')}
             </span>
           )}
         </div>
 
         <RegistroSemanalPdfImport
           data={data}
-          mes={resumo.mes}
+          mes={mesAtivo}
           semana={semanaEdit}
           readOnly={readOnly}
           onApply={(next) => onUpdate(next)}
@@ -422,58 +465,60 @@ export default function EmergencialMonitorPanel({
 
         <div className="emerg-kpi-grid">
           <article className="emerg-kpi">
-            <span className="emerg-kpi-label">Semana no mês</span>
+            <span className="emerg-kpi-label">Semana operacional</span>
             <strong>
-              S{resumo.semanaAnalise} / {resumo.semanasNoMes}
+              {resumoAnalise.labelSemanaAnalise ?? `S${resumoAnalise.semanaAnalise}`}
             </strong>
             <span className="emerg-kpi-sub">
-              {semanaCabecalho(resumo.semanaAnalise).periodo} ({resumo.mes})
-              {resumo.modoPlanejamento &&
-                ` · histórico até S${resumo.ultimaSemanaComDados}`}
+              {resumoAnalise.labelCiclo ?? resumoAnalise.mes}
+              {resumoAnalise.modoPlanejamento &&
+                ` · histórico ${num(resumoAnalise.enviadoAteBaseRitmo)} no ciclo`}
             </span>
           </article>
-          <article className={`emerg-kpi${resumo.estouroMes > 0 ? ' emerg-kpi--over' : ''}`}>
-            <span className="emerg-kpi-label">Uso do teto mensal</span>
+          <article className={`emerg-kpi${resumoAnalise.estouroMes > 0 ? ' emerg-kpi--over' : ''}`}>
+            <span className="emerg-kpi-label">Uso do teto do ciclo</span>
             <strong>
-              {num(resumo.enviadoMesTotal)} / {num(resumo.metaMesTotal)}
+              {num(resumoAnalise.enviadoMesTotal)} / {num(resumoAnalise.metaMesTotal)}
             </strong>
             <span className="emerg-kpi-sub">
-              {num(resumo.pctMes, 0)}%
-              {resumo.estouroMes > 0
-                ? ` · estouro +${num(resumo.estouroMes)}`
-                : ` · margem ${num(resumo.margemMes)}`}
+              {num(resumoAnalise.pctMes, 0)}%
+              {resumoAnalise.estouroMes > 0
+                ? ` · estouro +${num(resumoAnalise.estouroMes)}`
+                : ` · margem ${num(resumoAnalise.margemMes)}`}
             </span>
           </article>
           <article
-            className={`emerg-kpi${resumo.estouroSemana > 0 ? ' emerg-kpi--over' : ''}`}
+            className={`emerg-kpi${resumoAnalise.estouroSemana > 0 ? ' emerg-kpi--over' : ''}`}
           >
-            <span className="emerg-kpi-label">Semana {resumo.semanaAnalise}</span>
+            <span className="emerg-kpi-label">
+              Semana {resumoAnalise.semanaNoCiclo ?? resumoAnalise.semanaAnalise} do ciclo
+            </span>
             <strong>
-              {num(resumo.enviadoSemanaAtual)} / {num(resumo.limiteSemanal)}
+              {num(resumoAnalise.enviadoSemanaAtual)} / {num(resumoAnalise.limiteSemanal)}
             </strong>
             <span className="emerg-kpi-sub">
-              {num(resumo.pctLimiteSemana, 0)}% do teto
-              {resumo.estouroSemana > 0
-                ? ` · +${num(resumo.estouroSemana)}`
-                : ` · margem ${num(resumo.margemSemana)}`}
+              {num(resumoAnalise.pctLimiteSemana, 0)}% do teto
+              {resumoAnalise.estouroSemana > 0
+                ? ` · +${num(resumoAnalise.estouroSemana)}`
+                : ` · margem ${num(resumoAnalise.margemSemana)}`}
             </span>
           </article>
           <article
             className={`emerg-kpi${
-              resumo.empenhoAcabaAntesDoPeriodo ? ' emerg-kpi--over' : ''
+              resumoAnalise.empenhoAcabaAntesDoPeriodo ? ' emerg-kpi--over' : ''
             }`}
           >
             <span className="emerg-kpi-label">Empenho / autonomia</span>
-            <strong>{num(resumo.cestasDisponiveisEmpenho)}</strong>
+            <strong>{num(resumoAnalise.cestasDisponiveisEmpenho)}</strong>
             <span className="emerg-kpi-sub">
-              {resumo.autonomiaSemanasSaldo != null ? (
+              {resumoAnalise.autonomiaSemanasSaldo != null ? (
                 <>
-                  ~{num(resumo.autonomiaSemanasSaldo, 1)} sem. ao ritmo ~
-                  {num(resumo.ritmoSemanalReferencia, 0)}/sem
-                  {resumo.autonomiaDiasSaldo != null &&
-                    ` (${resumo.autonomiaDiasSaldo} dias)`}
-                  {resumo.empenhoAcabaAntesDoPeriodo &&
-                    ` · faltam ${resumo.semanasPeriodoRestantes} sem. no período`}
+                  ~{num(resumoAnalise.autonomiaSemanasSaldo, 1)} sem. ao ritmo ~
+                  {num(resumoAnalise.ritmoSemanalReferencia, 0)}/sem
+                  {resumoAnalise.autonomiaDiasSaldo != null &&
+                    ` (${resumoAnalise.autonomiaDiasSaldo} dias)`}
+                  {resumoAnalise.empenhoAcabaAntesDoPeriodo &&
+                    ` · faltam ${resumoAnalise.semanasPeriodoRestantes} sem. no período`}
                 </>
               ) : (
                 'Lance envios para calcular'
@@ -482,27 +527,27 @@ export default function EmergencialMonitorPanel({
           </article>
           <article
             className={`emerg-kpi${
-              resumo.estouroProjetadoMes > 0 ? ' emerg-kpi--over' : ''
+              resumoAnalise.estouroProjetadoMes > 0 ? ' emerg-kpi--over' : ''
             }`}
           >
-            <span className="emerg-kpi-label">Projeção fim do mês</span>
-            <strong>{num(resumo.projecaoMesTotal)}</strong>
+            <span className="emerg-kpi-label">Projeção fim do ciclo</span>
+            <strong>{num(resumoAnalise.projecaoMesTotal)}</strong>
             <span className="emerg-kpi-sub">
-              {num(resumo.pctProjecaoMes, 0)}% do teto
-              {resumo.semanaProjetadaEstouro != null
-                ? ` · estouro S${resumo.semanaProjetadaEstouro}`
-                : resumo.estouroProjetadoMes > 0
-                  ? ` · +${num(resumo.estouroProjetadoMes)}`
+              {num(resumoAnalise.pctProjecaoMes, 0)}% do teto
+              {resumoAnalise.semanaProjetadaEstouro != null
+                ? ` · estouro S${resumoAnalise.semanaProjetadaEstouro}`
+                : resumoAnalise.estouroProjetadoMes > 0
+                  ? ` · +${num(resumoAnalise.estouroProjetadoMes)}`
                   : ''}
               {' '}
-              · ritmo ~{num(resumo.ritmoSemanalMedio, 0)}/sem
+              · ritmo ~{num(resumoAnalise.ritmoSemanalMedio, 0)}/sem
             </span>
           </article>
         </div>
 
         <MonitorSaudePanel
           data={data}
-          resumo={resumo}
+          resumo={resumoAnalise}
           dashboard={decisionDashboard}
         />
       </section>
@@ -516,12 +561,12 @@ export default function EmergencialMonitorPanel({
       </section>
 
       {/* —— 3 · Distribuição e correção —— */}
-      {resumo.alertas.length > 0 && (
+      {resumoAnalise.alertas.length > 0 && (
         <section className="panel monitor-section">
           <h2 className="monitor-section-title">
             <span>3 ·</span> Correção de rota
           </h2>
-          {resumo.alertas.map((a, i) => (
+          {resumoAnalise.alertas.map((a, i) => (
             <p key={i} className={`alerta-box alerta-nivel-${a.nivel}`}>
               <strong>{a.titulo}</strong> — {a.descricao}
             </p>
@@ -531,7 +576,7 @@ export default function EmergencialMonitorPanel({
 
       <section className="panel monitor-section">
         <h2 className="monitor-section-title">
-          <span>3 ·</span> Distribuição por setor — {resumo.mes}
+          <span>3 ·</span> Distribuição por setor — {resumoTabela.mes}
           {!readOnly && (
             <span className="hint-inline">
               {' '}
@@ -539,7 +584,7 @@ export default function EmergencialMonitorPanel({
             </span>
           )}
         </h2>
-        {!resumo.allocation && (
+        {!resumoTabela.allocation && (
           <p className="alerta-box alerta-nivel-moderado">
             Importe a <strong>requisição Coderp</strong> abaixo e/ou a planilha pivot em Admin →
             Importar. Defina {TOTAL_MENSAL_EMERGENCIAL_PADRAO} cestas/mês em Contratos →
@@ -547,8 +592,8 @@ export default function EmergencialMonitorPanel({
           </p>
         )}
         <PrintableTable
-          title={`Distribuição por setor — ${resumo.mes}`}
-          subtitle={`Semana de análise S${resumo.semanaAnalise} · envio real via PDF · SAICA/WARAOS/Mãos Dadas: cota mensal única (sem % semanal)`}
+          title={`Distribuição por setor — ${resumoTabela.mes}`}
+          subtitle={`Lançamento S${semanaEdit} · grade civil · análise/KPIs no ciclo operacional (${resumoAnalise.labelCiclo ?? ''})`}
           wrapClassName="emerg-monitor-table-wrap"
           orientation="landscape"
         >
@@ -558,13 +603,13 @@ export default function EmergencialMonitorPanel({
                 <th rowSpan={2}>Equipamento</th>
                 <th rowSpan={2}>Teto mês</th>
                 <th rowSpan={2}>Teto/sem</th>
-                {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
+                {Array.from({ length: resumoTabela.semanasNoMes }, (_, i) => i + 1).map(
                   (w) => (
                     <th
                       key={w}
                       colSpan={1}
                       className={
-                        w < resumo.semanaInicioControle
+                        w < resumoTabela.semanaInicioControle
                           ? 'sem-head sem-head-pre'
                           : 'sem-head'
                       }
@@ -572,14 +617,14 @@ export default function EmergencialMonitorPanel({
                       {semanaCabecalho(w).titulo}
                       <span className="sem-range">
                         {semanaCabecalho(w).periodo}
-                        {w < resumo.semanaInicioControle ? ' · pré' : ''}
+                        {w < resumoTabela.semanaInicioControle ? ' · pré' : ''}
                       </span>
                     </th>
                   ),
                 )}
                 <th rowSpan={2}>Total</th>
                 <th rowSpan={2}>% mês</th>
-                <th rowSpan={2}>% sem. {resumo.semanaAnalise}</th>
+                <th rowSpan={2}>% sem. {semanaEdit}</th>
                 <th rowSpan={2} title="Se o ritmo das semanas de controle continuar">
                   % proj. mês
                 </th>
@@ -587,10 +632,10 @@ export default function EmergencialMonitorPanel({
               </tr>
             </thead>
             <tbody>
-              {resumo.familias.map((fam) => {
+              {resumoTabela.familias.map((fam) => {
                 const metaFam = fam.itens.reduce((s, e) => s + e.metaMensal, 0);
                 const envFam = fam.itens.reduce((s, e) => s + e.totalEnviado, 0);
-                const colSpan = 3 + resumo.semanasNoMes;
+                const colSpan = 3 + resumoTabela.semanasNoMes;
                 return (
                   <Fragment key={fam.familiaId}>
                     <tr className="row-familia">
@@ -617,22 +662,22 @@ export default function EmergencialMonitorPanel({
                   </Fragment>
                 );
               })}
-              {!resumo.familias.length &&
-                resumo.equipamentos.map((eq) => renderEquipRow(eq))}
+              {!resumoTabela.familias.length &&
+                resumoTabela.equipamentos.map((eq) => renderEquipRow(eq))}
             </tbody>
             <tfoot>
               <tr>
                 <td>
                   <strong>TOTAL</strong>
                 </td>
-                <td>{num(resumo.metaMesTotal)}</td>
+                <td>{num(resumoTabela.metaMesTotal)}</td>
                 <td>—</td>
-                {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
+                {Array.from({ length: resumoTabela.semanasNoMes }, (_, i) => i + 1).map(
                   (w) => (
                     <td key={w}>
                       <strong>
                         {num(
-                          resumo.equipamentos.reduce(
+                          resumoTabela.equipamentos.reduce(
                             (s, e) => s + (e.semanas[w] ?? 0),
                             0,
                           ),
@@ -642,20 +687,20 @@ export default function EmergencialMonitorPanel({
                   ),
                 )}
                 <td>
-                  <strong>{num(resumo.enviadoMesTotal)}</strong>
+                  <strong>{num(resumoTabela.enviadoMesTotal)}</strong>
                 </td>
-                <td>{num(resumo.pctMes, 0)}%</td>
-                <td>{num(resumo.pctLimiteSemana, 0)}%</td>
+                <td>{num(resumoTabela.pctMes, 0)}%</td>
+                <td>{num(resumoTabela.pctLimiteSemana, 0)}%</td>
                 <td
                   className={
-                    resumo.pctProjecaoMes > 100
+                    resumoTabela.pctProjecaoMes > 100
                       ? 'cell-over-limit'
-                      : resumo.pctProjecaoMes > 92
+                      : resumoTabela.pctProjecaoMes > 92
                         ? 'cell-projecao-alerta'
                         : ''
                   }
                 >
-                  {num(resumo.pctProjecaoMes, 0)}%
+                  {num(resumoTabela.pctProjecaoMes, 0)}%
                 </td>
                 <td />
               </tr>
@@ -664,13 +709,12 @@ export default function EmergencialMonitorPanel({
         </PrintableTable>
         <p className="hint">
           Envios reais por semana (colunas verdes = já lançadas). Ao mudar a semana no seletor, o
-          histórico permanece. <strong>% sem.</strong> = teto na S{resumo.semanaAnalise}.{' '}
-          <strong>% proj. mês</strong> = ritmo até S{resumo.semanaBaseRitmo} projetado até o fim do
-          mês. Badge <em>Ritmo</em> = semana ok, mas projeção alta.
+          histórico permanece. KPIs e mitigação usam o <strong>ciclo operacional</strong> (4 semanas,
+          teto 1.150), não o mês civil desta grade.
         </p>
       </section>
 
-      {resumo.allocation && (
+      {resumoTabela.allocation && (
         <details className="panel emerg-meta-ref">
           <summary>Referência rateio (histórico Set/25–Mar/26)</summary>
           {!readOnly && (
@@ -695,9 +739,9 @@ export default function EmergencialMonitorPanel({
                 </tr>
               </thead>
               <tbody>
-                {resumo.allocation.linhas.map((l) => {
+                {resumoTabela.allocation.linhas.map((l) => {
                   const env =
-                    resumo.equipamentos.find((e) => e.servicoId === l.servicoId)
+                    resumoTabela.equipamentos.find((e) => e.servicoId === l.servicoId)
                       ?.totalEnviado ?? 0;
                   const falta = Math.max(0, l.alocado - env);
                   return (

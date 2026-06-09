@@ -1,5 +1,18 @@
 import { allocatePlans } from './allocation.js';
-import { computeAutonomiaOperacional } from './empenhoControle.js';
+import {
+  computeAutonomiaOperacional,
+  suggestEmpenhoMeses,
+  EMPENHO_DURACAO_MESES_PADRAO,
+} from './empenhoControle.js';
+import {
+  SEMANAS_POR_CICLO_OPERACIONAL,
+  TETO_CICLO_OPERACIONAL,
+  civilPorIndiceOperacional,
+  enviadoCicloOperacionalAte,
+  indiceOperacionalCivil,
+  labelCicloOperacional,
+  refSemanaOperacionalCivil,
+} from './operationalWeeks.js';
 import {
   estouroAcimaLimite,
   margemAteLimite,
@@ -145,6 +158,14 @@ export interface MonitoramentoResumo {
   familias: FamiliaGroup<EquipamentoMonitorRow>[];
   historicoSaldo: SaldoSemanalRegistro[];
   allocation: MonthAllocationResult | null;
+  /** Métricas alinhadas ao ciclo operacional (4 sem. qua–ter, teto 1.150) */
+  usaCicloOperacional?: boolean;
+  cicloAtual?: number;
+  labelCiclo?: string;
+  labelSemanaAnalise?: string;
+  semanaNoCiclo?: number;
+  /** Mês civil exibido na grade (pode diferir do mês de análise) */
+  mesExibicao?: string;
 }
 
 export function defaultEmergencialMonitoring(): EmergencialMonitoramento {
@@ -475,26 +496,60 @@ export function ultimoLancamentoSemanal(
   return { mes: bestMes, semana: bestSem, totalCestas };
 }
 
-/** Painel público: usa mês/semana do último lançamento salvo quando o mês ativo está vazio. */
+/**
+ * Posição operacional para KPIs e mitigação.
+ * KPIs ficam no último lançamento salvo, exceto quando a grade aponta uma semana à frente (planejamento).
+ */
+export function resolveContextoOperacionalAnalise(
+  mon: EmergencialMonitoramento,
+  mesTabela: string,
+  semanaTabela: number,
+  empenhoMeses?: string[],
+): { mes: string; semana: number; indiceOperacional: number | null } {
+  const ultimo = ultimoLancamentoSemanal(mon);
+  if (ultimo) {
+    const idxUltimo = indiceOperacionalCivil(
+      ultimo.mes,
+      ultimo.semana,
+      empenhoMeses,
+    );
+    const idxTabela = indiceOperacionalCivil(
+      mesTabela,
+      semanaTabela,
+      empenhoMeses,
+    );
+    if (idxTabela != null && idxUltimo != null && idxTabela > idxUltimo) {
+      return {
+        mes: mesTabela,
+        semana: semanaTabela,
+        indiceOperacional: idxTabela,
+      };
+    }
+    return {
+      mes: ultimo.mes,
+      semana: ultimo.semana,
+      indiceOperacional: idxUltimo,
+    };
+  }
+  const mesIni = mon.mesInicioControle ?? MONITOR_CONTROLE_MES_INICIO;
+  const semIni = mon.semanaInicioControle ?? MONITOR_CONTROLE_SEMANA_INICIO;
+  const idx =
+    indiceOperacionalCivil(mesTabela, semanaTabela, empenhoMeses) ??
+    indiceOperacionalCivil(mesIni, semIni, empenhoMeses);
+  return {
+    mes: mesTabela || mesIni,
+    semana: semanaTabela || semIni,
+    indiceOperacional: idx,
+  };
+}
+
+/** Painel público: sempre ancora no último lançamento salvo (linha do tempo operacional). */
 export function resolveContextoPainelPublico(
   cfg: ProcessoEmergencialConfig,
   now: Date = new Date(),
 ): { mes: string; semanaReferencia?: number; ultimoLancamento: UltimoLancamentoSemanal | null } {
   const mon = mergeEmergencialMonitoring(cfg.monitoramento);
   const ultimo = ultimoLancamentoSemanal(mon);
-  const mesAtivo = resolveMesMonitoramento(cfg, now);
-  const semIni = semanaInicioControleEfetiva(mesAtivo, mon);
-  const temDadosMesAtivo =
-    ultimaSemanaComDadosNoMes(mon, mesAtivo, semIni) >= semIni;
-
-  if (temDadosMesAtivo) {
-    const semRef =
-      ultimo && parseMonthKey(ultimo.mes) === parseMonthKey(mesAtivo)
-        ? ultimo.semana
-        : undefined;
-    return { mes: mesAtivo, semanaReferencia: semRef, ultimoLancamento: ultimo };
-  }
-
   if (ultimo) {
     return {
       mes: ultimo.mes,
@@ -502,8 +557,9 @@ export function resolveContextoPainelPublico(
       ultimoLancamento: ultimo,
     };
   }
-
-  return { mes: mesAtivo, ultimoLancamento: null };
+  const mesAtivo = resolveMesMonitoramento(cfg, now);
+  const semIni = semanaInicioControleEfetiva(mesAtivo, mon);
+  return { mes: mesAtivo, semanaReferencia: semIni, ultimoLancamento: null };
 }
 
 export interface BuildMonitorOptions {
@@ -512,6 +568,10 @@ export interface BuildMonitorOptions {
   mesReferencia?: string;
   /** Semana selecionada no painel (importação / leitura); mantém histórico nas projeções */
   semanaReferencia?: number;
+  /** Mês da grade de lançamentos (quando diferente do mês de análise) */
+  mesExibicao?: string;
+  /** KPIs e alertas pelo ciclo operacional de 4 semanas (padrão: true) */
+  usarCicloOperacional?: boolean;
   allocateOptions?: Parameters<typeof allocatePlans>[3];
 }
 
@@ -551,7 +611,7 @@ export function buildMonitoramentoResumo(
     ultimaSemanaComDados > 0 &&
     semanaAnalise > ultimaSemanaComDados &&
     !analiseTemDados;
-  const semanasNoPeriodoControleVal = semanasNoPeriodoControle(
+  let semanasNoPeriodoControleVal = semanasNoPeriodoControle(
     semanaBaseRitmo,
     semanaInicioControle,
   );
@@ -559,7 +619,7 @@ export function buildMonitoramentoResumo(
   const planMes =
     cfg.plans.find((p) => parseMonthKey(p.mes) === ym) ??
     cfg.plans.find((p) => parseMonthKey(p.mes) === parseMonthKey(MES_REFERENCIA_SEGURO));
-  const metaMesTotal =
+  let metaMesTotal =
     planMes?.totalDisponivel ?? cfg.cestasPorMes ?? TOTAL_MENSAL_EMERGENCIAL_PADRAO;
 
   const histDistrib = historyForDistribuicao(payload);
@@ -584,10 +644,19 @@ export function buildMonitoramentoResumo(
     }
   }
 
-  const semanasRestantesNoMes = Math.max(0, semanasNoMes - semanaBaseRitmo);
+  let semanasRestantesNoMes = Math.max(0, semanasNoMes - semanaBaseRitmo);
+
+  const usarCiclo =
+    options?.usarCicloOperacional !== false;
+  const empenhoMesesAnalise =
+    cfg.empenhoMeses?.length
+      ? cfg.empenhoMeses
+      : suggestEmpenhoMeses(
+          cfg.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO,
+        );
 
   const units = consumptionUnits(payload.services);
-  const equipamentos: EquipamentoMonitorRow[] = units.map((s) => {
+  let equipamentos: EquipamentoMonitorRow[] = units.map((s) => {
     const metaMensal = metaPorEquip.get(s.id) ?? 0;
     const cotaMensalUnica = isServicoCotaMensalUnica(s);
     const metaSemanal =
@@ -674,53 +743,50 @@ export function buildMonitoramentoResumo(
     };
   });
 
-  const enviadoMesTotal = equipamentos.reduce(
+  let enviadoMesTotal = equipamentos.reduce(
     (s, e) =>
       s +
       somaEnviosSemanas(e.semanas, semanaInicioControle, semanasNoMes),
     0,
   );
-  const metaAcumuladaEsperada = Math.round(
+  let metaAcumuladaEsperada = Math.round(
     (metaMesTotal / semanasNoMes) * semanasNoPeriodoControleVal,
   );
-  const enviadoAteBaseRitmo = equipamentos.reduce(
+  let enviadoAteBaseRitmo = equipamentos.reduce(
     (s, e) =>
       s + somaEnviosSemanas(e.semanas, semanaInicioControle, semanaBaseRitmo),
     0,
   );
-  const enviadoAcumulado = enviadoAteBaseRitmo;
-  const limiteSemanal =
+  let enviadoAcumulado = enviadoAteBaseRitmo;
+  let limiteSemanal =
     semanasNoMes > 0 ? Math.round(metaMesTotal / semanasNoMes) : 0;
-  const enviadoSemanaAtual = equipamentos.reduce(
-    (s, e) => s + (e.semanas[semanaAnalise] ?? 0),
-    0,
-  );
-  const pctMes = pctUsoLimite(enviadoMesTotal, metaMesTotal);
-  const pctLimiteSemana = pctUsoLimite(enviadoSemanaAtual, limiteSemanal);
-  const estouroMes = estouroAcimaLimite(enviadoMesTotal, metaMesTotal);
-  const estouroSemana = estouroAcimaLimite(enviadoSemanaAtual, limiteSemanal);
-  const margemMes = margemAteLimite(enviadoMesTotal, metaMesTotal);
-  const margemSemana = margemAteLimite(enviadoSemanaAtual, limiteSemanal);
-  const pctRitmoGeral =
+  let enviadoSemanaAtual = totalEnviadoNaSemana(mon, mes, semanaAnalise);
+  let pctMes = pctUsoLimite(enviadoMesTotal, metaMesTotal);
+  let pctLimiteSemana = pctUsoLimite(enviadoSemanaAtual, limiteSemanal);
+  let estouroMes = estouroAcimaLimite(enviadoMesTotal, metaMesTotal);
+  let estouroSemana = estouroAcimaLimite(enviadoSemanaAtual, limiteSemanal);
+  let margemMes = margemAteLimite(enviadoMesTotal, metaMesTotal);
+  let margemSemana = margemAteLimite(enviadoSemanaAtual, limiteSemanal);
+  let pctRitmoGeral =
     metaAcumuladaEsperada > 0
       ? (enviadoAcumulado / metaAcumuladaEsperada) * 100
       : 0;
 
-  const ritmoSemanalMedio =
+  let ritmoSemanalMedio =
     semanasNoPeriodoControleVal > 0
       ? enviadoAcumulado / semanasNoPeriodoControleVal
       : enviadoSemanaAtual > 0
         ? enviadoSemanaAtual
         : 0;
-  const projecaoMesTotal = projecaoFimMes(
+  let projecaoMesTotal = projecaoFimMes(
     enviadoAteBaseRitmo,
     ritmoSemanalMedio,
     semanasRestantesNoMes,
   );
-  const pctProjecaoMes = pctUsoLimite(projecaoMesTotal, metaMesTotal);
-  const estouroProjetadoMes = estouroAcimaLimite(projecaoMesTotal, metaMesTotal);
+  let pctProjecaoMes = pctUsoLimite(projecaoMesTotal, metaMesTotal);
+  let estouroProjetadoMes = estouroAcimaLimite(projecaoMesTotal, metaMesTotal);
   const semanasAteTeto = semanasAteLimite(margemMes, ritmoSemanalMedio);
-  const semanaProjetadaEstouro =
+  let semanaProjetadaEstouro =
     semanasAteTeto != null && semanasAteTeto < semanasRestantesNoMes + 0.5
       ? Math.min(
           semanasNoMes,
@@ -897,6 +963,153 @@ export function buildMonitoramentoResumo(
     });
   }
 
+  let cicloAtual = 1;
+  let labelCiclo = '';
+  let labelSemanaAnalise = '';
+  let semanaNoCiclo = semanaAnalise;
+  const mesExibicao = options?.mesExibicao?.trim() || mes;
+
+  if (usarCiclo) {
+    const cicloInfo = enviadoCicloOperacionalAte(
+      mon,
+      mes,
+      semanaBaseRitmo,
+      empenhoMesesAnalise,
+    );
+    const refAnalise = refSemanaOperacionalCivil(
+      mes,
+      semanaAnalise,
+      empenhoMesesAnalise,
+    );
+    const refBase = refSemanaOperacionalCivil(
+      mes,
+      semanaBaseRitmo,
+      empenhoMesesAnalise,
+    );
+    cicloAtual = cicloInfo.ciclo;
+    labelCiclo = labelCicloOperacional(cicloAtual);
+    labelSemanaAnalise = refAnalise?.label ?? `S${semanaAnalise}`;
+    semanaNoCiclo = refAnalise?.semanaNoCiclo ?? semanaAnalise;
+
+    const indiceBase = indiceOperacionalCivil(
+      mes,
+      semanaBaseRitmo,
+      empenhoMesesAnalise,
+    );
+    const inicioCicloOp =
+      (cicloAtual - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
+    const semanasCicloComDado =
+      indiceBase != null ? indiceBase - inicioCicloOp + 1 : cicloInfo.semanasNoCiclo;
+
+    metaMesTotal = TETO_CICLO_OPERACIONAL;
+    limiteSemanal = Math.round(
+      TETO_CICLO_OPERACIONAL / SEMANAS_POR_CICLO_OPERACIONAL,
+    );
+    enviadoMesTotal = cicloInfo.enviado;
+    enviadoAteBaseRitmo = cicloInfo.enviado;
+    enviadoAcumulado = cicloInfo.enviado;
+    semanasNoPeriodoControleVal = Math.max(1, semanasCicloComDado);
+    semanasRestantesNoMes = Math.max(
+      0,
+      SEMANAS_POR_CICLO_OPERACIONAL - (refBase?.semanaNoCiclo ?? semanaNoCiclo),
+    );
+    metaAcumuladaEsperada = Math.round(
+      (metaMesTotal / SEMANAS_POR_CICLO_OPERACIONAL) * semanasNoPeriodoControleVal,
+    );
+
+    pctMes = pctUsoLimite(enviadoMesTotal, metaMesTotal);
+    pctLimiteSemana = pctUsoLimite(enviadoSemanaAtual, limiteSemanal);
+    estouroMes = estouroAcimaLimite(enviadoMesTotal, metaMesTotal);
+    estouroSemana = estouroAcimaLimite(enviadoSemanaAtual, limiteSemanal);
+    margemMes = margemAteLimite(enviadoMesTotal, metaMesTotal);
+    margemSemana = margemAteLimite(enviadoSemanaAtual, limiteSemanal);
+    pctRitmoGeral =
+      metaAcumuladaEsperada > 0
+        ? (enviadoAcumulado / metaAcumuladaEsperada) * 100
+        : 0;
+    ritmoSemanalMedio =
+      semanasNoPeriodoControleVal > 0
+        ? enviadoAcumulado / semanasNoPeriodoControleVal
+        : enviadoSemanaAtual > 0
+          ? enviadoSemanaAtual
+          : 0;
+    projecaoMesTotal = projecaoFimMes(
+      enviadoAcumulado,
+      ritmoSemanalMedio,
+      semanasRestantesNoMes,
+    );
+    pctProjecaoMes = pctUsoLimite(projecaoMesTotal, metaMesTotal);
+    estouroProjetadoMes = estouroAcimaLimite(projecaoMesTotal, metaMesTotal);
+    const semanasAteTetoCiclo = semanasAteLimite(margemMes, ritmoSemanalMedio);
+    semanaProjetadaEstouro =
+      semanasAteTetoCiclo != null &&
+      semanasAteTetoCiclo < semanasRestantesNoMes + 0.5
+        ? Math.min(
+            SEMANAS_POR_CICLO_OPERACIONAL,
+            (refBase?.semanaNoCiclo ?? semanaNoCiclo) +
+              Math.max(1, Math.ceil(semanasAteTetoCiclo)),
+          )
+        : null;
+
+    equipamentos = equipamentos.map((eq) => {
+      if (indiceBase == null) return eq;
+      let enviadoCicloEq = 0;
+      let semanasEq = 0;
+      const semanasCiclo: Record<number, number> = {};
+      for (let op = inicioCicloOp; op <= indiceBase; op++) {
+        const civil = civilPorIndiceOperacional(op, empenhoMesesAnalise);
+        if (!civil) continue;
+        const q = getWeeklyQty(mon, civil.mes, civil.semana, eq.servicoId);
+        semanasCiclo[op - inicioCicloOp + 1] = q;
+        enviadoCicloEq += q;
+        if (q > 0) semanasEq++;
+      }
+      const metaSemanalCiclo =
+        eq.cotaMensalUnica || eq.metaMensal <= 0
+          ? 0
+          : Math.round(eq.metaMensal / SEMANAS_POR_CICLO_OPERACIONAL);
+      const enviadoSemanaEq =
+        refAnalise != null
+          ? getWeeklyQty(
+              mon,
+              mes,
+              semanaAnalise,
+              eq.servicoId,
+            )
+          : eq.enviadoSemanaAtual;
+      const pctMesEq = pctUsoLimite(enviadoCicloEq, eq.metaMensal);
+      const pctSemanaEq = eq.cotaMensalUnica
+        ? 0
+        : pctUsoLimite(enviadoSemanaEq, metaSemanalCiclo);
+      const ritmoEq =
+        semanasEq > 0 ? enviadoCicloEq / semanasEq : enviadoSemanaEq;
+      const projEq = projecaoFimMes(
+        enviadoCicloEq,
+        ritmoEq,
+        semanasRestantesNoMes,
+      );
+      const pctProjEq = pctUsoLimite(projEq, eq.metaMensal);
+      return {
+        ...eq,
+        metaSemanal: metaSemanalCiclo,
+        semanas: semanasCiclo,
+        totalEnviado: enviadoCicloEq,
+        enviadoSemanaAtual: enviadoSemanaEq,
+        pctMes: pctMesEq,
+        pctSemana: pctSemanaEq,
+        projecaoMes: projEq,
+        pctProjecaoMes: pctProjEq,
+        estouroProjetadoMes: estouroAcimaLimite(projEq, eq.metaMensal),
+        status:
+          eq.metaMensal <= 0
+            ? eq.status
+            : eq.cotaMensalUnica
+              ? statusFromLimites(pctMesEq, 0, pctProjEq)
+              : statusFromLimites(pctMesEq, pctSemanaEq, pctProjEq),
+      };
+    });
+  }
+
   const familias = groupByFamilia(equipamentos, payload.services);
 
   return {
@@ -944,6 +1157,12 @@ export function buildMonitoramentoResumo(
     familias,
     historicoSaldo: mon.historicoSaldo ?? [],
     allocation,
+    usaCicloOperacional: usarCiclo,
+    cicloAtual,
+    labelCiclo,
+    labelSemanaAnalise,
+    semanaNoCiclo,
+    mesExibicao,
   };
 }
 

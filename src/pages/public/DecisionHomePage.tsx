@@ -45,6 +45,7 @@ export default function DecisionHomePage() {
     const resumo = buildMonitoramentoResumo(payload, {
       mesReferencia: ctx.mes,
       semanaReferencia: ctx.semanaReferencia,
+      usarCicloOperacional: true,
     });
     const empenho = buildEmpenhoControle(payload);
     const autonomia = computeAutonomiaOperacional(

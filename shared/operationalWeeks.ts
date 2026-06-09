@@ -238,14 +238,58 @@ export function proximasSemanasOperacionais(
   horizonte: number,
   empenhoMeses?: string[],
 ): Array<CivilWeekKey & { indiceOperacional: number }> {
+  return semanasAlvoMitigacao(aposMes, aposSemana, horizonte, empenhoMeses, 'inclusive');
+}
+
+/**
+ * Semanas-alvo do plano de mitigação.
+ * - inclusive: inclui a semana de referência (ex.: planejando Jun S1 → Jun S1 + Jun S2)
+ * - apos: começa na semana seguinte (ex.: último dado Mai S4 → Jun S1 + Jun S2)
+ */
+export function semanasAlvoMitigacao(
+  mesRef: string,
+  semanaRef: number,
+  horizonte: number,
+  empenhoMeses?: string[],
+  modo: 'inclusive' | 'apos' = 'inclusive',
+): Array<CivilWeekKey & { indiceOperacional: number }> {
   const lista = listarSemanasCivisControle(empenhoMeses);
-  const apos = indiceOperacionalCivil(aposMes, aposSemana, empenhoMeses);
-  if (apos == null) return [];
+  const idx = indiceOperacionalCivil(mesRef, semanaRef, empenhoMeses);
+  if (idx == null) return [];
+  const start = modo === 'apos' ? idx + 1 : idx;
   const out: Array<CivilWeekKey & { indiceOperacional: number }> = [];
-  for (let i = apos; i < lista.length && out.length < horizonte; i++) {
-    out.push({ ...lista[i], indiceOperacional: i + 1 });
+  for (let i = start; i <= lista.length && out.length < horizonte; i++) {
+    const civil = lista[i - 1];
+    if (!civil) continue;
+    out.push({ ...civil, indiceOperacional: i });
   }
   return out;
+}
+
+/** Gordura consumida (acima de 1.150) por ciclo operacional concluído ou em curso */
+export function gorduraUsadaPeriodoOperacional(
+  mon: EmergencialMonitoramento,
+  ateIndiceOperacional: number,
+  empenhoMeses?: string[],
+): number {
+  if (ateIndiceOperacional <= 0) return 0;
+  const cicloAtual = cicloOperacionalDeIndice(ateIndiceOperacional);
+  let total = 0;
+  for (let c = 1; c <= cicloAtual; c++) {
+    const ini = (c - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
+    const fim =
+      c === cicloAtual
+        ? ateIndiceOperacional
+        : c * SEMANAS_POR_CICLO_OPERACIONAL;
+    let enviado = 0;
+    for (let i = ini; i <= fim; i++) {
+      const civil = civilPorIndiceOperacional(i, empenhoMeses);
+      if (!civil) continue;
+      enviado += totalEnviadoNaSemana(mon, civil.mes, civil.semana);
+    }
+    total += Math.max(0, enviado - TETO_CICLO_OPERACIONAL);
+  }
+  return total;
 }
 
 /** Jun S1 ↔ Jun S2: entrega invertida em relação ao plano original */
