@@ -136,9 +136,10 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
                   />
                 </div>
                 <p className="monitor-saude-autonomia-valor">
-                  <strong>{num(empenhoProc.restante, 0)}</strong> cestas restantes · ritmo real ~
-                  {num(empenhoProc.ritmoRealMedio, 0)}/sem · sustentável ~
-                  {num(empenhoProc.ritmoSustentavel, 0)}/sem · fechamento projetado{' '}
+                  <strong>{num(empenhoProc.restante, 0)}</strong> cestas restantes · sustentável ~
+                  {num(empenhoProc.ritmoSustentavel, 0)}/sem · média acumulada ~
+                  {num(empenhoProc.ritmoAcumulado, 0)}/sem ({empenhoProc.semanasDecorridas}{' '}
+                  sem.) · fechamento projetado{' '}
                   <strong>{num(empenhoProc.fechamentoProjetadoProcesso, 0)}</strong> /{' '}
                   {num(empenhoProc.totalEmpenho, 0)}
                 </p>

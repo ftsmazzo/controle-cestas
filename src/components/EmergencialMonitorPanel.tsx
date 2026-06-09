@@ -539,8 +539,7 @@ export default function EmergencialMonitorPanel({
                 <>
                   {resumoAnalise.saudeEmpenho.semanasDecorridas}/
                   {resumoAnalise.saudeEmpenho.semanasTotal} sem. · sustentável ~
-                  {num(resumoAnalise.saudeEmpenho.ritmoSustentavel, 0)}/sem · real ~
-                  {num(resumoAnalise.saudeEmpenho.ritmoRealMedio, 0)}/sem
+                  {num(resumoAnalise.saudeEmpenho.ritmoSustentavel, 0)}/sem
                   {resumoAnalise.empenhoAcabaAntesDoPeriodo
                     ? ' · fora do trilho'
                     : ` · proj. ${num(resumoAnalise.saudeEmpenho.fechamentoProjetadoProcesso, 0)}/${num(resumoAnalise.saudeEmpenho.totalEmpenho, 0)}`}

@@ -1207,8 +1207,7 @@ export function buildMonitoramentoResumo(
       )
     : undefined;
   if (saudeEmpenho) {
-    empenhoAcabaAntesDoPeriodo =
-      !saudeEmpenho.noTrilho || saudeEmpenho.acimaRitmoSustentavel;
+    empenhoAcabaAntesDoPeriodo = !saudeEmpenho.noTrilho;
     cestasDisponiveisEmpenho = saudeEmpenho.restante;
     ritmoSemanalReferencia = saudeEmpenho.ritmoSustentavel;
     autonomiaSemanasSaldo = saudeEmpenho.semanasRestantes;

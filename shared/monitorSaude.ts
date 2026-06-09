@@ -275,16 +275,17 @@ export function buildSaudeDistribuicao(
   const semanasPeriodoRestantes = autonomiaOp.semanasPeriodoRestantes;
   const semanasPeriodoTotal = autonomiaOp.semanasPeriodoTotal;
   const empenhoAcabaAntesDoPeriodo = saudeEmpenho
-    ? !saudeEmpenho.noTrilho || saudeEmpenho.acimaRitmoSustentavel
+    ? !saudeEmpenho.noTrilho
     : autonomiaOp.empenhoAcabaAntesDoPeriodo;
   const mesesPeriodoRestantes = autonomiaOp.mesesPeriodoRestantes;
 
   const nivelEmpenhoProcesso: SaudeNivel = saudeEmpenho
-    ? saudeEmpenho.noTrilho && !saudeEmpenho.acimaRitmoSustentavel
-      ? 'verde'
-      : saudeEmpenho.noTrilho
+    ? saudeEmpenho.noTrilho
+      ? saudeEmpenho.fechamentoProjetadoProcesso / saudeEmpenho.totalEmpenho >
+        0.95
         ? 'amarelo'
-        : 'vermelho'
+        : 'verde'
+      : 'vermelho'
     : nivelAutonomiaEmpenho(autonomiaMeses, mesesPeriodoRestantes);
   const pctUsoLimiteMes = resumo.pctMes;
   const pctUsoLimiteSemana = resumo.pctLimiteSemana;
@@ -338,7 +339,7 @@ export function buildSaudeDistribuicao(
 
   if (saudeEmpenho) {
     acoesSemana.push(
-      `Empenho (16 sem.): ${num(saudeEmpenho.restante)} restantes · ${saudeEmpenho.semanasDecorridas}/${saudeEmpenho.semanasTotal} sem. · sustentável ~${num(saudeEmpenho.ritmoSustentavel)}/sem · real ~${num(saudeEmpenho.ritmoRealMedio)}/sem · proj. ${num(saudeEmpenho.fechamentoProjetadoProcesso)}/${num(saudeEmpenho.totalEmpenho)}.`,
+      `Empenho (16 sem.): ${num(saudeEmpenho.restante)} restantes · ${saudeEmpenho.semanasDecorridas}/${saudeEmpenho.semanasTotal} sem. · sustentável ~${num(saudeEmpenho.ritmoSustentavel)}/sem · proj. ${num(saudeEmpenho.fechamentoProjetadoProcesso)}/${num(saudeEmpenho.totalEmpenho)}.`,
     );
   }
 

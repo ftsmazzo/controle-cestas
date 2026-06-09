@@ -13,7 +13,6 @@ import {
   tetoMaximoCicloOperacional,
 } from './operationalWeeks.js';
 import { projecaoFimCicloOperacional } from './projecaoOperacionalCiclo.js';
-import { totalEnviadoNaSemana } from './weeklyQty.js';
 import type { ServicesPayload } from './serviceTypes.js';
 
 /** 4 ciclos operacionais × 4 semanas */
@@ -34,13 +33,12 @@ export interface SaudeEmpenhoProcesso {
   semanasTotal: number;
   semanasDecorridas: number;
   semanasRestantes: number;
-  /** Média real desde o ponto zero (semanas com lançamento) */
-  ritmoRealMedio: number;
+  /** Média acumulada desde o ponto zero (consumido ÷ semanas decorridas) */
+  ritmoAcumulado: number;
   /** Cestas/sem para fechar 5.000 em 16 semanas no ritmo restante */
   ritmoSustentavel: number;
   fechamentoProjetadoProcesso: number;
   noTrilho: boolean;
-  acimaRitmoSustentavel: boolean;
   mensagem: string;
 }
 
@@ -68,26 +66,6 @@ export function contagemSemanasProcesso(
   };
 }
 
-function semanasComLancamentoProcesso(
-  mon: EmergencialMonitoramento,
-  ateIndice: number,
-  empenhoMeses?: string[],
-): number {
-  const idxIni = indiceOperacionalCivil(
-    MONITOR_CONTROLE_MES_INICIO,
-    MONITOR_CONTROLE_SEMANA_INICIO,
-    empenhoMeses,
-  );
-  if (idxIni == null) return 0;
-  let n = 0;
-  for (let i = idxIni; i <= ateIndice; i++) {
-    const civil = civilPorIndiceOperacional(i, empenhoMeses);
-    if (!civil) continue;
-    if (totalEnviadoNaSemana(mon, civil.mes, civil.semana) > 0) n++;
-  }
-  return n;
-}
-
 /** Empenho cumulativo — 16 semanas, 5.000 cestas (1.350 + 1.150×3), independente do ciclo semanal */
 export function buildSaudeEmpenhoProcesso(
   payload: ServicesPayload,
@@ -100,13 +78,9 @@ export function buildSaudeEmpenhoProcesso(
   const mon = payload.emergencial.monitoramento;
   const idx = contagem.indiceAtual;
 
-  const semanasComDado =
-    idx != null
-      ? semanasComLancamentoProcesso(mon, idx, empenhoMeses)
-      : 0;
-  const ritmoRealMedio =
-    semanasComDado > 0
-      ? empenho.totalConsumido / semanasComDado
+  const ritmoAcumulado =
+    contagem.decorridas > 0
+      ? empenho.totalConsumido / contagem.decorridas
       : 0;
   const ritmoSustentavel =
     contagem.restantes > 0 ? empenho.restante / contagem.restantes : 0;
@@ -139,21 +113,15 @@ export function buildSaudeEmpenhoProcesso(
   }
 
   const noTrilho = fechamentoProjetadoProcesso <= empenho.totalEmpenho;
-  const acimaRitmoSustentavel =
-    ritmoRealMedio > 0 &&
-    ritmoSustentavel > 0 &&
-    ritmoRealMedio > ritmoSustentavel * 1.08;
 
   let mensagem = '';
   if (contagem.decorridas === 0) {
     mensagem = 'Aguardando lançamentos no processo (16 semanas operacionais).';
-  } else if (noTrilho && !acimaRitmoSustentavel) {
+  } else if (noTrilho) {
     mensagem =
-      `${empenho.restante.toLocaleString('pt-BR')} cestas para ${contagem.restantes} sem. restantes — fechamento projetado ${fechamentoProjetadoProcesso.toLocaleString('pt-BR')} dentro dos ${empenho.totalEmpenho.toLocaleString('pt-BR')}.`;
-  } else if (!noTrilho) {
-    mensagem = `Atenção: fechamento projetado ${fechamentoProjetadoProcesso.toLocaleString('pt-BR')} ultrapassa o empenho de ${empenho.totalEmpenho.toLocaleString('pt-BR')}.`;
+      `${empenho.restante.toLocaleString('pt-BR')} cestas para ${contagem.restantes} sem. restantes — sustentável ~${Math.round(ritmoSustentavel)}/sem · fechamento projetado ${fechamentoProjetadoProcesso.toLocaleString('pt-BR')} dentro dos ${empenho.totalEmpenho.toLocaleString('pt-BR')}.`;
   } else {
-    mensagem = `Ritmo real ~${Math.round(ritmoRealMedio)}/sem acima do sustentável ~${Math.round(ritmoSustentavel)}/sem — ajuste nas próximas semanas.`;
+    mensagem = `Atenção: fechamento projetado ${fechamentoProjetadoProcesso.toLocaleString('pt-BR')} ultrapassa o empenho de ${empenho.totalEmpenho.toLocaleString('pt-BR')}.`;
   }
 
   return {
@@ -163,11 +131,10 @@ export function buildSaudeEmpenhoProcesso(
     semanasTotal: contagem.total,
     semanasDecorridas: contagem.decorridas,
     semanasRestantes: contagem.restantes,
-    ritmoRealMedio,
+    ritmoAcumulado,
     ritmoSustentavel,
     fechamentoProjetadoProcesso,
     noTrilho,
-    acimaRitmoSustentavel,
     mensagem,
   };
 }
