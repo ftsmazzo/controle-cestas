@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
-import { buildMonitoramentoResumo, resolveContextoPainelPublico } from '@shared/emergencyMonitoring';
-import { buildEmpenhoControle } from '@shared/empenhoControle';
-import { computeAutonomiaOperacional } from '@shared/empenhoControle';
 import {
-  PERIODO_REFERENCIA_FIM,
-  PERIODO_REFERENCIA_INICIO,
+  buildMonitoramentoResumo,
+  MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
+  resolveContextoPainelPublico,
+} from '@shared/emergencyMonitoring';
+import { buildCenarioMitigacao } from '@shared/cenarioMitigacao';
+import { buildEmpenhoControle, computeAutonomiaOperacional } from '@shared/empenhoControle';
+import {
   TETO_MENSAL_OPERACIONAL,
   TETO_CONTRATUAL_MENSAL,
 } from '@shared/processoEmergencial';
@@ -13,6 +16,7 @@ import {
   CalendarRange,
   Package,
   ShieldAlert,
+  Target,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import CessaoEquipamentosTable from '../../components/CessaoEquipamentosTable';
@@ -24,16 +28,15 @@ function num(n: number | null | undefined, dec = 1): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: dec });
 }
 
-function saudePill(
-  autonomiaMeses: number | null,
-  mesesRestantes: number,
-  empenhoAcabaAntes: boolean,
+function saudeCiclo(
+  enviado: number,
+  teto: number,
+  dentroDoTeto: boolean,
 ): { label: string; mod: 'verde' | 'amarelo' | 'vermelho' } {
-  if (empenhoAcabaAntes) return { label: 'VERMELHO', mod: 'vermelho' };
-  if (autonomiaMeses == null) return { label: 'AMARELO', mod: 'amarelo' };
-  if (autonomiaMeses >= mesesRestantes) return { label: 'VERDE', mod: 'verde' };
-  if (autonomiaMeses >= mesesRestantes * 0.5) return { label: 'AMARELO', mod: 'amarelo' };
-  return { label: 'VERMELHO', mod: 'vermelho' };
+  const pct = teto > 0 ? (enviado / teto) * 100 : 0;
+  if (!dentroDoTeto || pct > 100) return { label: 'VERMELHO', mod: 'vermelho' };
+  if (pct >= 90) return { label: 'AMARELO', mod: 'amarelo' };
+  return { label: 'VERDE', mod: 'verde' };
 }
 
 export default function DecisionHomePage() {
@@ -48,6 +51,7 @@ export default function DecisionHomePage() {
       usarCicloOperacional: true,
     });
     const empenho = buildEmpenhoControle(payload);
+    const cenario = buildCenarioMitigacao(payload, 2);
     const autonomia = computeAutonomiaOperacional(
       payload,
       resumo.ritmoSemanalMedio,
@@ -55,12 +59,15 @@ export default function DecisionHomePage() {
       resumo.mes,
       resumo.semanaAnalise,
     );
-    const pill = saudePill(
-      autonomia.autonomiaMeses,
-      autonomia.mesesPeriodoRestantes,
-      autonomia.empenhoAcabaAntesDoPeriodo,
+    const tetoCiclo = resumo.metaMesTotal;
+    const fechamentoProjetado =
+      cenario.fechamentoCicloProjetado ?? resumo.enviadoMesTotal;
+    const pill = saudeCiclo(
+      fechamentoProjetado,
+      tetoCiclo,
+      cenario.dentroDoTetoCiclo ?? fechamentoProjetado <= tetoCiclo,
     );
-    return { resumo, empenho, autonomia, pill, ctx };
+    return { resumo, empenho, autonomia, cenario, pill, ctx };
   }, [payload]);
 
   if (loading) return null;
@@ -77,45 +84,63 @@ export default function DecisionHomePage() {
     );
   }
 
-  const { empenho, autonomia, pill, ctx } = emergencial;
+  const { empenho, autonomia, cenario, pill, resumo } = emergencial;
 
   return (
     <>
       <section className={`home-kpi-strip home-kpi-strip--${pill.mod}`}>
         <article className="home-kpi-tile home-kpi-tile--primary">
           <span className="home-kpi-icon" aria-hidden>
-            <ShieldAlert size={20} />
+            <Target size={20} />
           </span>
-          <span className="home-kpi-label">Autonomia ao ritmo atual</span>
-          {autonomia.autonomiaMeses != null ? (
-            <p className="home-kpi-value-line">
-              <span className="home-kpi-number">{num(autonomia.autonomiaMeses)}</span>
-              <span className="home-kpi-unit">meses</span>
-            </p>
-          ) : (
-            <p className="home-kpi-value-line home-kpi-value-line--muted">
-              <span className="home-kpi-number">—</span>
-              <span className="home-kpi-hint">
-                {ctx.ultimoLancamento
-                  ? 'Salve no Monitor e atualize (F5)'
-                  : 'Lance semanas no Monitor'}
-              </span>
-            </p>
-          )}
-          <span className={`home-kpi-pill home-kpi-pill--${pill.mod}`}>{pill.label}</span>
+          <span className="home-kpi-label">
+            {resumo.labelCiclo ?? 'Ciclo operacional'}
+          </span>
+          <p className="home-kpi-value-line">
+            <span className="home-kpi-number">
+              {num(resumo.enviadoMesTotal, 0)}
+            </span>
+            <span className="home-kpi-unit">/ {num(resumo.metaMesTotal, 0)}</span>
+          </p>
+          <span className="home-kpi-hint">
+            Fechamento projetado {num(cenario.fechamentoCicloProjetado, 0)} ·{' '}
+            {cenario.dentroDoTetoCiclo ? 'dentro do teto' : 'acima do teto'}
+          </span>
+          <span className={`home-kpi-pill home-kpi-pill--${pill.mod}`}>
+            {pill.label}
+          </span>
         </article>
 
         <article className="home-kpi-tile">
           <span className="home-kpi-icon" aria-hidden>
             <Activity size={20} />
           </span>
-          <span className="home-kpi-label">Teto operacional</span>
+          <span className="home-kpi-label">Ritmo de entrega (real)</span>
           <p className="home-kpi-value-line">
-            <span className="home-kpi-number">{num(TETO_MENSAL_OPERACIONAL, 0)}</span>
-            <span className="home-kpi-unit">/mês</span>
+            <span className="home-kpi-number">
+              {num(resumo.ritmoSemanalMedio, 0)}
+            </span>
+            <span className="home-kpi-unit">cestas/sem</span>
           </p>
           <span className="home-kpi-hint">
-            Contrato {num(TETO_CONTRATUAL_MENSAL, 0)} · margem 50/mês
+            Empenho dura ~{num(autonomia.autonomiaSemanas, 0)} sem ao ritmo atual
+          </span>
+        </article>
+
+        <article className="home-kpi-tile">
+          <span className="home-kpi-icon" aria-hidden>
+            <ShieldAlert size={20} />
+          </span>
+          <span className="home-kpi-label">Teto por ciclo</span>
+          <p className="home-kpi-value-line">
+            <span className="home-kpi-number">
+              {num(TETO_MENSAL_OPERACIONAL, 0)}
+            </span>
+            <span className="home-kpi-unit">cestas</span>
+          </p>
+          <span className="home-kpi-hint">
+            Ciclo 1: 1.350 (1.150 + 200 gordura) · contrato{' '}
+            {num(TETO_CONTRATUAL_MENSAL, 0)}
           </span>
         </article>
 
@@ -123,12 +148,15 @@ export default function DecisionHomePage() {
           <span className="home-kpi-icon" aria-hidden>
             <CalendarRange size={20} />
           </span>
-          <span className="home-kpi-label">Referência histórica</span>
+          <span className="home-kpi-label">Ponto zero</span>
           <p className="home-kpi-value-line">
             <span className="home-kpi-text">
-              {PERIODO_REFERENCIA_INICIO} – {PERIODO_REFERENCIA_FIM}
+              {MONITOR_CONTROLE_MES_INICIO} S{MONITOR_CONTROLE_SEMANA_INICIO}
             </span>
           </p>
+          <span className="home-kpi-hint">
+            Âncora operacional — independente do mês no Admin
+          </span>
         </article>
 
         <article className="home-kpi-tile">
@@ -151,13 +179,6 @@ export default function DecisionHomePage() {
       <MitigacaoCenarioPanel payload={payload} />
 
       <CessaoEquipamentosTable payload={payload} />
-
-      <p className="hint decision-foot-link">
-        Acompanhamento semanal detalhado:{' '}
-        <a href="/contrato-emergencial">Monitor emergencial</a>
-        {' · '}
-        <a href="/admin/monitoramento">Admin</a>
-      </p>
     </>
   );
 }

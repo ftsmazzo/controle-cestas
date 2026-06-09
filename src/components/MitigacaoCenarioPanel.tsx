@@ -6,7 +6,7 @@ import {
   type MitigacaoImpacto,
 } from '@shared/cenarioMitigacao';
 import type { ServicesPayload } from '@shared/serviceTypes';
-import { Scale, Sparkles, TrendingDown } from 'lucide-react';
+import { CheckCircle2, Scale, Sparkles, TrendingDown } from 'lucide-react';
 import PrintableTable from './ui/PrintableTable';
 import './MitigacaoCenarioPanel.css';
 
@@ -30,7 +30,11 @@ function barPct(value: number, max: number): number {
   return Math.min(100, (value / max) * 100);
 }
 
-function renderUnitRow(r: MitigacaoEquipamentoRow, semanaCount: number) {
+function renderUnitRow(
+  r: MitigacaoEquipamentoRow,
+  semanaCount: number,
+  semanasLancadas: boolean[],
+) {
   return (
     <tr key={r.servicoId} className={`mit-row mit-row--${r.impacto}`}>
       <td className="mit-cell-nome mit-cell-unidade">{r.servicoNome}</td>
@@ -58,7 +62,16 @@ function renderUnitRow(r: MitigacaoEquipamentoRow, semanaCount: number) {
           {r.cotaMensalUnica ? (
             '—'
           ) : (
-            <strong>{num(r.propostasSemana[i]?.cestas ?? 0)}</strong>
+            <strong
+              className={semanasLancadas[i] ? 'mit-lancado' : undefined}
+              title={
+                semanasLancadas[i]
+                  ? 'Semana já lançada no Monitor'
+                  : 'Proposta / a lançar'
+              }
+            >
+              {num(r.propostasSemana[i]?.cestas ?? 0)}
+            </strong>
           )}
         </td>
       ))}
@@ -180,7 +193,8 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
               {cenario.semanasPlanejadas.length} semana(s)
               {usaPlanoJun ? ' (plano aprovado Jun)' : ''}
             </p>
-            {cenario.demandaInercialTotal > cenario.orcamentoDistribuir && (
+            {!usaPlanoJun &&
+              cenario.demandaInercialTotal > cenario.orcamentoDistribuir && (
               <p className="mit-formula-warn">
                 Normal pediria {num(cenario.demandaInercialTotal)} — com{' '}
                 {num(cenario.orcamentoDistribuir)} reduzimos o prejuízo, mas ainda faltam{' '}
@@ -194,6 +208,35 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
             )}
           </div>
 
+          {usaPlanoJun && cenario.conformidadePlano && (
+            <div
+              className={`mit-conformidade ${
+                cenario.conformidadePlano.conformeGeral
+                  ? 'mit-conformidade--ok'
+                  : 'mit-conformidade--warn'
+              }`}
+            >
+              <CheckCircle2 size={18} aria-hidden />
+              <p>{cenario.conformidadePlano.mensagem}</p>
+              <ul className="mit-conformidade-list">
+                {cenario.conformidadePlano.semanas.map((s) => (
+                  <li key={`${s.mes}-S${s.semana}`}>
+                    <strong>{s.label}</strong>
+                    {s.jaLancada ? (
+                      <>
+                        {' '}
+                        lançado {num(s.lancadoFlex)} · plano {num(s.planejadoFlex)}
+                        {s.conforme ? ' ✓' : ` (Δ ${num(s.delta)})`}
+                      </>
+                    ) : (
+                      <> · plano {num(s.planejadoFlex)} (a lançar)</>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="mit-summary-grid">
             <article className="mit-summary-card mit-summary-card--inercial">
               <span className="mit-summary-label">
@@ -201,32 +244,56 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
               </span>
               <p className="mit-summary-value">{num(cenario.enviadoCicloAteAgora)}</p>
               <span className="mit-summary-hint">
-                {cenario.labelCiclo} · desde {cenario.semanaInicioControleLabel}
+                {cenario.labelCiclo} · ponto zero {cenario.semanaInicioControleLabel}
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--proposta">
               <span className="mit-summary-label">
-                <Sparkles size={14} aria-hidden /> A distribuir (2 sem.)
+                <Sparkles size={14} aria-hidden />
+                {usaPlanoJun ? 'A lançar (sem. restantes)' : 'A distribuir (2 sem.)'}
               </span>
-              <p className="mit-summary-value">{num(cenario.orcamentoDistribuir)}</p>
+              <p className="mit-summary-value">
+                {num(usaPlanoJun ? cenario.propostaFuturaTotal : cenario.orcamentoDistribuir)}
+              </p>
               <span className="mit-summary-hint">
-                {num(cenario.saldoRestante1150)} no ciclo +{' '}
-                {num(cenario.gorduraNoPlano)} gordura período
+                {usaPlanoJun
+                  ? `Saldo ciclo ${num(cenario.saldoCicloAposPlano)} até teto ${num(cenario.tetoMaximoCiclo)}`
+                  : `${num(cenario.saldoRestante1150)} saldo flexível no ciclo`}
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--fechamento">
-              <span className="mit-summary-label">Após plano (2 sem.)</span>
-              <p className="mit-summary-value">{num(cenario.fechamentoMesProjetado)}</p>
+              <span className="mit-summary-label">Fechamento do ciclo</span>
+              <p className="mit-summary-value">
+                {num(cenario.fechamentoCicloProjetado)}
+              </p>
               <span className="mit-summary-hint">
-                {num(cenario.enviadoMesAteAgora)} + {num(cenario.propostaTotal)} (
-                {cenario.semanasPlanejadasLabels.join(' + ') || '—'})
+                {num(cenario.enviadoMesAteAgora)} enviado
+                {cenario.propostaFuturaTotal > 0
+                  ? ` + ${num(cenario.propostaFuturaTotal)} a lançar`
+                  : ''}{' '}
+                / teto {num(cenario.tetoMaximoCiclo)}
+                {cenario.dentroDoTetoCiclo ? ' ✓' : ' ⚠'}
               </span>
             </article>
-            <article className="mit-summary-card mit-summary-card--saldo">
-              <span className="mit-summary-label">Ainda falta vs ritmo</span>
-              <p className="mit-summary-value">{num(cenario.deficitVsInercial)}</p>
+            <article
+              className={`mit-summary-card mit-summary-card--saldo ${
+                usaPlanoJun ? 'mit-summary-card--conforme' : ''
+              }`}
+            >
+              <span className="mit-summary-label">
+                {usaPlanoJun ? 'Controle nos trilhos' : 'Ainda falta vs ritmo'}
+              </span>
+              <p className="mit-summary-value">
+                {usaPlanoJun
+                  ? cenario.dentroDoTetoCiclo
+                    ? 'Sim'
+                    : 'Atenção'
+                  : num(cenario.deficitVsInercial)}
+              </p>
               <span className="mit-summary-hint">
-                Ritmo pediria {num(cenario.demandaInercialTotal)} — não fecha o mês
+                {usaPlanoJun
+                  ? `Gordura ciclo 1: ${num(cenario.gorduraUsadaNoPlano)} de 200 usada`
+                  : `Ritmo pediria ${num(cenario.demandaInercialTotal)} nas 2 sem.`}
               </span>
             </article>
           </div>
@@ -391,7 +458,11 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                                 b.corte2sem - a.corte2sem,
                             )
                             .map((r) =>
-                              renderUnitRow(r, cenario.periodosSemana.length),
+                              renderUnitRow(
+                                r,
+                                cenario.periodosSemana.length,
+                                cenario.semanasAlvoLancadas,
+                              ),
                             )
                         : null}
                     </Fragment>

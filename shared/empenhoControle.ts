@@ -9,7 +9,7 @@ import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from './requisicaoHistorico.js';
 import type { MonthlyPlan, ServicesPayload } from './serviceTypes.js';
 
 /** Empenho emergencial padrão (4 meses × ~1.150, ajustável no mês) */
-export const EMPENHO_CESTAS_TOTAL_PADRAO = 4800;
+export const EMPENHO_CESTAS_TOTAL_PADRAO = 5000;
 export const EMPENHO_DURACAO_MESES_PADRAO = 4;
 /** Conversão semanas → meses no calendário operacional */
 export const SEMANAS_POR_MES_CALENDARIO = 4.33;

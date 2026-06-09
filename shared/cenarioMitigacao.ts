@@ -1,4 +1,9 @@
 import {
+  auditoriaPlanoJunCiclo1,
+  semanaJaLancada,
+  type ConformidadePlanoJun,
+} from './conformidadePlano.js';
+import {
   buildMonitoramentoResumo,
   getWeeklyQty,
   MONITOR_CONTROLE_MES_INICIO,
@@ -6,6 +11,7 @@ import {
   resolveContextoPainelPublico,
   weekDateRangeLabel,
   weeksInCalendarMonth,
+  type EmergencialMonitoramento,
 } from './emergencyMonitoring.js';
 import {
   computeAutonomiaOperacional,
@@ -52,6 +58,7 @@ import {
 import { consumptionUnits, groupByFamilia, type FamiliaGroup } from './serviceFamilies.js';
 import { buildTabelaCessaoEmergencial } from './tabelaCessaoEmergencial.js';
 import type { ServicesPayload } from './serviceTypes.js';
+import { totalEnviadoNaSemana } from './weeklyQty.js';
 
 export const GORDURA_PERIODO_TOTAL =
   MARGEM_MITIGACAO_MENSAL * EMPENHO_DURACAO_MESES_PADRAO;
@@ -176,6 +183,17 @@ export interface CenarioMitigacao {
   /** Totais do plano aprovado Jun (referência) */
   planoJunS1Total: number;
   planoJunS2Total: number;
+  /** Jun S1/S2 com plano aprovado ativo */
+  usaPlanoAprovadoJun: boolean;
+  /** Só semanas ainda sem lançamento (evita duplicar no fechamento) */
+  propostaFuturaTotal: number;
+  /** enviadoCiclo + propostaFuturaTotal */
+  fechamentoCicloProjetado: number;
+  saldoCicloAposPlano: number;
+  dentroDoTetoCiclo: boolean;
+  conformidadePlano: ConformidadePlanoJun | null;
+  /** Por alvo: semana já tem lançamento salvo */
+  semanasAlvoLancadas: boolean[];
 }
 
 function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
@@ -183,6 +201,32 @@ function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
   if (pctReducao >= 40) return 'forte';
   if (pctReducao >= 15) return 'moderado';
   return 'leve';
+}
+
+function valorPropostaSemana(
+  mon: EmergencialMonitoramento,
+  d: DraftUnit,
+  alvo: AlvoSemanaMitigacao,
+  algo: number,
+  usaPlanoJun: boolean,
+): { exibicao: number; futuro: number; lancada: boolean } {
+  if (isServicoCotaMensalUnica(d.servicoNome)) {
+    return { exibicao: 0, futuro: 0, lancada: false };
+  }
+  const lanzado = getWeeklyQty(mon, alvo.mes, alvo.semana, d.servicoId);
+  if (lanzado > 0) {
+    return { exibicao: lanzado, futuro: 0, lancada: true };
+  }
+  const junKey = parseMonthKey('Jun/2026');
+  let plan = algo;
+  if (
+    usaPlanoJun &&
+    parseMonthKey(alvo.mes) === junKey &&
+    (alvo.semana === 1 || alvo.semana === 2)
+  ) {
+    plan = planoJunSemana(d.servicoNome, alvo.semana as 1 | 2) ?? algo;
+  }
+  return { exibicao: plan, futuro: plan, lancada: false };
 }
 
 function buildPropostasSemana(
@@ -945,14 +989,51 @@ export function buildCenarioMitigacao(
       ? cenarioSemanaLabel(alvos[semanaPressaoIdx], empenhoMeses)
       : null;
 
+  const semanasAlvoLancadas = alvos.map((a) =>
+    semanaJaLancada(mon, a.mes, a.semana),
+  );
+  const semanasNaoLancadas = semanasAlvoLancadas.filter((x) => !x).length;
+
   const equipamentos: MitigacaoEquipamentoRow[] = drafts
     .map((d) => {
       const semanasVal = resultado.porUnidade.get(d.servicoId) ?? [];
-      const proposta2sem = semanasVal.reduce((a, b) => a + b, 0);
-      const corte2sem = Math.max(0, d.demanda - proposta2sem);
+      let propostaFuturaUnit = 0;
+      let propostaExibicao = 0;
+      const propostasSemana: MitigacaoSemanaProposta[] = alvos.map(
+        (alvo, i) => {
+          const v = valorPropostaSemana(
+            mon,
+            d,
+            alvo,
+            semanasVal[i] ?? 0,
+            usaPlanoAprovadoJun,
+          );
+          propostaFuturaUnit += v.futuro;
+          propostaExibicao += v.exibicao;
+          const ref = refSemanaOperacionalCivil(
+            alvo.mes,
+            alvo.semana,
+            empenhoMeses,
+          );
+          return {
+            mes: alvo.mes,
+            semana: alvo.semana,
+            labelCurta: ref?.label ?? formatSemanaCurta(alvo.mes, alvo.semana),
+            periodo: formatSemanaOperacionalCurta(
+              alvo.mes,
+              alvo.semana,
+              empenhoMeses,
+            ),
+            cestas: v.exibicao,
+          };
+        },
+      );
+      const demandaFutura =
+        semanasNaoLancadas > 0 ? d.ritmo * semanasNaoLancadas : 0;
+      const corte2sem = Math.max(0, demandaFutura - propostaFuturaUnit);
       const pctReducaoRitmo =
-        d.demanda > 0 ? (corte2sem / d.demanda) * 100 : 0;
-      const fechamentoMes = d.enviado + proposta2sem;
+        demandaFutura > 0 ? (corte2sem / demandaFutura) * 100 : 0;
+      const fechamentoMes = d.enviado + propostaFuturaUnit;
       const fechamentoInercial = d.enviado + d.demanda;
       return {
         servicoId: d.servicoId,
@@ -968,9 +1049,9 @@ export function buildCenarioMitigacao(
         participacaoPct: d.participacaoPct,
         ritmoSemanal: d.ritmo,
         demandaInercial2sem: d.demanda,
-        proposta2sem,
+        proposta2sem: propostaExibicao,
         corte2sem,
-        propostasSemana: buildPropostasSemana(semanasVal, alvos, empenhoMeses),
+        propostasSemana,
         fechamentoMes,
         fechamentoInercial,
         vsCotaMesPct: d.cotaMes > 0 ? (fechamentoMes / d.cotaMes) * 100 : 0,
@@ -983,16 +1064,37 @@ export function buildCenarioMitigacao(
     })
     .filter((r) => r.demandaInercial2sem > 0 || r.proposta2sem > 0 || r.enviadoAteAgora > 0);
 
-  const propostaTotal = equipamentos.reduce((s, r) => s + r.proposta2sem, 0);
+  const propostaFuturaTotal = equipamentos.reduce(
+    (s, r) =>
+      s +
+      r.propostasSemana.reduce((a, p, i) => {
+        if (semanasAlvoLancadas[i]) return a;
+        if (r.cotaMensalUnica) return a;
+        return a + p.cestas;
+      }, 0),
+    0,
+  );
+  const propostaTotal = propostaFuturaTotal;
   const corteTotal = equipamentos.reduce((s, r) => s + r.corte2sem, 0);
-  const deficitVsInercial = Math.max(0, demandaInercialTotal - propostaTotal);
-  const fechamentoMesProjetado = enviadoMes + propostaTotal;
+  const deficitVsInercial = usaPlanoAprovadoJun
+    ? 0
+    : Math.max(0, demandaInercialTotal - propostaFuturaTotal);
+  const fechamentoCicloProjetado = enviadoMes + propostaFuturaTotal;
+  const fechamentoMesProjetado = fechamentoCicloProjetado;
   const fechamentoInercial = enviadoMes + demandaInercialTotal;
+  const saldoCicloAposPlano = Math.max(
+    0,
+    tetoMaximoCiclo - fechamentoCicloProjetado,
+  );
+  const dentroDoTetoCiclo = fechamentoCicloProjetado <= tetoMaximoCiclo;
   const gorduraUsadaNoPlano = Math.max(
     0,
-    fechamentoMesProjetado - TETO_CICLO_OPERACIONAL,
+    fechamentoCicloProjetado - TETO_CICLO_OPERACIONAL,
   );
-  const saldoEmpenhoPosPlano = Math.max(0, empenho.restante - propostaTotal);
+  const saldoEmpenhoPosPlano = Math.max(0, empenho.restante - propostaFuturaTotal);
+  const conformidadePlano = usaPlanoAprovadoJun
+    ? auditoriaPlanoJunCiclo1(mon, payload.services, empenhoMeses)
+    : null;
 
   const familias = groupByFamilia(equipamentos, payload.services);
 
@@ -1036,7 +1138,9 @@ export function buildCenarioMitigacao(
       (cicloInfo.ciclo === 1 ? ' (1.150+200 gordura)' : '') +
       ` · fixas ${fmt(reservaFixas)} no teto · ref. ${semanaReferenciaLabel}: ${fmt(enviadoCiclo)} no ciclo.` +
       (usaPlanoAprovadoJun
-        ? ` Plano aprovado Jun: S1 ${fmt(TOTAL_PLANO_JUN_S1)} · S2 ${fmt(TOTAL_PLANO_JUN_S2)}.`
+        ? ` Plano aprovado Jun: S1 ${fmt(TOTAL_PLANO_JUN_S1)} · S2 ${fmt(TOTAL_PLANO_JUN_S2)}.` +
+          ` Fechamento ciclo ${fmt(fechamentoCicloProjetado)}/${fmt(tetoMaximoCiclo)}` +
+          (conformidadePlano?.conformeGeral ? ' — conforme plano.' : '.')
         : ` ${fmt(orcamentoDistribuir)} nas próximas ${numSemanas} sem.` +
           (semanasPlanejadasLabels.length
             ? ` (${semanasPlanejadasLabels.join(', ')})`
@@ -1044,10 +1148,10 @@ export function buildCenarioMitigacao(
       (entregaInvertidaJun && !usaPlanoAprovadoJun
         ? ' · entrega Jun S1/S2 invertida'
         : '') +
-      (semanaPressaoLabel
+      (!usaPlanoAprovadoJun && semanaPressaoLabel
         ? ` — ${semanaPressaoLabel} com −${REDUCAO_SEMANA_PRESSAO_PCT}%`
         : '') +
-      (deficitVsInercial > 0
+      (!usaPlanoAprovadoJun && deficitVsInercial > 0
         ? `; faltam ${fmt(deficitVsInercial)} vs ritmo`
         : '') +
       `.`;
@@ -1070,6 +1174,13 @@ export function buildCenarioMitigacao(
     orcamentoFlexivel,
     planoJunS1Total: TOTAL_PLANO_JUN_S1,
     planoJunS2Total: TOTAL_PLANO_JUN_S2,
+    usaPlanoAprovadoJun,
+    propostaFuturaTotal,
+    fechamentoCicloProjetado,
+    saldoCicloAposPlano,
+    dentroDoTetoCiclo,
+    conformidadePlano,
+    semanasAlvoLancadas,
     saldoRestante1150,
     gorduraMesDisponivel,
     gorduraPeriodoTotal: GORDURA_PERIODO_TOTAL,

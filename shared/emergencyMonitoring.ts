@@ -23,6 +23,7 @@ import {
 } from './limitesControle.js';
 import { resolveJanelaAnaliseMeses } from './methodologyCalendar.js';
 import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
+import { getWeeklyQty } from './weeklyQty.js';
 import { validMonthKeysForPayload } from './payloadAnalysis.js';
 import {
   consumptionUnits,
@@ -345,22 +346,7 @@ export function resolveMesMonitoramento(
   return currentMonthLabelPt(now);
 }
 
-export function getWeeklyQty(
-  mon: EmergencialMonitoramento,
-  mes: string,
-  semana: number,
-  servicoId: string,
-): number {
-  const mesKey = parseMonthKey(mes);
-  return mon.entradasSemanais
-    .filter(
-      (e) =>
-        parseMonthKey(e.mes) === mesKey &&
-        e.semana === semana &&
-        e.servicoId === servicoId,
-    )
-    .reduce((s, e) => s + (e.quantidade || 0), 0);
-}
+export { getWeeklyQty } from './weeklyQty.js';
 
 /** Maior número de semana com quantidade > 0 no mês */
 export function ultimaSemanaComDadosNoMes(

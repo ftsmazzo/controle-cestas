@@ -416,3 +416,51 @@
   margin: 0.85rem 0 0;
   font-size: 0.82rem;
 }
+
+.mit-conformidade {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 1rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+
+.mit-conformidade--ok {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.mit-conformidade--warn {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.mit-conformidade p {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+
+.mit-conformidade-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex: 1 1 100%;
+  font-size: 0.82rem;
+}
+
+.mit-conformidade-list li {
+  margin-top: 0.25rem;
+}
+
+.mit-lancado {
+  color: #047857;
+}
+
+.mit-summary-card--conforme .mit-summary-value {
+  color: #047857;
+}
