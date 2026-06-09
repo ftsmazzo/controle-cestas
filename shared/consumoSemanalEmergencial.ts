@@ -3,15 +3,19 @@ import {
   MONITOR_CONTROLE_MES_INICIO,
   MONITOR_CONTROLE_SEMANA_INICIO,
   totalEnviadoNaSemana,
-  weekDateRangeLabel,
-  weeksInCalendarMonth,
 } from './emergencyMonitoring.js';
+import {
+  SEMANAS_POR_CICLO_OPERACIONAL,
+  listarSemanasCivisControle,
+  refSemanaOperacional,
+} from './operationalWeeks.js';
 import {
   EMPENHO_DURACAO_MESES_PADRAO,
   suggestEmpenhoMeses,
 } from './empenhoControle.js';
 import { formatSemanaCurta, getYearMonth, parseMonthKey } from './monthUtils.js';
 import { consumptionUnits, groupByFamilia, type FamiliaGroup } from './serviceFamilies.js';
+import { isServicoCotaMensalUnica } from './coderpRequisitanteRules.js';
 import { buildTabelaCessaoEmergencial } from './tabelaCessaoEmergencial.js';
 import type { ServicesPayload } from './serviceTypes.js';
 
@@ -34,6 +38,8 @@ export interface ConsumoSemanalEquipRow {
   servicoId: string;
   servicoNome: string;
   familiaCodigo?: string;
+  /** SAICA, WARAOS, Mãos Dadas — cota mensal única, sem alerta semanal */
+  cotaMensalUnica: boolean;
   cotaMensal: number;
   cotaSemanal: number;
   mediaHistorica: number;
@@ -57,33 +63,23 @@ export interface ConsumoSemanalEmergencial {
 
 function listarSemanasComDados(payload: ServicesPayload): SemanaColunaConsumo[] {
   const mon = payload.emergencial.monitoramento;
-  const meses =
+  const empenhoMeses =
     payload.emergencial.empenhoMeses?.length
       ? payload.emergencial.empenhoMeses
       : suggestEmpenhoMeses(
           payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO,
         );
 
-  const kInicio = parseMonthKey(MONITOR_CONTROLE_MES_INICIO);
-  const candidatas: SemanaColunaConsumo[] = [];
-
-  for (const mes of meses) {
-    if (parseMonthKey(mes) < kInicio) continue;
-    const ym = getYearMonth(mes);
-    if (!ym) continue;
-    const maxW = weeksInCalendarMonth(ym.year, ym.month);
-    const wStart =
-      parseMonthKey(mes) === kInicio ? MONITOR_CONTROLE_SEMANA_INICIO : 1;
-
-    for (let w = wStart; w <= maxW; w++) {
-      candidatas.push({
-        mes,
-        semana: w,
-        label: formatSemanaCurta(mes, w),
-        periodo: weekDateRangeLabel(ym.year, ym.month, w),
-      });
-    }
-  }
+  const civis = listarSemanasCivisControle(empenhoMeses);
+  const candidatas: SemanaColunaConsumo[] = civis.map((c, i) => {
+    const ref = refSemanaOperacional(i + 1, empenhoMeses);
+    return {
+      mes: c.mes,
+      semana: c.semana,
+      label: ref?.label ?? formatSemanaCurta(c.mes, c.semana),
+      periodo: ref?.periodo ?? `S${c.semana}`,
+    };
+  });
 
   let ultimaComDados = -1;
   for (let i = 0; i < candidatas.length; i++) {
@@ -94,11 +90,9 @@ function listarSemanasComDados(payload: ServicesPayload): SemanaColunaConsumo[] 
   return ultimaComDados >= 0 ? candidatas.slice(0, ultimaComDados + 1) : [];
 }
 
-function mediaSemanalRef(mediaHistorica: number, semanasNoMes: number): number {
+function mediaSemanalRef(mediaHistorica: number): number {
   if (mediaHistorica <= 0) return 0;
-  return semanasNoMes > 0
-    ? Math.round(mediaHistorica / semanasNoMes)
-    : Math.round(mediaHistorica / 4.33);
+  return Math.round(mediaHistorica / SEMANAS_POR_CICLO_OPERACIONAL);
 }
 
 export function buildConsumoSemanalEmergencial(
@@ -114,22 +108,35 @@ export function buildConsumoSemanalEmergencial(
   const equipamentos: ConsumoSemanalEquipRow[] = units.map((s) => {
     const cotaMes = cotaMap.get(s.id) ?? 0;
     const mediaHistorica = mediaMap.get(s.id) ?? 0;
+    const cotaMensalUnica = isServicoCotaMensalUnica(s);
     let acumulado = 0;
     let semanasAcimaCota = 0;
     let semanasAcimaMedia = 0;
 
+    const cotaSemanal =
+      cotaMensalUnica || cotaMes <= 0
+        ? 0
+        : Math.round(cotaMes / SEMANAS_POR_CICLO_OPERACIONAL);
+    const mediaSemanal = cotaMensalUnica ? 0 : mediaSemanalRef(mediaHistorica);
+
     const celulas: CelulaConsumoSemanal[] = colunas.map(({ mes, semana }) => {
-      const ym = getYearMonth(mes);
-      const semanasNoMes = ym ? weeksInCalendarMonth(ym.year, ym.month) : 4;
-      const cotaSemanal =
-        cotaMes > 0 && semanasNoMes > 0 ? Math.round(cotaMes / semanasNoMes) : 0;
-      const mediaSem = mediaSemanalRef(mediaHistorica, semanasNoMes);
       const quantidade = getWeeklyQty(mon, mes, semana, s.id);
       acumulado += quantidade;
+      if (cotaMensalUnica) {
+        return {
+          quantidade,
+          acimaCota: false,
+          acimaMedia: false,
+          excessoCota: 0,
+          excessoMedia: 0,
+        };
+      }
       const excessoCota =
         cotaSemanal > 0 && quantidade > cotaSemanal ? quantidade - cotaSemanal : 0;
       const excessoMedia =
-        mediaSem > 0 && quantidade > mediaSem ? quantidade - mediaSem : 0;
+        mediaSemanal > 0 && quantidade > mediaSemanal
+          ? quantidade - mediaSemanal
+          : 0;
       if (excessoCota > 0) semanasAcimaCota++;
       if (excessoMedia > 0) semanasAcimaMedia++;
       return {
@@ -141,29 +148,36 @@ export function buildConsumoSemanalEmergencial(
       };
     });
 
-    const ymRef = getYearMonth(colunas[0]?.mes ?? MONITOR_CONTROLE_MES_INICIO);
-    const semanasRef = ymRef ? weeksInCalendarMonth(ymRef.year, ymRef.month) : 4;
-    const cotaSemanal =
-      cotaMes > 0 && semanasRef > 0 ? Math.round(cotaMes / semanasRef) : 0;
-    const mediaSemanal = mediaSemanalRef(mediaHistorica, semanasRef);
-    const semanasComDado = celulas.filter((c) => c.quantidade > 0).length;
-    const cotaAcumEsperada = cotaSemanal * semanasComDado;
-    const mediaAcumEsperada = mediaSemanal * semanasComDado;
+    const excessoAcumCota = cotaMensalUnica
+      ? Math.max(0, acumulado - cotaMes)
+      : Math.max(
+          0,
+          acumulado -
+            cotaSemanal * celulas.filter((c) => c.quantidade > 0).length,
+        );
+    const excessoAcumMedia = cotaMensalUnica
+      ? Math.max(0, acumulado - mediaHistorica)
+      : Math.max(
+          0,
+          acumulado -
+            mediaSemanal * celulas.filter((c) => c.quantidade > 0).length,
+        );
 
     return {
       servicoId: s.id,
       servicoNome: s.nome,
       familiaCodigo: s.familiaCodigo ?? undefined,
+      cotaMensalUnica,
       cotaMensal: cotaMes,
       cotaSemanal,
       mediaHistorica,
       mediaSemanal,
       celulas,
       acumulado,
-      excessoAcumCota: Math.max(0, acumulado - cotaAcumEsperada),
-      excessoAcumMedia: Math.max(0, acumulado - mediaAcumEsperada),
-      semanasAcimaCota,
-      semanasAcimaMedia,
+      excessoAcumCota,
+      excessoAcumMedia,
+      semanasAcimaCota: cotaMensalUnica ? 0 : semanasAcimaCota,
+      semanasAcimaMedia: cotaMensalUnica ? 0 : semanasAcimaMedia,
     };
   }).filter((r) => r.acumulado > 0 || r.celulas.some((c) => c.quantidade > 0));
 

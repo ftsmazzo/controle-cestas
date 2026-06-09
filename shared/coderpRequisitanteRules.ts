@@ -62,6 +62,18 @@ export function isUnidadeFixaEspecial(nome: string): boolean {
   return cotaFixaPorUnidade(nome) != null;
 }
 
+/** Recebem a cota mensal de uma vez — não entram em teto/corte semanal */
+export const UNIDADES_COTA_MENSAL_UNICA = [
+  UNIDADE_SAICA,
+  UNIDADE_WARAOS,
+  UNIDADE_MAOS_DADAS,
+] as const;
+
+export function isServicoCotaMensalUnica(nomeOuServico: string | { nome: string }): boolean {
+  const nome = typeof nomeOuServico === 'string' ? nomeOuServico : nomeOuServico.nome;
+  return isUnidadeFixaEspecial(nome);
+}
+
 /**
  * Divide o total do requisitante Banco/Nutrição entre Mãos Dadas, SAICA e WARAOS
  * conforme cotas mensais × meses do período (proporção do que era pedido via Banco).

@@ -1,9 +1,9 @@
 import {
   buildMonitoramentoResumo,
+  getWeeklyQty,
   MONITOR_CONTROLE_MES_INICIO,
   MONITOR_CONTROLE_SEMANA_INICIO,
   resolveContextoPainelPublico,
-  somaEnviosSemanas,
   weekDateRangeLabel,
   weeksInCalendarMonth,
 } from './emergencyMonitoring.js';
@@ -17,10 +17,26 @@ import {
 import { margemAteLimite } from './limitesControle.js';
 import { getYearMonth, parseMonthKey, formatSemanaCurta } from './monthUtils.js';
 import {
+  SEMANAS_POR_CICLO_OPERACIONAL,
+  TETO_CICLO_OPERACIONAL,
+  cicloOperacionalDeIndice,
+  civilPorIndiceOperacional,
+  deveInverterJunSemanas,
+  enviadoCicloOperacionalAte,
+  formatSemanaOperacionalCurta,
+  indiceOperacionalCivil,
+  labelCicloOperacional,
+  proximasSemanasOperacionais,
+  refSemanaOperacionalCivil,
+  saldoCicloOperacional,
+  trocarValoresSemanas,
+} from './operationalWeeks.js';
+import {
   MARGEM_MITIGACAO_MENSAL,
   TETO_CONTRATUAL_MENSAL,
   TETO_MENSAL_OPERACIONAL,
 } from './processoEmergencial.js';
+import { isServicoCotaMensalUnica } from './coderpRequisitanteRules.js';
 import { consumptionUnits, groupByFamilia, type FamiliaGroup } from './serviceFamilies.js';
 import { buildTabelaCessaoEmergencial } from './tabelaCessaoEmergencial.js';
 import type { ServicesPayload } from './serviceTypes.js';
@@ -47,6 +63,8 @@ export interface MitigacaoEquipamentoRow {
   servicoNome: string;
   familiaCodigo?: string;
   fixo: boolean;
+  /** Cota mensal única (SAICA, WARAOS, Mãos Dadas) — fora do rateio semanal */
+  cotaMensalUnica: boolean;
   enviadoAteAgora: number;
   cotaMensal: number;
   /** Teto semanal proporcional (cota ÷ semanas do mês) */
@@ -131,6 +149,12 @@ export interface CenarioMitigacao {
   /** @deprecated use mesFechamento */
   mes: string;
   semanaInicioControleLabel: string;
+  /** Ciclo operacional (4 semanas qua–ter) */
+  cicloAtual: number;
+  labelCiclo: string;
+  enviadoCicloAteAgora: number;
+  /** Plano Jun S1/S2 invertido para refletir entrega real */
+  entregaInvertidaJun: boolean;
 }
 
 function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
@@ -143,17 +167,15 @@ function impactoFromPct(pctReducao: number, corte: number): MitigacaoImpacto {
 function buildPropostasSemana(
   valores: number[],
   alvos: AlvoSemanaMitigacao[],
-  yearByMes: Map<string, { year: number; month: number }>,
+  empenhoMeses: string[],
 ): MitigacaoSemanaProposta[] {
   return alvos.map(({ mes, semana }, i) => {
-    const ym = yearByMes.get(mes);
+    const ref = refSemanaOperacionalCivil(mes, semana, empenhoMeses);
     return {
       mes,
       semana,
-      labelCurta: formatSemanaCurta(mes, semana),
-      periodo: ym
-        ? weekDateRangeLabel(ym.year, ym.month, semana)
-        : `S${semana}`,
+      labelCurta: ref?.label ?? formatSemanaCurta(mes, semana),
+      periodo: ref?.periodo ?? `S${semana}`,
       cestas: valores[i] ?? 0,
     };
   });
@@ -201,6 +223,30 @@ function planejarProximasSemanas(
     w = 1;
   }
   return out;
+}
+
+function aplicarInversaoJun(
+  alvos: AlvoSemanaMitigacao[],
+  resultado: ResultadoDuasSemanas,
+): ResultadoDuasSemanas {
+  const swap = deveInverterJunSemanas(alvos);
+  if (!swap) return resultado;
+  const [i, j] = swap;
+  const porUnidade = new Map<string, number[]>();
+  for (const [id, vals] of resultado.porUnidade) {
+    porUnidade.set(id, trocarValoresSemanas(vals, i, j));
+  }
+  let pressao = resultado.semanaPressaoIdx;
+  if (pressao === i) pressao = j;
+  else if (pressao === j) pressao = i;
+  return {
+    ...resultado,
+    porUnidade,
+    totaisNormal: trocarValoresSemanas(resultado.totaisNormal, i, j),
+    totaisProposta: trocarValoresSemanas(resultado.totaisProposta, i, j),
+    budgetsSemana: trocarValoresSemanas(resultado.budgetsSemana, i, j),
+    semanaPressaoIdx: pressao,
+  };
 }
 
 function proximoMesEmpenho(payload: ServicesPayload, mes: string): string | null {
@@ -292,13 +338,22 @@ function pesoDistribuicao(u: DraftUnit): number {
   return u.ritmo > 0 ? u.ritmo : 1;
 }
 
-/** Espaço na cota do mês da semana (mês novo = cota cheia) */
+/** Espaço na cota — novo ciclo operacional (4 sem.) reinicia a cota cheia */
 function espacoInicialMes(
   u: DraftUnit,
   mesSemana: string,
+  semanaSemana: number,
   mesFechamento: string,
+  semanaFechamento: number,
+  empenhoMeses: string[],
 ): number {
-  if (parseMonthKey(mesSemana) > parseMonthKey(mesFechamento)) {
+  const idxS = indiceOperacionalCivil(mesSemana, semanaSemana, empenhoMeses);
+  const idxF = indiceOperacionalCivil(mesFechamento, semanaFechamento, empenhoMeses);
+  if (
+    idxS != null &&
+    idxF != null &&
+    cicloOperacionalDeIndice(idxS) > cicloOperacionalDeIndice(idxF)
+  ) {
     return u.cotaMes;
   }
   return u.espacoAteCota;
@@ -388,6 +443,8 @@ function alocarDuasSemanas(
   numSemanas: number,
   alvos: AlvoSemanaMitigacao[],
   mesFechamento: string,
+  semanaFechamento: number,
+  empenhoMeses: string[],
 ): ResultadoDuasSemanas {
   const vazio: ResultadoDuasSemanas = {
     porUnidade: new Map(),
@@ -405,17 +462,33 @@ function alocarDuasSemanas(
       espacoPorMes.set(
         a.mes,
         new Map(
-          units.map((u) => [u.servicoId, espacoInicialMes(u, a.mes, mesFechamento)]),
+          units.map((u) => [
+            u.servicoId,
+            espacoInicialMes(
+              u,
+              a.mes,
+              a.semana,
+              mesFechamento,
+              semanaFechamento,
+              empenhoMeses,
+            ),
+          ]),
         ),
       );
     }
   }
 
+  const unitsSemanais = units.filter((u) => !isServicoCotaMensalUnica(u.servicoNome));
+
   const normalPorSemana: Map<string, number>[] = [];
   for (let wi = 0; wi < numSemanas; wi++) {
     const mes = alvos[wi]?.mes ?? mesFechamento;
     const espaco = espacoPorMes.get(mes)!;
-    const alocado = distribuirEnvelopeSemana(units, budgetsSemana[wi] ?? 0, espaco);
+    const alocado = distribuirEnvelopeSemana(
+      unitsSemanais,
+      budgetsSemana[wi] ?? 0,
+      espaco,
+    );
     for (const u of units) {
       const id = u.servicoId;
       const v = alocado.get(id) ?? 0;
@@ -527,6 +600,16 @@ function alocarDuasSemanas(
 
   const totaisProposta = propostaPorSemana.map((m) => somaMapSemana(m));
 
+  for (const u of units) {
+    if (!isServicoCotaMensalUnica(u.servicoNome)) continue;
+    for (const m of propostaPorSemana) {
+      m.set(u.servicoId, 0);
+    }
+    for (const m of normalPorSemana) {
+      m.set(u.servicoId, 0);
+    }
+  }
+
   return {
     porUnidade: mapParaArray(units, propostaPorSemana),
     semanaPressaoIdx,
@@ -547,12 +630,22 @@ export function buildCenarioMitigacao(
   });
 
   const mesFechamento = resumo.mes;
-  const alvos = planejarProximasSemanas(
-    payload,
+  const empenhoMeses =
+    payload.emergencial.empenhoMeses?.length
+      ? payload.emergencial.empenhoMeses
+      : suggestEmpenhoMeses(
+          payload.emergencial.duracaoMeses ?? EMPENHO_DURACAO_MESES_PADRAO,
+        );
+  const proximasOp = proximasSemanasOperacionais(
     mesFechamento,
     resumo.semanaBaseRitmo,
     semanasHorizonte,
+    empenhoMeses,
   );
+  const alvos: AlvoSemanaMitigacao[] = proximasOp.map((p) => ({
+    mes: p.mes,
+    semana: p.semana,
+  }));
 
   const empenho = buildEmpenhoControle(payload);
   const autonomia = computeAutonomiaOperacional(
@@ -584,16 +677,24 @@ export function buildCenarioMitigacao(
     yearByMes.set(mesFechamento, ymFech);
   }
 
-  const semanaReferenciaLabel = formatSemanaCurta(
+  const semanaReferenciaLabel = formatSemanaOperacionalCurta(
     mesFechamento,
     resumo.semanaBaseRitmo,
+    empenhoMeses,
   );
   const semanasPlanejadasLabels = alvos.map((a) =>
-    formatSemanaCurta(a.mes, a.semana),
+    formatSemanaOperacionalCurta(a.mes, a.semana, empenhoMeses),
   );
-  const enviadoMes = resumo.enviadoMesTotal;
-  const saldoRestante1150 = margemAteLimite(enviadoMes, TETO_MENSAL_OPERACIONAL);
-  const margemAte1200 = margemAteLimite(enviadoMes, TETO_CONTRATUAL_MENSAL);
+  const cicloInfo = enviadoCicloOperacionalAte(
+    payload.emergencial.monitoramento,
+    mesFechamento,
+    resumo.semanaBaseRitmo,
+    empenhoMeses,
+  );
+  const enviadoCiclo = cicloInfo.enviado;
+  const enviadoMes = enviadoCiclo;
+  const saldoRestante1150 = saldoCicloOperacional(enviadoCiclo);
+  const margemAte1200 = margemAteLimite(enviadoCiclo, TETO_CONTRATUAL_MENSAL);
   const gorduraMesDisponivel = Math.min(
     MARGEM_MITIGACAO_MENSAL,
     Math.max(0, margemAte1200 - saldoRestante1150),
@@ -612,37 +713,58 @@ export function buildCenarioMitigacao(
 
   const units = consumptionUnits(payload.services);
   const numSemanas = alvos.length;
-  const semanasNoMes = resumo.semanasNoMes;
+  const semanasNoCiclo = SEMANAS_POR_CICLO_OPERACIONAL;
+  const inicioCicloOp =
+    (cicloInfo.ciclo - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
+  const indiceRef = indiceOperacionalCivil(
+    mesFechamento,
+    resumo.semanaBaseRitmo,
+    empenhoMeses,
+  );
+  const mon = payload.emergencial.monitoramento;
   const drafts: DraftUnit[] = units.map((s) => {
     const eq = resumo.equipamentos.find((e) => e.servicoId === s.id);
     const cotaMes = eq?.metaMensal ?? cotaMap.get(s.id) ?? 0;
-    const cotaSemanal =
-      eq?.metaSemanal ??
-      (cotaMes > 0 && semanasNoMes > 0 ? Math.round(cotaMes / semanasNoMes) : 0);
-    const enviado = eq
-      ? somaEnviosSemanas(
-          eq.semanas,
-          resumo.semanaInicioControle,
-          resumo.semanaBaseRitmo,
-        )
-      : 0;
-    const ritmo =
-      resumo.semanasNoPeriodoControle > 0
-        ? enviado / resumo.semanasNoPeriodoControle
+    const cotaMensalUnica = isServicoCotaMensalUnica(s);
+    const cotaSemanal = cotaMensalUnica
+      ? 0
+      : cotaMes > 0
+        ? Math.round(cotaMes / semanasNoCiclo)
+        : eq?.metaSemanal ?? 0;
+    let enviado = 0;
+    let semanasComDado = 0;
+    if (indiceRef != null) {
+      for (let op = inicioCicloOp; op <= indiceRef; op++) {
+        const civil = civilPorIndiceOperacional(op, empenhoMeses);
+        if (!civil) continue;
+        const q = getWeeklyQty(mon, civil.mes, civil.semana, s.id);
+        enviado += q;
+        if (q > 0) semanasComDado++;
+      }
+    }
+    const ritmo = cotaMensalUnica
+      ? 0
+      : semanasComDado > 0
+        ? enviado / semanasComDado
         : eq?.enviadoSemanaAtual ?? 0;
-    const demanda = Math.round(ritmo * numSemanas);
+    const demanda = cotaMensalUnica ? 0 : Math.round(ritmo * numSemanas);
     const espacoAteCota = Math.max(0, cotaMes - enviado);
     const mediaHistorica = mediaMap.get(s.id) ?? 0;
     const pctAcimaMedia = pctAcimaReferencia(enviado, mediaHistorica);
     const pctAcimaCota = pctAcimaReferencia(enviado, cotaMes);
-    const pctAcimaSemana = eq
-      ? mediaExcessoSemanal(
-          eq.semanas,
-          cotaSemanal,
-          resumo.semanaInicioControle,
-          resumo.semanaBaseRitmo,
-        )
-      : 0;
+    let pctAcimaSemana = 0;
+    if (!cotaMensalUnica && indiceRef != null && cotaSemanal > 0) {
+      let soma = 0;
+      let n = 0;
+      for (let op = inicioCicloOp; op <= indiceRef; op++) {
+        const civil = civilPorIndiceOperacional(op, empenhoMeses);
+        if (!civil) continue;
+        const q = getWeeklyQty(mon, civil.mes, civil.semana, s.id);
+        if (q > cotaSemanal) soma += pctAcimaReferencia(q, cotaSemanal);
+        n++;
+      }
+      pctAcimaSemana = n > 0 ? soma / n : 0;
+    }
     const draft: DraftUnit = {
       servicoId: s.id,
       servicoNome: s.nome,
@@ -664,17 +786,23 @@ export function buildCenarioMitigacao(
   });
 
   const demandaInercialTotal = drafts.reduce((s, d) => s + d.demanda, 0);
-  const resultado = alocarDuasSemanas(
+  let resultado = alocarDuasSemanas(
     drafts,
     orcamentoDistribuir,
     numSemanas,
     alvos,
     mesFechamento,
+    resumo.semanaBaseRitmo,
+    empenhoMeses,
   );
+  const entregaInvertidaJun = deveInverterJunSemanas(alvos) != null;
+  if (entregaInvertidaJun) {
+    resultado = aplicarInversaoJun(alvos, resultado);
+  }
   const semanaPressaoIdx = resultado.semanaPressaoIdx;
   const semanaPressaoLabel =
     alvos[semanaPressaoIdx] != null
-      ? cenarioSemanaLabel(alvos[semanaPressaoIdx], yearByMes)
+      ? cenarioSemanaLabel(alvos[semanaPressaoIdx], empenhoMeses)
       : null;
 
   const equipamentos: MitigacaoEquipamentoRow[] = drafts
@@ -691,6 +819,7 @@ export function buildCenarioMitigacao(
         servicoNome: d.servicoNome,
         familiaCodigo: d.familiaCodigo,
         fixo: d.fixo,
+        cotaMensalUnica: isServicoCotaMensalUnica(d.servicoNome),
         enviadoAteAgora: d.enviado,
         cotaMensal: d.cotaMes,
         cotaSemanal: d.cotaSemanal,
@@ -701,7 +830,7 @@ export function buildCenarioMitigacao(
         demandaInercial2sem: d.demanda,
         proposta2sem,
         corte2sem,
-        propostasSemana: buildPropostasSemana(semanasVal, alvos, yearByMes),
+        propostasSemana: buildPropostasSemana(semanasVal, alvos, empenhoMeses),
         fechamentoMes,
         fechamentoInercial,
         vsCotaMesPct: d.cotaMes > 0 ? (fechamentoMes / d.cotaMes) * 100 : 0,
@@ -719,7 +848,10 @@ export function buildCenarioMitigacao(
   const deficitVsInercial = Math.max(0, demandaInercialTotal - propostaTotal);
   const fechamentoMesProjetado = enviadoMes + propostaTotal;
   const fechamentoInercial = enviadoMes + demandaInercialTotal;
-  const gorduraUsadaNoPlano = Math.max(0, fechamentoMesProjetado - TETO_MENSAL_OPERACIONAL);
+  const gorduraUsadaNoPlano = Math.max(
+    0,
+    fechamentoMesProjetado - TETO_CICLO_OPERACIONAL,
+  );
   const saldoEmpenhoPosPlano = Math.max(0, empenho.restante - propostaTotal);
 
   const familias = groupByFamilia(equipamentos, payload.services);
@@ -753,19 +885,20 @@ export function buildCenarioMitigacao(
 
   const precisaMitigacao =
     demandaInercialTotal > orcamentoDistribuir ||
-    fechamentoInercial > TETO_MENSAL_OPERACIONAL;
+    fechamentoInercial > TETO_CICLO_OPERACIONAL;
 
   let resumoCurto = '';
   if (!temDados) {
     resumoCurto = mensagemAjuda || 'Aguardando lançamentos salvos.';
   } else {
     resumoCurto =
-      `Referência ${semanaReferenciaLabel}: ${fmt(enviadoMes)} acumulados. ${fmt(orcamentoDistribuir)} nas próximas ${numSemanas} sem.` +
+      `${labelCicloOperacional(cicloInfo.ciclo)} · ref. ${semanaReferenciaLabel}: ${fmt(enviadoCiclo)} no ciclo. ${fmt(orcamentoDistribuir)} nas próximas ${numSemanas} sem.` +
       (semanasPlanejadasLabels.length
         ? ` (${semanasPlanejadasLabels.join(', ')})`
         : '') +
+      (entregaInvertidaJun ? ' · entrega Jun S1/S2 invertida' : '') +
       (semanaPressaoLabel
-        ? ` — ${formatSemanaCurta(alvos[semanaPressaoIdx]?.mes ?? mesFechamento, alvos[semanaPressaoIdx]?.semana ?? 0)} com −${REDUCAO_SEMANA_PRESSAO_PCT}%`
+        ? ` — ${semanaPressaoLabel} com −${REDUCAO_SEMANA_PRESSAO_PCT}%`
         : '') +
       (deficitVsInercial > 0
         ? `; faltam ${fmt(deficitVsInercial)} vs ritmo`
@@ -779,15 +912,11 @@ export function buildCenarioMitigacao(
     semanasPlanejadas: alvos.map((a) => a.semana),
     semanasPlanejadasLabels,
     semanaReferenciaLabel,
-    periodosSemana: alvos.map((a) => {
-      const ym = yearByMes.get(a.mes);
-      const curta = formatSemanaCurta(a.mes, a.semana);
-      return ym
-        ? `${curta} (${weekDateRangeLabel(ym.year, ym.month, a.semana)})`
-        : curta;
-    }),
-    enviadoMesAteAgora: enviadoMes,
-    tetoOperacional: TETO_MENSAL_OPERACIONAL,
+    periodosSemana: alvos.map((a) =>
+      formatSemanaOperacionalCurta(a.mes, a.semana, empenhoMeses),
+    ),
+    enviadoMesAteAgora: enviadoCiclo,
+    tetoOperacional: TETO_CICLO_OPERACIONAL,
     tetoComGordura: TETO_CONTRATUAL_MENSAL,
     saldoRestante1150,
     gorduraMesDisponivel,
@@ -809,10 +938,15 @@ export function buildCenarioMitigacao(
     semanaBaseRitmo: resumo.semanaBaseRitmo,
     semanaInicioControle: resumo.semanaInicioControle,
     semanasHorizonte,
-    semanaInicioControleLabel: formatSemanaCurta(
+    semanaInicioControleLabel: formatSemanaOperacionalCurta(
       MONITOR_CONTROLE_MES_INICIO,
       MONITOR_CONTROLE_SEMANA_INICIO,
+      empenhoMeses,
     ),
+    cicloAtual: cicloInfo.ciclo,
+    labelCiclo: labelCicloOperacional(cicloInfo.ciclo),
+    enviadoCicloAteAgora: enviadoCiclo,
+    entregaInvertidaJun,
     semanaPressaoIdx,
     semanaPressaoLabel,
     reducaoSemanaPressaoPct: REDUCAO_SEMANA_PRESSAO_PCT,
@@ -837,14 +971,9 @@ function fmt(n: number): string {
 
 function cenarioSemanaLabel(
   alvo: AlvoSemanaMitigacao,
-  yearByMes: Map<string, { year: number; month: number }>,
+  empenhoMeses: string[],
 ): string {
-  const curta = formatSemanaCurta(alvo.mes, alvo.semana);
-  const ym = yearByMes.get(alvo.mes);
-  const periodo = ym
-    ? weekDateRangeLabel(ym.year, ym.month, alvo.semana)
-    : '';
-  return periodo ? `${curta} (${periodo})` : curta;
+  return formatSemanaOperacionalCurta(alvo.mes, alvo.semana, empenhoMeses);
 }
 
 export function totaisPorSemana(

@@ -23,6 +23,7 @@ import {
 import type { ProcessoRiscoItem } from './processTypes.js';
 import type { MonthAllocationResult, ServicesPayload } from './serviceTypes.js';
 import type { ProcessoEmergencialConfig } from './processTypes.js';
+import { isServicoCotaMensalUnica } from './coderpRequisitanteRules.js';
 
 /** Envio semanal por equipamento (Banco de Alimentos) */
 export interface EntradaSemanalEquipamento {
@@ -84,6 +85,8 @@ export interface EquipamentoMonitorRow {
   /** Texto curto para decisão na próxima semana */
   alertaEquip: string | null;
   status: MonitorEquipStatus;
+  /** SAICA, WARAOS, Mãos Dadas — sem teto semanal */
+  cotaMensalUnica: boolean;
 }
 
 export interface MonitoramentoResumo {
@@ -586,8 +589,11 @@ export function buildMonitoramentoResumo(
   const units = consumptionUnits(payload.services);
   const equipamentos: EquipamentoMonitorRow[] = units.map((s) => {
     const metaMensal = metaPorEquip.get(s.id) ?? 0;
+    const cotaMensalUnica = isServicoCotaMensalUnica(s);
     const metaSemanal =
-      metaMensal > 0 ? Math.round(metaMensal / semanasNoMes) : 0;
+      cotaMensalUnica || metaMensal <= 0
+        ? 0
+        : Math.round(metaMensal / semanasNoMes);
     const semanas: Record<number, number> = {};
     let totalEnviado = 0;
     for (let w = 1; w <= semanasNoMes; w++) {
@@ -609,7 +615,9 @@ export function buildMonitoramentoResumo(
     const metaAcumEquip =
       metaSemanal * semanasNoPeriodoControleVal;
     const pctMes = pctUsoLimite(enviadoNoControle, metaMensal);
-    const pctSemana = pctUsoLimite(enviadoSemanaAtual, metaSemanal);
+    const pctSemana = cotaMensalUnica
+      ? 0
+      : pctUsoLimite(enviadoSemanaAtual, metaSemanal);
     const pctRitmo =
       metaAcumEquip > 0 ? (enviadoRitmo / metaAcumEquip) * 100 : 0;
     const ritmoEquip =
@@ -626,17 +634,25 @@ export function buildMonitoramentoResumo(
     const alertaEquip =
       metaMensal <= 0
         ? null
-        : alertaEquipamentoTexto(
-            pctMes,
-            pctSemana,
-            pctProjecaoMes,
-            estouroProjetadoMes,
-            semanasRestantesNoMes,
-          );
+        : cotaMensalUnica
+          ? pctMes > 100 || pctProjecaoMes > 100
+            ? 'Acima da cota mensal do ciclo — conferir lançamento único.'
+            : pctProjecaoMes > 88
+              ? 'Projeção do ciclo alta — cota mensal única.'
+              : null
+          : alertaEquipamentoTexto(
+              pctMes,
+              pctSemana,
+              pctProjecaoMes,
+              estouroProjetadoMes,
+              semanasRestantesNoMes,
+            );
     const status: MonitorEquipStatus =
       metaMensal <= 0
         ? 'sem_meta'
-        : statusFromLimites(pctMes, pctSemana, pctProjecaoMes);
+        : cotaMensalUnica
+          ? statusFromLimites(pctMes, 0, pctProjecaoMes)
+          : statusFromLimites(pctMes, pctSemana, pctProjecaoMes);
     return {
       servicoId: s.id,
       servicoNome: s.nome,
@@ -654,6 +670,7 @@ export function buildMonitoramentoResumo(
       estouroProjetadoMes,
       alertaEquip,
       status,
+      cotaMensalUnica,
     };
   });
 

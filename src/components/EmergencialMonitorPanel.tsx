@@ -19,6 +19,11 @@ import MonitorSaldoEvolucao from './MonitorSaldoEvolucao';
 import RegistroSemanalPdfImport from './RegistroSemanalPdfImport';
 import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from '@shared/requisicaoHistorico';
 import { TETO_MENSAL_OPERACIONAL } from '@shared/processoEmergencial';
+import {
+  formatSemanaOperacionalCurta,
+  periodoOperacionalCivil,
+  refSemanaOperacionalCivil,
+} from '@shared/operationalWeeks';
 import type { DashboardState } from '@shared/types';
 import PrintableTable from './ui/PrintableTable';
 import './EmergencialMonitorPanel.css';
@@ -131,6 +136,7 @@ export default function EmergencialMonitorPanel({
 
   const renderEquipRow = (eq: EquipamentoMonitorRow) => {
     const ritmoPerigoso =
+      !eq.cotaMensalUnica &&
       eq.metaMensal > 0 &&
       eq.pctMes <= 100 &&
       eq.pctSemana <= 95 &&
@@ -138,12 +144,25 @@ export default function EmergencialMonitorPanel({
     return (
     <tr
       key={eq.servicoId}
-      className={`row-status-${eq.status}${ritmoPerigoso ? ' row-ritmo-perigoso' : ''}`}
+      className={`row-status-${eq.status}${ritmoPerigoso ? ' row-ritmo-perigoso' : ''}${eq.cotaMensalUnica ? ' row-cota-mes' : ''}`}
       title={eq.alertaEquip ?? undefined}
     >
-      <td className="cell-unidade">{eq.servicoNome}</td>
+      <td className="cell-unidade">
+        {eq.servicoNome}
+        {eq.cotaMensalUnica && (
+          <span className="badge badge-cota-mes" title="Cota mensal única">
+            mês
+          </span>
+        )}
+      </td>
       <td>{eq.metaMensal > 0 ? num(eq.metaMensal) : '—'}</td>
-      <td>{eq.metaSemanal > 0 ? num(eq.metaSemanal) : '—'}</td>
+      <td>
+        {eq.cotaMensalUnica
+          ? '—'
+          : eq.metaSemanal > 0
+            ? num(eq.metaSemanal)
+            : '—'}
+      </td>
       {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map((w) => {
         const val = eq.semanas[w] ?? 0;
         const isEdit = !readOnly && w === semanaEdit;
@@ -202,7 +221,11 @@ export default function EmergencialMonitorPanel({
               : ''
         }
       >
-        {eq.metaSemanal > 0 ? `${num(eq.pctSemana, 0)}%` : '—'}
+        {eq.cotaMensalUnica
+          ? '—'
+          : eq.metaSemanal > 0
+            ? `${num(eq.pctSemana, 0)}%`
+            : '—'}
       </td>
       <td
         className={
@@ -265,6 +288,12 @@ export default function EmergencialMonitorPanel({
         ? 'atencao'
         : 'ok';
 
+  const semanaCabecalho = (w: number) => {
+    const ref = refSemanaOperacionalCivil(resumo.mes, w);
+    if (ref) return { titulo: ref.label, periodo: ref.periodo };
+    return { titulo: `S${w}`, periodo: weekDateRangeLabel(year, month, w) };
+  };
+
   return (
     <div className="emerg-monitor">
       {/* —— 1 · Situação agora —— */}
@@ -289,8 +318,8 @@ export default function EmergencialMonitorPanel({
         <p className="hint">
           Teto <strong>{num(TETO_MENSAL_OPERACIONAL)}</strong>/mês · empenho{' '}
           <strong>{num(data.emergencial.empenhoTotalCestas ?? 4800)}</strong> · ponto zero S
-          {resumo.semanaInicioControle} (
-          {weekDateRangeLabel(year, month, resumo.semanaInicioControle)}).{' '}
+          {semanaCabecalho(resumo.semanaInicioControle).titulo} (
+          {semanaCabecalho(resumo.semanaInicioControle).periodo}).{' '}
           {readOnly ? 'Consulta.' : 'Importe o PDF da semana abaixo e salve.'}
         </p>
 
@@ -318,7 +347,7 @@ export default function EmergencialMonitorPanel({
               {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
                 (w) => (
                   <option key={w} value={w}>
-                    Semana {w} ({weekDateRangeLabel(year, month, w)})
+                    {semanaCabecalho(w).titulo} ({semanaCabecalho(w).periodo})
                     {w < resumo.semanaInicioControle ? ' — pré-controle' : ''}
                     {w === resumo.semanaAnalise ? ' — em análise' : ''}
                     {w === resumo.semanaAtual && w !== resumo.semanaAnalise
@@ -350,7 +379,7 @@ export default function EmergencialMonitorPanel({
                 {Array.from({ length: resumo.semanasNoMes }, (_, i) => i + 1).map(
                   (w) => (
                     <option key={w} value={w}>
-                      S{w} ({weekDateRangeLabel(year, month, w)})
+                      {semanaCabecalho(w).titulo} ({semanaCabecalho(w).periodo})
                     </option>
                   ),
                 )}
@@ -398,7 +427,7 @@ export default function EmergencialMonitorPanel({
               S{resumo.semanaAnalise} / {resumo.semanasNoMes}
             </strong>
             <span className="emerg-kpi-sub">
-              {weekDateRangeLabel(year, month, resumo.semanaAnalise)} ({resumo.mes})
+              {semanaCabecalho(resumo.semanaAnalise).periodo} ({resumo.mes})
               {resumo.modoPlanejamento &&
                 ` · histórico até S${resumo.ultimaSemanaComDados}`}
             </span>
@@ -519,7 +548,7 @@ export default function EmergencialMonitorPanel({
         )}
         <PrintableTable
           title={`Distribuição por setor — ${resumo.mes}`}
-          subtitle={`Semana de análise S${resumo.semanaAnalise} · envio real via PDF`}
+          subtitle={`Semana de análise S${resumo.semanaAnalise} · envio real via PDF · SAICA/WARAOS/Mãos Dadas: cota mensal única (sem % semanal)`}
           wrapClassName="emerg-monitor-table-wrap"
           orientation="landscape"
         >
@@ -540,9 +569,9 @@ export default function EmergencialMonitorPanel({
                           : 'sem-head'
                       }
                     >
-                      S{w}
+                      {semanaCabecalho(w).titulo}
                       <span className="sem-range">
-                        {weekDateRangeLabel(year, month, w)}
+                        {semanaCabecalho(w).periodo}
                         {w < resumo.semanaInicioControle ? ' · pré' : ''}
                       </span>
                     </th>

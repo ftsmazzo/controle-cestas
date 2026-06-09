@@ -32,27 +32,29 @@ export const METODOLOGIA_EMPENHO_TETOS =
   `A diferença (${TETO_CONTRATUAL_MENSAL - TETO_MENSAL_OPERACIONAL}/mês) forma a gordura de mitigação — ${GORDURA_PERIODO_TOTAL} cestas no período completo — usada apenas quando o mês já pressionado precisa fechar acima de 1.150 sem comprometer o empenho.`;
 
 export const METODOLOGIA_PONTO_ZERO =
-  `Ponto zero do controle semanal: ${MONITOR_CONTROLE_MES_INICIO}, semana civil ${MONITOR_CONTROLE_SEMANA_INICIO} (segunda a domingo). ` +
-  'Antes disso, o histórico serve só como referência de cessão; a partir daí, cada envio semanal reduz o saldo do empenho e alimenta o monitor e o painel de decisão.';
+  'Ponto zero operacional: quarta 20/05/2026 (1ª semana qua–ter do relatório). ' +
+  'Pedidos de quarta a sexta; entregas na segunda e terça seguinte; o PDF do Banco de Alimentos cobre quarta a terça. ' +
+  'Antes disso, o histórico serve só como referência de cessão.';
 
 export const METODOLOGIA_REFERENCIA_CESSAO =
   `Cotas por equipamento derivam do histórico de referência ${PERIODO_REFERENCIA_INICIO}–${PERIODO_REFERENCIA_FIM}: ` +
-  'média mensal válida por serviço, rateio proporcional ao total mensal e conversão em cota semanal (cota mensal ÷ semanas civis do mês). ' +
-  'Equipamentos marcados como fixos ou com cota fixa informada têm prioridade no rateio.';
+  'média mensal válida por serviço, rateio proporcional ao total mensal e conversão em cota semanal (cota do ciclo ÷ 4 semanas operacionais). ' +
+  'Equipamentos marcados como fixos ou com cota fixa informada têm prioridade no rateio. ' +
+  'SAICA, WARAOS e Mãos Dadas recebem cota mensal única e ficam fora do rateio e dos alertas semanais.';
 
 export const METODOLOGIA_CONTROLE_SEMANAL =
-  'O consumo é acompanhado por semana civil (S1…S5), não por mês fechado. ' +
-  'A aba Consumo mostra envios por equipamento e semana, com destaque quando supera a cota semanal ou a média histórica. ' +
-  'O Monitor emergencial consolida saldo do empenho, envios da semana e PDFs operacionais lançados pelo Banco de Alimentos.';
+  'O teto de 1.150 vale por ciclo de 4 semanas operacionais (qua–ter), não por mês civil. ' +
+  'Ex.: ciclo 1 = 20–26 Mai, 27 Mai–2 Jun, 3–9 Jun e 10–16 Jun. ' +
+  'A aba Consumo e o painel de decisão usam esses períodos; cotas semanais = cota do ciclo ÷ 4.';
 
 export const METODOLOGIA_MITIGACAO =
-  'Quando o mês corrente já gastou parte do teto de 1.150, o painel de decisão propõe um plano para as próximas semanas: ' +
+  'Quando o ciclo corrente (4 semanas) já gastou parte do teto de 1.150, o painel de decisão propõe um plano para as próximas semanas operacionais: ' +
   `(1) orçamento restante = saldo até 1.150 + gordura ainda disponível no período; ` +
   `(2) divisão do orçamento pelas semanas planejadas; ` +
   `(3) rateio proporcional à cota semanal de cada equipamento; ` +
   `(4) redução de ${REDUCAO_SEMANA_PRESSAO_PCT}% na semana de maior pressão; ` +
   `(5) corte adicional em quem já superou a média histórica no acumulado do mês. ` +
-  'Em mês novo, a cota mensal reinicia integralmente.';
+  'Em novo ciclo de 4 semanas, a cota do equipamento reinicia integralmente.';
 
 export const METODOLOGIA_EXCLUSOES =
   'Períodos excluídos do cálculo de médias e cotas: Jan–Mar/2022 (legado COVID), todo o ano de 2023 (racionamento), Abr/2026 (ruptura) e Mai/2026 enquanto parcial.';

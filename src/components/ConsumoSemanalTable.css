@@ -32,6 +32,24 @@
   background: linear-gradient(135deg, #f59e0b 50%, #dc2626 50%);
 }
 
+.csem-legend-fixa {
+  font-style: italic;
+}
+
+.csem-tag-mes {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #4338ca;
+  background: #eef2ff;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
 .csem-table-wrap {
   max-height: 70vh;
   overflow: auto;

@@ -73,10 +73,13 @@ export default function ConsumoSemanalTable({ dados }: Props) {
       <span>
         <i className="csem-dot csem-dot--media" /> Acima da média semanal
       </span>
-      <span>
-        <i className="csem-dot csem-dot--ambos" /> Acima dos dois
-      </span>
-    </div>
+        <span>
+          <i className="csem-dot csem-dot--ambos" /> Acima dos dois
+        </span>
+        <span className="csem-legend-fixa">
+          SAICA, WARAOS e Mãos Dadas: cota mensal única — sem alerta semanal
+        </span>
+      </div>
   );
 
   return (
@@ -146,10 +149,31 @@ export default function ConsumoSemanalTable({ dados }: Props) {
                   )}
                   {(showChildren ? fam.itens : fam.itens).map((r) => (
                     <tr key={r.servicoId} className="csem-row">
-                      <td className="csem-sticky csem-nome">{r.servicoNome}</td>
+                      <td className="csem-sticky csem-nome">
+                        {r.servicoNome}
+                        {r.cotaMensalUnica && (
+                          <span className="csem-tag-mes" title="Cota mensal única">
+                            mês
+                          </span>
+                        )}
+                      </td>
                       <td>{r.mediaHistorica > 0 ? num(r.mediaHistorica) : '—'}</td>
-                      <td>{r.cotaSemanal > 0 ? num(r.cotaSemanal) : '—'}</td>
-                      <td>{r.mediaSemanal > 0 ? num(r.mediaSemanal) : '—'}</td>
+                      <td>
+                        {r.cotaMensalUnica
+                          ? r.cotaMensal > 0
+                            ? `${num(r.cotaMensal)} mês`
+                            : '—'
+                          : r.cotaSemanal > 0
+                            ? num(r.cotaSemanal)
+                            : '—'}
+                      </td>
+                      <td>
+                        {r.cotaMensalUnica
+                          ? '—'
+                          : r.mediaSemanal > 0
+                            ? num(r.mediaSemanal)
+                            : '—'}
+                      </td>
                       {r.celulas.map((c, i) => (
                         <Fragment key={i}>{renderCelula(c)}</Fragment>
                       ))}

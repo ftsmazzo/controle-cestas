@@ -36,13 +36,30 @@ function renderUnitRow(r: MitigacaoEquipamentoRow, semanaCount: number) {
       <td className="mit-cell-nome mit-cell-unidade">{r.servicoNome}</td>
       <td>{num(r.enviadoAteAgora)}</td>
       <td>{num(r.cotaMensal)}</td>
-      <td className="mit-cell-muted" title="Teto por semana (cota ÷ semanas do mês)">
-        {r.cotaSemanal > 0 ? num(r.cotaSemanal) : '—'}
+      <td
+        className="mit-cell-muted"
+        title={
+          r.cotaMensalUnica
+            ? 'Cota mensal única — fora do rateio semanal'
+            : 'Teto por semana (cota ÷ 4 sem. operacionais)'
+        }
+      >
+        {r.cotaMensalUnica
+          ? r.cotaMensal > 0
+            ? `${num(r.cotaMensal)} mês`
+            : '—'
+          : r.cotaSemanal > 0
+            ? num(r.cotaSemanal)
+            : '—'}
       </td>
       <td className="mit-cell-muted">{num(r.espacoAteCota)}</td>
       {Array.from({ length: semanaCount }, (_, i) => (
-        <td key={i}>
-          <strong>{num(r.propostasSemana[i]?.cestas ?? 0)}</strong>
+        <td key={i} className={r.cotaMensalUnica ? 'mit-cell-muted' : undefined}>
+          {r.cotaMensalUnica ? (
+            '—'
+          ) : (
+            <strong>{num(r.propostasSemana[i]?.cestas ?? 0)}</strong>
+          )}
         </td>
       ))}
       <td className="mit-cell-muted">{num(r.demandaInercial2sem)}</td>
@@ -97,9 +114,15 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           <p className="mit-sub">{cenario.resumoCurto}</p>
         </div>
         <div className="mit-badges">
+          <span className="mit-badge">{cenario.labelCiclo}</span>
           <span className="mit-badge">
             Referência {cenario.semanaReferenciaLabel}
           </span>
+          {cenario.entregaInvertidaJun && (
+            <span className="mit-badge mit-badge--gordura" title="Plano ajustado: volumes Jun S1/S2 trocados conforme entrega real">
+              Jun S1↔S2 invertido
+            </span>
+          )}
           <span className="mit-badge mit-badge--gordura">
             Gordura período:{' '}
             <strong>
@@ -130,8 +153,8 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
         <>
           <div className="mit-formula-box">
             <p>
-              <strong>{num(cenario.tetoOperacional)}</strong> teto −{' '}
-              <strong>{num(cenario.enviadoMesAteAgora)}</strong> já gasto ={' '}
+              <strong>{num(cenario.tetoOperacional)}</strong> teto ciclo −{' '}
+              <strong>{num(cenario.enviadoCicloAteAgora)}</strong> já gasto ={' '}
               <strong>{num(cenario.saldoRestante1150)}</strong> restantes
               {cenario.gorduraNoPlano > 0 && (
                 <>
@@ -159,11 +182,11 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
           <div className="mit-summary-grid">
             <article className="mit-summary-card mit-summary-card--inercial">
               <span className="mit-summary-label">
-                Acumulado até {cenario.semanaReferenciaLabel}
+                Acumulado no ciclo até {cenario.semanaReferenciaLabel}
               </span>
-              <p className="mit-summary-value">{num(cenario.enviadoMesAteAgora)}</p>
+              <p className="mit-summary-value">{num(cenario.enviadoCicloAteAgora)}</p>
               <span className="mit-summary-hint">
-                Desde {cenario.semanaInicioControleLabel} no controle
+                {cenario.labelCiclo} · desde {cenario.semanaInicioControleLabel}
               </span>
             </article>
             <article className="mit-summary-card mit-summary-card--proposta">
@@ -172,7 +195,7 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
               </span>
               <p className="mit-summary-value">{num(cenario.orcamentoDistribuir)}</p>
               <span className="mit-summary-hint">
-                {num(cenario.saldoRestante1150)} até 1.150 +{' '}
+                {num(cenario.saldoRestante1150)} no ciclo +{' '}
                 {num(cenario.gorduraNoPlano)} gordura período
               </span>
             </article>
