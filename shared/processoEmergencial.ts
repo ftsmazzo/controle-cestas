@@ -26,14 +26,15 @@ import {
 /** Empenho total do processo (cestas disponíveis para distribuir) */
 export const EMPENHO_OPERACIONAL_TOTAL = EMPENHO_CESTAS_TOTAL_PADRAO;
 
-/** Teto operacional mensal — planejamento de distribuição */
-export const TETO_MENSAL_OPERACIONAL = 1150;
-
-/** Teto contratual mensal máximo */
-export const TETO_CONTRATUAL_MENSAL = 1200;
-
-/** Margem mensal para mitigação refinada (1200 − 1150) × 4 meses ≈ 200 no período */
-export const MARGEM_MITIGACAO_MENSAL = TETO_CONTRATUAL_MENSAL - TETO_MENSAL_OPERACIONAL;
+export {
+  MARGEM_MITIGACAO_MENSAL,
+  TETO_CONTRATUAL_MENSAL,
+  TETO_MENSAL_OPERACIONAL,
+} from './monitorConstants.js';
+import {
+  TETO_CONTRATUAL_MENSAL,
+  TETO_MENSAL_OPERACIONAL,
+} from './monitorConstants.js';
 
 export const PERIODO_REFERENCIA_INICIO = 'Set/2025';
 export const PERIODO_REFERENCIA_FIM = 'Mar/2026';

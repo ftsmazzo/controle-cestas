@@ -1,30 +1,23 @@
 import type { EmergencialMonitoramento } from './emergencyMonitoring.js';
-import {
-  MONITOR_CONTROLE_MES_INICIO,
-  MONITOR_CONTROLE_SEMANA_INICIO,
-  weeksInCalendarMonth,
-} from './emergencyMonitoring.js';
-import {
-  EMPENHO_DURACAO_MESES_PADRAO,
-  suggestEmpenhoMeses,
-} from './empenhoControle.js';
+import { weeksInCalendarMonth } from './calendarWeeks.js';
 import { getYearMonth, parseMonthKey } from './monthUtils.js';
 import {
-  MARGEM_MITIGACAO_MENSAL,
-  TETO_MENSAL_OPERACIONAL,
-} from './processoEmergencial.js';
+  CICLO_GORDURA_PERMITIDO,
+  GORDURA_PERIODO_CICLO,
+  MESES_EMPENHO_PADRAO,
+  MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
+  SEMANAS_POR_CICLO_OPERACIONAL,
+  TETO_CICLO_OPERACIONAL,
+} from './monitorConstants.js';
+import { totalEnviadoNaSemana } from './weeklyQty.js';
 
-/** Gordura do período (200) só pode compor o teto do 1º ciclo operacional */
-export const CICLO_GORDURA_PERMITIDO = 1;
-
-/** 50 × 4 meses = 200 cestas de gordura no empenho */
-export const GORDURA_PERIODO_CICLO = MARGEM_MITIGACAO_MENSAL * 4;
-import { totalEnviadoNaSemana } from './emergencyMonitoring.js';
-
-/** Semanas por ciclo de teto (1.150) — não é mês civil */
-export const SEMANAS_POR_CICLO_OPERACIONAL = 4;
-
-export const TETO_CICLO_OPERACIONAL = TETO_MENSAL_OPERACIONAL;
+export {
+  CICLO_GORDURA_PERMITIDO,
+  GORDURA_PERIODO_CICLO,
+  SEMANAS_POR_CICLO_OPERACIONAL,
+  TETO_CICLO_OPERACIONAL,
+} from './monitorConstants.js';
 
 /** 1ª semana operacional: quarta 20/05/2026 (relatório qua–ter; entrega seg–ter seguinte) */
 export const OPERACIONAL_ANCORAGEM = { year: 2026, month: 5, day: 20 };
@@ -110,9 +103,7 @@ export function listarSemanasCivisControle(
   empenhoMeses?: string[],
 ): CivilWeekKey[] {
   const meses =
-    empenhoMeses?.length
-      ? empenhoMeses
-      : suggestEmpenhoMeses(EMPENHO_DURACAO_MESES_PADRAO, MONITOR_CONTROLE_MES_INICIO);
+    empenhoMeses?.length ? empenhoMeses : [...MESES_EMPENHO_PADRAO];
   const kInicio = parseMonthKey(MONITOR_CONTROLE_MES_INICIO);
   const out: CivilWeekKey[] = [];
 

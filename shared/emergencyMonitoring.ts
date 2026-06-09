@@ -55,10 +55,25 @@ export interface SaldoSemanalRegistro {
   registradoEm: string;
 }
 
-/** Mês em que começa o controle semanal operacional (ponto zero) */
-export const MONITOR_CONTROLE_MES_INICIO = 'Mai/2026';
-/** 3ª semana civil do mês (seg–dom); em Mai/2026 = 18–24 (envios ~18–22) */
-export const MONITOR_CONTROLE_SEMANA_INICIO = 3;
+export {
+  MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
+} from './monitorConstants.js';
+export {
+  calendarWeekRangesInMonth,
+  weeksInCalendarMonth,
+} from './calendarWeeks.js';
+export { totalEnviadoNaSemana } from './weeklyQty.js';
+
+import {
+  MONITOR_CONTROLE_MES_INICIO,
+  MONITOR_CONTROLE_SEMANA_INICIO,
+} from './monitorConstants.js';
+import {
+  calendarWeekRangesInMonth,
+  weeksInCalendarMonth,
+} from './calendarWeeks.js';
+import { totalEnviadoNaSemana } from './weeklyQty.js';
 
 export interface EmergencialMonitoramento {
   saldoAtual: number | null;
@@ -267,24 +282,6 @@ export function registerSaldoSemanal(
   };
 }
 
-/** Intervalos seg–dom de cada semana do mês (a partir da 1ª segunda-feira do mês) */
-export function calendarWeekRangesInMonth(
-  year: number,
-  month: number,
-): { start: number; end: number }[] {
-  const lastDay = new Date(year, month, 0).getDate();
-  const firstDow = new Date(year, month - 1, 1).getDay();
-  let firstMonday = 1;
-  if (firstDow !== 1) {
-    firstMonday = 1 + (firstDow === 0 ? 1 : 8 - firstDow);
-  }
-  const ranges: { start: number; end: number }[] = [];
-  for (let start = firstMonday; start <= lastDay; start += 7) {
-    ranges.push({ start, end: Math.min(start + 6, lastDay) });
-  }
-  return ranges;
-}
-
 /** Dias do mês antes da 1ª segunda (ex.: 1–3 em Mai/2026), se houver */
 export function leadingDaysBeforeFirstMondayWeek(
   year: number,
@@ -329,10 +326,6 @@ export function semanaAtualParaMes(mes: string, now: Date = new Date()): number 
   return Math.min(weekOfMonth(now), semanasNoMes);
 }
 
-export function weeksInCalendarMonth(year: number, month: number): number {
-  return calendarWeekRangesInMonth(year, month).length || 4;
-}
-
 export function currentMonthLabelPt(date: Date = new Date()): string {
   const key = date.getFullYear() * 100 + (date.getMonth() + 1);
   return formatMonthKeyPt(key);
@@ -365,20 +358,6 @@ export function getWeeklyQty(
         parseMonthKey(e.mes) === mesKey &&
         e.semana === semana &&
         e.servicoId === servicoId,
-    )
-    .reduce((s, e) => s + (e.quantidade || 0), 0);
-}
-
-/** Total enviado na semana (todos os equipamentos) */
-export function totalEnviadoNaSemana(
-  mon: EmergencialMonitoramento,
-  mes: string,
-  semana: number,
-): number {
-  const mesKey = parseMonthKey(mes);
-  return mon.entradasSemanais
-    .filter(
-      (e) => parseMonthKey(e.mes) === mesKey && e.semana === semana,
     )
     .reduce((s, e) => s + (e.quantidade || 0), 0);
 }
