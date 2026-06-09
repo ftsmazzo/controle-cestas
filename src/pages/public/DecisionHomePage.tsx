@@ -6,7 +6,7 @@ import {
   resolveContextoPainelPublico,
 } from '@shared/emergencyMonitoring';
 import { buildCenarioMitigacao } from '@shared/cenarioMitigacao';
-import { buildEmpenhoControle, computeAutonomiaOperacional } from '@shared/empenhoControle';
+import { buildEmpenhoControle } from '@shared/empenhoControle';
 import {
   TETO_MENSAL_OPERACIONAL,
   TETO_CONTRATUAL_MENSAL,
@@ -52,13 +52,6 @@ export default function DecisionHomePage() {
     });
     const empenho = buildEmpenhoControle(payload);
     const cenario = buildCenarioMitigacao(payload, 2);
-    const autonomia = computeAutonomiaOperacional(
-      payload,
-      resumo.ritmoSemanalMedio,
-      resumo.enviadoSemanaAtual,
-      resumo.mes,
-      resumo.semanaAnalise,
-    );
     const tetoCiclo = resumo.metaMesTotal;
     const fechamentoProjetado =
       cenario.fechamentoCicloProjetado ?? resumo.enviadoMesTotal;
@@ -67,7 +60,7 @@ export default function DecisionHomePage() {
       tetoCiclo,
       cenario.dentroDoTetoCiclo ?? fechamentoProjetado <= tetoCiclo,
     );
-    return { resumo, empenho, autonomia, cenario, pill, ctx };
+    return { resumo, empenho, cenario, pill, ctx };
   }, [payload]);
 
   if (loading) return null;
@@ -84,7 +77,7 @@ export default function DecisionHomePage() {
     );
   }
 
-  const { empenho, autonomia, cenario, pill, resumo } = emergencial;
+  const { empenho, cenario, pill, resumo } = emergencial;
 
   return (
     <>
@@ -115,15 +108,25 @@ export default function DecisionHomePage() {
           <span className="home-kpi-icon" aria-hidden>
             <Activity size={20} />
           </span>
-          <span className="home-kpi-label">Ritmo de entrega (real)</span>
+          <span className="home-kpi-label">
+            {resumo.labelSemanaAnalise ?? `Semana S${resumo.semanaAnalise}`}
+          </span>
           <p className="home-kpi-value-line">
             <span className="home-kpi-number">
-              {num(resumo.ritmoSemanalMedio, 0)}
+              {num(resumo.enviadoSemanaFlex ?? resumo.enviadoSemanaAtual, 0)}
             </span>
-            <span className="home-kpi-unit">cestas/sem</span>
+            {resumo.planejadoSemanaFlex != null ? (
+              <span className="home-kpi-unit">
+                / {num(resumo.planejadoSemanaFlex, 0)} plano flex
+              </span>
+            ) : (
+              <span className="home-kpi-unit">cestas flex (sem fixos)</span>
+            )}
           </p>
           <span className="home-kpi-hint">
-            Empenho dura ~{num(autonomia.autonomiaSemanas, 0)} sem ao ritmo atual
+            {resumo.saudeEmpenho
+              ? `Empenho 16 sem.: sustentável ~${num(resumo.saudeEmpenho.ritmoSustentavel, 0)}/sem · ${resumo.saudeEmpenho.semanasDecorridas}/${resumo.saudeEmpenho.semanasTotal} sem.`
+              : 'Semana flexível — SAICA/WARAOS/Mãos Dadas fora do rateio'}
           </span>
         </article>
 

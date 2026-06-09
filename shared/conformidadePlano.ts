@@ -6,9 +6,16 @@ import {
   TOTAL_PLANO_JUN_S1,
   TOTAL_PLANO_JUN_S2,
 } from './planoAprovadoCiclo1.js';
-import { formatSemanaOperacionalCurta } from './operationalWeeks.js';
+import {
+  civilPorIndiceOperacional,
+  cicloOperacionalDeIndice,
+  formatSemanaOperacionalCurta,
+  indiceOperacionalCivil,
+  SEMANAS_POR_CICLO_OPERACIONAL,
+} from './operationalWeeks.js';
 import type { ServiceDef } from './serviceTypes.js';
 import { isServicoCotaMensalUnica } from './coderpRequisitanteRules.js';
+import { consumptionUnits } from './serviceFamilies.js';
 
 export interface ConformidadeSemanaPlano {
   mes: string;
@@ -29,28 +36,50 @@ export interface ConformidadePlanoJun {
   mensagem: string;
 }
 
-function totalFlexSemana(
+/** Soma lançamentos flexíveis (exclui SAICA, WARAOS e Mãos Dadas) — só unidades de consumo */
+export function totalFlexSemana(
   mon: EmergencialMonitoramento,
   mes: string,
   semana: number,
   services: ServiceDef[],
 ): number {
   let t = 0;
-  for (const s of services) {
+  for (const s of consumptionUnits(services)) {
     if (isServicoCotaMensalUnica(s.nome)) continue;
     t += getWeeklyQty(mon, mes, semana, s.id);
   }
   return t;
 }
 
-function planejadoFlexSemana(
+/** Plano aprovado Jun flexível — alinhado à programação (sem cotas mensais únicas) */
+export function planejadoFlexJunSemana(
   services: ServiceDef[],
   semanaJun: 1 | 2,
 ): number {
   let t = 0;
-  for (const s of services) {
+  for (const s of consumptionUnits(services)) {
     if (isServicoCotaMensalUnica(s.nome)) continue;
     t += planoJunSemana(s.nome, semanaJun) ?? 0;
+  }
+  return t;
+}
+
+export function totalFlexCicloOperacional(
+  mon: EmergencialMonitoramento,
+  mesRef: string,
+  semanaRef: number,
+  services: ServiceDef[],
+  empenhoMeses?: string[],
+): number {
+  const idx = indiceOperacionalCivil(mesRef, semanaRef, empenhoMeses);
+  if (idx == null) return 0;
+  const ciclo = cicloOperacionalDeIndice(idx);
+  const inicio = (ciclo - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
+  let t = 0;
+  for (let i = inicio; i <= idx; i++) {
+    const civil = civilPorIndiceOperacional(i, empenhoMeses);
+    if (!civil) continue;
+    t += totalFlexSemana(mon, civil.mes, civil.semana, services);
   }
   return t;
 }
@@ -65,7 +94,7 @@ export function auditoriaPlanoJunCiclo1(
 
   for (const semana of [1, 2] as const) {
     const lancadoFlex = totalFlexSemana(mon, 'Jun/2026', semana, services);
-    const planejadoFlex = planejadoFlexSemana(services, semana);
+    const planejadoFlex = planejadoFlexJunSemana(services, semana);
     const jaLancada = lancadoFlex > 0;
     const delta = jaLancada ? lancadoFlex - planejadoFlex : 0;
     const conforme = jaLancada

@@ -2,6 +2,7 @@ import {
   auditoriaPlanoJunCiclo1,
   semanaJaLancada,
   type ConformidadePlanoJun,
+  planejadoFlexJunSemana,
 } from './conformidadePlano.js';
 import {
   buildMonitoramentoResumo,
@@ -57,7 +58,7 @@ import {
 } from './planoAprovadoCiclo1.js';
 import { consumptionUnits, groupByFamilia, type FamiliaGroup } from './serviceFamilies.js';
 import { buildTabelaCessaoEmergencial } from './tabelaCessaoEmergencial.js';
-import type { ServicesPayload } from './serviceTypes.js';
+import type { ServiceDef, ServicesPayload } from './serviceTypes.js';
 import { totalEnviadoNaSemana } from './weeklyQty.js';
 
 export const GORDURA_PERIODO_TOTAL =
@@ -295,6 +296,7 @@ function aplicarPlanoAprovadoJun(
   alvos: AlvoSemanaMitigacao[],
   resultado: ResultadoDuasSemanas,
   units: DraftUnit[],
+  services: ServiceDef[],
 ): ResultadoDuasSemanas {
   const junKey = parseMonthKey('Jun/2026');
   const idxS1 = alvos.findIndex(
@@ -321,15 +323,8 @@ function aplicarPlanoAprovadoJun(
   }
 
   const totaisProposta = [...resultado.totaisProposta];
-  let t1 = 0;
-  let t2 = 0;
-  for (const u of units) {
-    if (isServicoCotaMensalUnica(u.servicoNome)) continue;
-    t1 += planoJunSemana(u.servicoNome, 1) ?? 0;
-    t2 += planoJunSemana(u.servicoNome, 2) ?? 0;
-  }
-  totaisProposta[idxS1] = t1;
-  totaisProposta[idxS2] = t2;
+  totaisProposta[idxS1] = planejadoFlexJunSemana(services, 1);
+  totaisProposta[idxS2] = planejadoFlexJunSemana(services, 2);
 
   return { ...resultado, porUnidade, totaisProposta };
 }
@@ -979,7 +974,7 @@ export function buildCenarioMitigacao(
   const entregaInvertidaJun = deveInverterJunSemanas(alvos) != null;
   const usaPlanoAprovadoJun = cicloInfo.ciclo === 1 && entregaInvertidaJun;
   if (usaPlanoAprovadoJun) {
-    resultado = aplicarPlanoAprovadoJun(alvos, resultado, drafts);
+    resultado = aplicarPlanoAprovadoJun(alvos, resultado, drafts, payload.services);
   } else if (entregaInvertidaJun) {
     resultado = aplicarInversaoJun(alvos, resultado);
   }

@@ -21,6 +21,7 @@ import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from './requisicaoHistorico.js';
 import type { ServicesPayload } from './serviceTypes.js';
 import { labelFonteProjecao } from './projecaoOperacionalCiclo.js';
 import type { FonteProjecaoOperacional } from './projecaoOperacionalCiclo.js';
+import type { SaudeEmpenhoProcesso } from './saudeEmpenhoProcesso.js';
 import type { DashboardState } from './types.js';
 
 export const MESES_SAUDE_IDEAIS = 4;
@@ -68,6 +69,11 @@ export interface SaudeDistribuicao {
   empenho: EmpenhoControleResumo;
   acoesSemana: string[];
   resumoDecisao: string;
+  resumoDecisaoCiclo: string;
+  resumoDecisaoEmpenho: string;
+  saudeEmpenho: SaudeEmpenhoProcesso | null;
+  nivelEmpenhoProcesso: SaudeNivel;
+  nivelCicloSemana: SaudeNivel;
 }
 
 function nivelLimiteParaSaude(pctUso: number): SaudeNivel {
@@ -113,7 +119,11 @@ export type MonitorResumoSaude = Pick<
   | 'pctProjecaoMes'
   | 'estouroProjetadoMes'
   | 'ritmoSemanalMedio'
+  | 'ritmoOperacionalForward'
   | 'semanasRestantesNoMes'
+  | 'semanasRestantesCiclo'
+  | 'planejadoSemanaAtual'
+  | 'limiteSemanaFonte'
   | 'semanaProjetadaEstouro'
   | 'autonomiaDiasSaldo'
   | 'ritmoSemanalReferencia'
@@ -129,6 +139,7 @@ export type MonitorResumoSaude = Pick<
   | 'projecaoFonte'
   | 'novoCicloPlanejamento'
   | 'labelCiclo'
+  | 'saudeEmpenho'
 >;
 
 interface MonitoramentoResumoShape {
@@ -178,6 +189,11 @@ interface MonitoramentoResumoShape {
   projecaoFonte?: FonteProjecaoOperacional;
   novoCicloPlanejamento?: boolean;
   labelCiclo?: string;
+  ritmoOperacionalForward?: number;
+  semanasRestantesCiclo?: number;
+  planejadoSemanaAtual?: number | null;
+  limiteSemanaFonte?: 'plano' | 'margem_ciclo';
+  saudeEmpenho?: SaudeEmpenhoProcesso;
 }
 
 function estimateConsumoReferenciaRateio(
@@ -239,9 +255,10 @@ export function buildSaudeDistribuicao(
     estimateConsumoReferenciaRateio(payload, limiteMensal, dashboard);
 
   const empenho = buildEmpenhoControle(payload);
+  const saudeEmpenho = resumo.saudeEmpenho ?? null;
   const autonomiaOp = computeAutonomiaOperacional(
     payload,
-    resumo.ritmoSemanalMedio,
+    saudeEmpenho?.ritmoSustentavel ?? resumo.ritmoSemanalMedio,
     resumo.enviadoSemanaAtual,
     resumo.mes,
     resumo.semanaAnalise,
@@ -257,67 +274,71 @@ export function buildSaudeDistribuicao(
   const ritmoSemanaAtual = autonomiaOp.ritmoSemanaAtual;
   const semanasPeriodoRestantes = autonomiaOp.semanasPeriodoRestantes;
   const semanasPeriodoTotal = autonomiaOp.semanasPeriodoTotal;
-  const empenhoAcabaAntesDoPeriodo = autonomiaOp.empenhoAcabaAntesDoPeriodo;
+  const empenhoAcabaAntesDoPeriodo = saudeEmpenho
+    ? !saudeEmpenho.noTrilho || saudeEmpenho.acimaRitmoSustentavel
+    : autonomiaOp.empenhoAcabaAntesDoPeriodo;
   const mesesPeriodoRestantes = autonomiaOp.mesesPeriodoRestantes;
 
-  const nivelEstoque = nivelAutonomiaEmpenho(
-    autonomiaMeses,
-    mesesPeriodoRestantes,
-  );
+  const nivelEmpenhoProcesso: SaudeNivel = saudeEmpenho
+    ? saudeEmpenho.noTrilho && !saudeEmpenho.acimaRitmoSustentavel
+      ? 'verde'
+      : saudeEmpenho.noTrilho
+        ? 'amarelo'
+        : 'vermelho'
+    : nivelAutonomiaEmpenho(autonomiaMeses, mesesPeriodoRestantes);
   const pctUsoLimiteMes = resumo.pctMes;
   const pctUsoLimiteSemana = resumo.pctLimiteSemana;
   const nivelLimiteMes = nivelLimiteParaSaude(pctUsoLimiteMes);
   const nivelLimiteSemana = nivelLimiteParaSaude(pctUsoLimiteSemana);
-
   const estouroMes = resumo.estouroMes;
   const estouroSemana = resumo.estouroSemana;
   const margemMes = resumo.margemMes;
   const margemSemana = resumo.margemSemana;
-
-  const pctEstoque =
-    autonomiaMeses != null && duracaoMesesEmpenho > 0
-      ? Math.min(100, (autonomiaMeses / duracaoMesesEmpenho) * 100)
-      : 40;
-  const scoreMes = scoreDentroDoLimite(pctUsoLimiteMes);
-  const scoreSemana = scoreDentroDoLimite(pctUsoLimiteSemana);
-  const mesEmpenho = empenho.meses.find(
-    (m) => parseMonthKey(m.mes) === parseMonthKey(resumo.mes),
-  );
-  const pctEmpenhoMes =
-    mesEmpenho && mesEmpenho.metaMensal > 0
-      ? (mesEmpenho.enviado / mesEmpenho.metaMensal) * 100
-      : pctUsoLimiteMes;
-  const scoreEmpenho = scoreDentroDoLimite(pctEmpenhoMes);
-
   const pctProjecaoMes = resumo.pctProjecaoMes;
   const estouroProjetadoMes = resumo.estouroProjetadoMes;
-  const scoreProjecao = scoreDentroDoLimite(pctProjecaoMes);
 
-  let indiceSaudeGeral = Math.round(
-    pctEstoque * 0.35 +
-      scoreMes * 0.25 +
-      scoreSemana * 0.15 +
-      scoreProjecao * 0.15 +
-      scoreEmpenho * 0.1,
+  const nivelCicloSemana: SaudeNivel =
+    estouroMes > 0 || estouroSemana > 0 || estouroProjetadoMes > 0
+      ? 'vermelho'
+      : nivelLimiteMes === 'vermelho' || nivelLimiteSemana === 'vermelho'
+        ? 'vermelho'
+        : nivelLimiteMes === 'amarelo' ||
+            nivelLimiteSemana === 'amarelo' ||
+            pctProjecaoMes > 92
+          ? 'amarelo'
+          : 'verde';
+
+  const scoreMes = scoreDentroDoLimite(pctUsoLimiteMes);
+  const scoreSemana = scoreDentroDoLimite(pctUsoLimiteSemana);
+  const scoreProjecao = scoreDentroDoLimite(pctProjecaoMes);
+  const scoreCiclo = Math.round(
+    (scoreMes + scoreSemana + scoreProjecao) / 3,
   );
-  if (estouroMes > 0 || estouroSemana > 0) {
+  const pctFechamentoProcesso = saudeEmpenho
+    ? (saudeEmpenho.fechamentoProjetadoProcesso / saudeEmpenho.totalEmpenho) *
+      100
+    : 100;
+  const scoreEmpenhoProcesso = scoreDentroDoLimite(pctFechamentoProcesso);
+
+  let indiceSaudeGeral = Math.round(scoreCiclo * 0.5 + scoreEmpenhoProcesso * 0.5);
+  if (nivelCicloSemana === 'vermelho') {
     indiceSaudeGeral = Math.min(indiceSaudeGeral, 45);
   }
-  if (estouroProjetadoMes > 0 || pctProjecaoMes > 100) {
+  if (nivelEmpenhoProcesso === 'vermelho') {
     indiceSaudeGeral = Math.min(indiceSaudeGeral, 40);
-  }
-  if (empenhoAcabaAntesDoPeriodo) {
-    indiceSaudeGeral = Math.min(indiceSaudeGeral, 35);
   }
   if (empenho.restante < 0) {
     indiceSaudeGeral = Math.min(indiceSaudeGeral, 30);
   }
 
+  const mesEmpenho = empenho.meses.find(
+    (m) => parseMonthKey(m.mes) === parseMonthKey(resumo.mes),
+  );
   const acoesSemana: string[] = [];
 
-  if (autonomiaSemanas != null && ritmoReferencia > 0) {
+  if (saudeEmpenho) {
     acoesSemana.push(
-      `Empenho: ${num(cestasDisponiveis)} cestas restantes · ritmo ref. ~${num(ritmoReferencia)}/sem${ritmoSemanaAtual > resumo.ritmoSemanalMedio ? ` (semana atual ${num(ritmoSemanaAtual)})` : ''} · dura ~${autonomiaSemanas.toFixed(1)} sem.`,
+      `Empenho (16 sem.): ${num(saudeEmpenho.restante)} restantes · ${saudeEmpenho.semanasDecorridas}/${saudeEmpenho.semanasTotal} sem. · sustentável ~${num(saudeEmpenho.ritmoSustentavel)}/sem · real ~${num(saudeEmpenho.ritmoRealMedio)}/sem · proj. ${num(saudeEmpenho.fechamentoProjetadoProcesso)}/${num(saudeEmpenho.totalEmpenho)}.`,
     );
   }
 
@@ -331,27 +352,23 @@ export function buildSaudeDistribuicao(
     );
   }
 
-  if (empenhoAcabaAntesDoPeriodo && autonomiaSemanas != null) {
+  if (saudeEmpenho && !saudeEmpenho.noTrilho) {
     acoesSemana.push(
-      `Crítico — empenho acaba em ~${autonomiaSemanas.toFixed(1)} semana(s) (${autonomiaDias ?? '—'} dias) ao ritmo atual; o período ainda tem ~${semanasPeriodoRestantes} semana(s).`,
+      `Crítico — empenho: fechamento projetado ${num(saudeEmpenho.fechamentoProjetadoProcesso)} ultrapassa ${num(saudeEmpenho.totalEmpenho)} (16 semanas, ciclos 1.350 + 1.150).`,
     );
   }
 
   if (
-    estouroProjetadoMes > 0 &&
-    estouroMes === 0 &&
-    !resumo.usaPlanoOperacional
-  ) {
-    acoesSemana.push(
-      `Projeção estoura o teto antes do fim do mês (+${num(estouroProjetadoMes)} cestas)${resumo.semanaProjetadaEstouro != null ? ` — previsto na S${resumo.semanaProjetadaEstouro}` : ''}. Cortar já na próxima semana.`,
-    );
-  } else if (
-    resumo.usaPlanoOperacional &&
+    resumo.usaCicloOperacional &&
     estouroProjetadoMes === 0 &&
-    resumo.usaCicloOperacional
+    resumo.usaPlanoOperacional
   ) {
     acoesSemana.push(
-      `Fechamento operacional ${num(resumo.projecaoMesTotal)} no teto do ciclo (${resumo.projecaoFonte ? labelFonteProjecao(resumo.projecaoFonte as FonteProjecaoOperacional) : 'plano'}) — ritmo inercial não guia a projeção.`,
+      `Ciclo/semana: fechamento ${num(resumo.projecaoMesTotal)} no teto ${num(limiteMensal)} (${resumo.projecaoFonte ? labelFonteProjecao(resumo.projecaoFonte as FonteProjecaoOperacional) : 'plano'}).`,
+    );
+  } else if (estouroProjetadoMes > 0 && estouroMes === 0) {
+    acoesSemana.push(
+      `Ciclo: projeção estoura o teto (+${num(estouroProjetadoMes)} cestas)${resumo.semanaProjetadaEstouro != null ? ` — previsto na S${resumo.semanaProjetadaEstouro}` : ''}.`,
     );
   }
 
@@ -401,29 +418,25 @@ export function buildSaudeDistribuicao(
     );
   }
 
-  let resumoDecisao: string;
+  let resumoDecisaoCiclo: string;
   if (estouroMes > 0 || estouroSemana > 0) {
-    resumoDecisao = `Fora do controle: estouro ${estouroMes > 0 ? `mensal +${num(estouroMes)}` : ''}${estouroMes > 0 && estouroSemana > 0 ? ' · ' : ''}${estouroSemana > 0 ? `semanal +${num(estouroSemana)}` : ''} (teto ${num(limiteMensal)}/mês).`;
-  } else if (empenhoAcabaAntesDoPeriodo && autonomiaSemanas != null) {
-    resumoDecisao = `Empenho dura ~${autonomiaSemanas.toFixed(1)} semana(s) (~${autonomiaMeses?.toFixed(1) ?? '—'} meses) ao ritmo ~${num(ritmoReferencia)}/sem — o período ainda tem ~${semanasPeriodoRestantes} semana(s). Cortar volume na próxima semana.`;
+    resumoDecisaoCiclo = `Ciclo/semana fora do teto: ${estouroMes > 0 ? `ciclo +${num(estouroMes)}` : ''}${estouroMes > 0 && estouroSemana > 0 ? ' · ' : ''}${estouroSemana > 0 ? `semana +${num(estouroSemana)}` : ''}.`;
   } else if (
     resumo.usaPlanoOperacional &&
     estouroProjetadoMes === 0 &&
     resumo.usaCicloOperacional
   ) {
-    resumoDecisao = `Controle nos trilhos: ${num(resumo.enviadoMesTotal)} enviadas no ${resumo.labelCiclo ?? 'ciclo'} · fechamento operacional ${num(resumo.projecaoMesTotal)} (${pctProjecaoMes.toFixed(0)}% do teto) — plano aprovado, não projeção inercial.`;
+    resumoDecisaoCiclo = `Ciclo no trilho: ${num(resumo.enviadoMesTotal)}/${num(limiteMensal)} · fechamento ${num(resumo.projecaoMesTotal)} (${pctProjecaoMes.toFixed(0)}% do teto do ciclo).`;
   } else if (estouroProjetadoMes > 0) {
-    resumoDecisao = `Dentro do teto hoje (${pctUsoLimiteMes.toFixed(0)}%), mas projeção ${pctProjecaoMes.toFixed(0)}% (+${num(estouroProjetadoMes)} cestas)${resumo.semanaProjetadaEstouro != null ? ` — estouro previsto na S${resumo.semanaProjetadaEstouro}` : ''}. Cortar volume na próxima semana.`;
-  } else if (
-    nivelLimiteMes === 'verde' &&
-    nivelLimiteSemana === 'verde' &&
-    autonomiaMeses != null &&
-    autonomiaMeses >= mesesPeriodoRestantes
-  ) {
-    resumoDecisao = `Controle estável: ${pctUsoLimiteMes.toFixed(0)}% do teto mensal · ${pctUsoLimiteSemana.toFixed(0)}% da semana · empenho dura ~${autonomiaMeses.toFixed(1)} mês(es) ao ritmo atual.`;
+    resumoDecisaoCiclo = `Ciclo: projeção ${pctProjecaoMes.toFixed(0)}% do teto (+${num(estouroProjetadoMes)} cestas).`;
   } else {
-    resumoDecisao = `Uso ${pctUsoLimiteMes.toFixed(0)}% do teto ${num(limiteMensal)} · S${resumo.semanaAnalise} ${pctUsoLimiteSemana.toFixed(0)}% · margem ${num(margemMes)} no mês · empenho ${num(empenho.restante)} restantes.`;
+    resumoDecisaoCiclo = `Ciclo: ${pctUsoLimiteMes.toFixed(0)}% do teto · semana ${pctUsoLimiteSemana.toFixed(0)}% · margem ${num(margemMes)}.`;
   }
+
+  const resumoDecisaoEmpenho = saudeEmpenho
+    ? saudeEmpenho.mensagem
+    : `Empenho: ${num(empenho.restante)} restantes.`;
+  const resumoDecisao = `${resumoDecisaoCiclo} ${resumoDecisaoEmpenho}`;
 
   return {
     mesesIdeais,
@@ -442,7 +455,7 @@ export function buildSaudeDistribuicao(
     semanasPeriodoRestantes,
     semanasPeriodoTotal,
     empenhoAcabaAntesDoPeriodo,
-    nivelEstoque,
+    nivelEstoque: nivelEmpenhoProcesso,
     nivelLimiteMes,
     nivelLimiteSemana,
     indiceSaudeGeral,
@@ -465,6 +478,11 @@ export function buildSaudeDistribuicao(
     empenho,
     acoesSemana,
     resumoDecisao,
+    resumoDecisaoCiclo,
+    resumoDecisaoEmpenho,
+    saudeEmpenho,
+    nivelEmpenhoProcesso,
+    nivelCicloSemana,
   };
 }
 

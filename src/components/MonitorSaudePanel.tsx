@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import {
   buildSaudeDistribuicao,
-  MESES_SAUDE_IDEAIS,
   type SaudeDistribuicao,
   type SaudeNivel,
 } from '@shared/monitorSaude';
@@ -25,21 +24,19 @@ const FONTE_RATEIO_LABEL: Record<SaudeDistribuicao['consumoFonteRateio'], string
 };
 
 function nivelGeral(saude: SaudeDistribuicao): SaudeNivel {
-  if (saude.estouroMes > 0 || saude.estouroSemana > 0) return 'vermelho';
-  if (saude.estouroProjetadoMes > 0 || saude.empenhoAcabaAntesDoPeriodo) {
+  if (saude.nivelCicloSemana === 'vermelho' || saude.nivelEmpenhoProcesso === 'vermelho') {
     return 'vermelho';
   }
-  if (saude.nivelLimiteMes === 'vermelho' || saude.nivelLimiteSemana === 'vermelho') {
-    return 'vermelho';
-  }
-  if (
-    saude.pctProjecaoMes > 92 ||
-    saude.nivelLimiteMes === 'amarelo' ||
-    saude.nivelLimiteSemana === 'amarelo'
-  ) {
+  if (saude.nivelCicloSemana === 'amarelo' || saude.nivelEmpenhoProcesso === 'amarelo') {
     return 'amarelo';
   }
-  return saude.nivelEstoque;
+  return 'verde';
+}
+
+function NivelBadge({ nivel, label }: { nivel: SaudeNivel; label: string }) {
+  return (
+    <span className={`monitor-saude-badge monitor-saude-badge--${nivel}`}>{label}</span>
+  );
 }
 
 interface Props {
@@ -55,10 +52,10 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
   );
 
   const nivel = nivelGeral(saude);
-
-  const pctBar =
-    saude.autonomiaMeses != null && saude.duracaoMesesEmpenho > 0
-      ? Math.min(100, (saude.autonomiaMeses / saude.duracaoMesesEmpenho) * 100)
+  const empenhoProc = saude.saudeEmpenho;
+  const pctBarEmpenho =
+    empenhoProc && empenhoProc.semanasTotal > 0
+      ? Math.min(100, (empenhoProc.semanasDecorridas / empenhoProc.semanasTotal) * 100)
       : 0;
 
   return (
@@ -69,35 +66,18 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           Índice {saude.indiceSaudeGeral}%
         </span>
       </div>
-      <p className="hint monitor-saude-lead">{saude.resumoDecisao}</p>
 
-      {(saude.autonomiaSemanas != null || saude.pctProjecaoMes > 0) && (
-        <div className={`monitor-saude-prazo monitor-saude-prazo--${nivel}`}>
-          <h4>Prazo para decisão (empenho · 4 meses)</h4>
-          {saude.autonomiaSemanas != null && (
-            <p className="monitor-saude-prazo-destaque">
-              <strong>
-                Com ritmo ~{num(saude.ritmoReferencia, 0)}/sem, o empenho dura ~
-                {num(saude.autonomiaSemanas, 1)} semana(s)
-              </strong>
-              {saude.autonomiaDias != null && <> (~{saude.autonomiaDias} dias)</>}
-              {saude.ritmoSemanaAtual > saude.ritmoSemanalConsumo && (
-                <>
-                  {' '}
-                  (semana atual: {num(saude.ritmoSemanaAtual, 0)}/sem)
-                </>
-              )}
-              <span className="monitor-saude-prazo-sub">
-                {' '}
-                · {num(saude.cestasDisponiveis, 0)} cestas restantes no período
-              </span>
-              {saude.empenhoAcabaAntesDoPeriodo && (
-                <span className="monitor-saude-prazo-alerta">
-                  {' '}
-                  — acaba antes do fim dos {saude.duracaoMesesEmpenho} meses (faltam ~
-                  {num(saude.semanasPeriodoRestantes, 0)} sem. no contrato)
-                </span>
-              )}
+      <div className="monitor-saude-escopos">
+        <article className={`monitor-saude-escopo monitor-saude-escopo--${saude.nivelCicloSemana}`}>
+          <div className="monitor-saude-escopo-head">
+            <h4>Ciclo e semana</h4>
+            <NivelBadge nivel={saude.nivelCicloSemana} label="4 semanas · zera a cada ciclo" />
+          </div>
+          <p className="hint monitor-saude-lead">{saude.resumoDecisaoCiclo}</p>
+          {resumo.novoCicloPlanejamento && (
+            <p className="monitor-saude-escopo-nota">
+              Novo ciclo em planejamento — contadores de ciclo/semana reiniciam no teto{' '}
+              {num(saude.limiteMensal, 0)}.
             </p>
           )}
           {saude.pctProjecaoMes > 0 && (
@@ -125,52 +105,50 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
               )}
             </p>
           )}
-        </div>
-      )}
+        </article>
 
-      <div className="monitor-saude-autonomia">
-        <div className="monitor-saude-autonomia-labels">
-          <span>0</span>
-          <span className="monitor-saude-meta-line">
-            Duração do empenho ({saude.duracaoMesesEmpenho} meses)
-          </span>
-          <span>{saude.duracaoMesesEmpenho} m</span>
-        </div>
-        <div
-          className="monitor-saude-track"
-          role="img"
-          aria-label="Meses de empenho ao ritmo atual"
+        <article
+          className={`monitor-saude-escopo monitor-saude-escopo--${saude.nivelEmpenhoProcesso}`}
         >
-          <div
-            className={`monitor-saude-fill monitor-saude-fill--${nivel}`}
-            style={{ width: `${pctBar}%` }}
-          />
-        </div>
-        <p className="monitor-saude-autonomia-valor">
-          {saude.autonomiaMeses != null ? (
+          <div className="monitor-saude-escopo-head">
+            <h4>Empenho do processo</h4>
+            <NivelBadge nivel={saude.nivelEmpenhoProcesso} label="16 sem. · cumulativo" />
+          </div>
+          <p className="hint monitor-saude-lead">{saude.resumoDecisaoEmpenho}</p>
+          {empenhoProc && (
             <>
-              <strong>{num(saude.autonomiaMeses)}</strong> meses ao ritmo atual
-              <span className="monitor-saude-gap">
-                {' '}
-                (período:{' '}
-                {num(saude.semanasPeriodoTotal - saude.semanasPeriodoRestantes, 0)} sem.
-                decorridas ·{' '}
-                {num(saude.semanasPeriodoRestantes, 0)} restantes de{' '}
-                {num(saude.semanasPeriodoTotal, 0)})
-              </span>
+              <div className="monitor-saude-autonomia">
+                <div className="monitor-saude-autonomia-labels">
+                  <span>0</span>
+                  <span className="monitor-saude-meta-line">
+                    {empenhoProc.semanasDecorridas}/{empenhoProc.semanasTotal} semanas operacionais
+                  </span>
+                  <span>{empenhoProc.semanasTotal}</span>
+                </div>
+                <div
+                  className="monitor-saude-track"
+                  role="img"
+                  aria-label="Progresso do processo em 16 semanas"
+                >
+                  <div
+                    className={`monitor-saude-fill monitor-saude-fill--${saude.nivelEmpenhoProcesso}`}
+                    style={{ width: `${pctBarEmpenho}%` }}
+                  />
+                </div>
+                <p className="monitor-saude-autonomia-valor">
+                  <strong>{num(empenhoProc.restante, 0)}</strong> cestas restantes · ritmo real ~
+                  {num(empenhoProc.ritmoRealMedio, 0)}/sem · sustentável ~
+                  {num(empenhoProc.ritmoSustentavel, 0)}/sem · fechamento projetado{' '}
+                  <strong>{num(empenhoProc.fechamentoProjetadoProcesso, 0)}</strong> /{' '}
+                  {num(empenhoProc.totalEmpenho, 0)}
+                </p>
+              </div>
             </>
-          ) : (
-            'Lance envios semanais para calcular autonomia ao ritmo'
           )}
-        </p>
+        </article>
       </div>
 
       <div className="monitor-saude-grid">
-        <article className="monitor-saude-card">
-          <span className="monitor-saude-card-label">Saldo Banco</span>
-          <strong>{num(saude.saldoAtual, 0)}</strong>
-          <span className="monitor-saude-card-sub">cestas</span>
-        </article>
         <article
           className={`monitor-saude-card${saude.estouroMes > 0 ? ' monitor-saude-card--over' : ''}`}
         >
@@ -196,6 +174,12 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           <strong>{num(saude.limiteSemanal, 0)}</strong>
           <span className="monitor-saude-card-sub">
             uso {num(saude.pctUsoLimiteSemana, 0)}% · {num(saude.enviadoSemana, 0)} enviadas
+            {resumo.planejadoSemanaAtual != null
+              ? ` · plano ${num(resumo.planejadoSemanaAtual)}`
+              : ''}
+            {resumo.semanasRestantesCiclo != null
+              ? ` · margem ciclo ${num(resumo.margemMes)}`
+              : ''}
           </span>
         </article>
         <article
@@ -215,6 +199,11 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           </span>
         </article>
         <article className="monitor-saude-card">
+          <span className="monitor-saude-card-label">Saldo Banco</span>
+          <strong>{num(saude.saldoAtual, 0)}</strong>
+          <span className="monitor-saude-card-sub">cestas</span>
+        </article>
+        <article className="monitor-saude-card">
           <span className="monitor-saude-card-label">Ref. rateio</span>
           <strong>{num(saude.consumoReferenciaRateio, 0)}</strong>
           <span className="monitor-saude-card-sub">
@@ -222,11 +211,14 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           </span>
         </article>
         <article className="monitor-saude-card">
-          <span className="monitor-saude-card-label">Empenho período</span>
+          <span className="monitor-saude-card-label">Empenho total</span>
           <strong>{num(saude.empenho.restante, 0)}</strong>
           <span className="monitor-saude-card-sub">
             restantes de {num(saude.empenho.totalEmpenho, 0)} · usado{' '}
             {num(saude.empenho.totalConsumido, 0)}
+            {empenhoProc
+              ? ` · ${empenhoProc.semanasDecorridas}/${empenhoProc.semanasTotal} sem.`
+              : ''}
           </span>
         </article>
       </div>
@@ -276,12 +268,12 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
 
       <div className="monitor-saude-legend">
         <span>
-          <i className="dot dot-estoque" /> Empenho (35%): meses ao ritmo ÷{' '}
-          {saude.duracaoMesesEmpenho} meses do contrato
+          <i className="dot dot-estoque" /> Ciclo/semana (50%): teto, semana e projeção do ciclo — zera
+          a cada 4 semanas
         </span>
         <span>
-          <i className="dot dot-ritmo" /> Teto mês (25%) · projeção (15%) · semana S
-          {resumo.semanaAnalise} (15%) · empenho (10%)
+          <i className="dot dot-ritmo" /> Empenho processo (50%): 5.000 em 16 semanas (1.350 + 1.150×3)
+          — cumulativo, não zera entre ciclos
         </span>
       </div>
     </section>

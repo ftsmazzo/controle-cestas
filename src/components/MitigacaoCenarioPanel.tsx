@@ -218,6 +218,10 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
             >
               <CheckCircle2 size={18} aria-hidden />
               <p>{cenario.conformidadePlano.mensagem}</p>
+              <p className="mit-conformidade-nota">
+                Comparativo flexível — exclui SAICA, WARAOS e Mãos Dadas (cota mensal
+                única).
+              </p>
               <ul className="mit-conformidade-list">
                 {cenario.conformidadePlano.semanas.map((s) => (
                   <li key={`${s.mes}-S${s.semana}`}>
@@ -225,11 +229,11 @@ export default function MitigacaoCenarioPanel({ payload }: Props) {
                     {s.jaLancada ? (
                       <>
                         {' '}
-                        lançado {num(s.lancadoFlex)} · plano {num(s.planejadoFlex)}
+                        flex {num(s.lancadoFlex)} · plano {num(s.planejadoFlex)}
                         {s.conforme ? ' ✓' : ` (Δ ${num(s.delta)})`}
                       </>
                     ) : (
-                      <> · plano {num(s.planejadoFlex)} (a lançar)</>
+                      <> · plano flex {num(s.planejadoFlex)} (a lançar)</>
                     )}
                   </li>
                 ))}

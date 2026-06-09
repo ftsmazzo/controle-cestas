@@ -514,6 +514,12 @@ export default function EmergencialMonitorPanel({
               {resumoAnalise.estouroSemana > 0
                 ? ` · +${num(resumoAnalise.estouroSemana)}`
                 : ` · margem ${num(resumoAnalise.margemSemana)}`}
+              {resumoAnalise.planejadoSemanaAtual != null
+                ? ` · plano ${num(resumoAnalise.planejadoSemanaAtual)}`
+                : ''}
+              {resumoAnalise.semanasRestantesCiclo != null
+                ? ` · ${resumoAnalise.semanasRestantesCiclo} sem. rest. no ciclo (margem ${num(resumoAnalise.margemMes)})`
+                : ''}
             </span>
           </article>
           <article
@@ -521,17 +527,27 @@ export default function EmergencialMonitorPanel({
               resumoAnalise.empenhoAcabaAntesDoPeriodo ? ' emerg-kpi--over' : ''
             }`}
           >
-            <span className="emerg-kpi-label">Empenho / autonomia</span>
-            <strong>{num(resumoAnalise.cestasDisponiveisEmpenho)}</strong>
+            <span className="emerg-kpi-label">Empenho (16 sem.)</span>
+            <strong>
+              {num(
+                resumoAnalise.saudeEmpenho?.restante ??
+                  resumoAnalise.cestasDisponiveisEmpenho,
+              )}
+            </strong>
             <span className="emerg-kpi-sub">
-              {resumoAnalise.autonomiaSemanasSaldo != null ? (
+              {resumoAnalise.saudeEmpenho ? (
                 <>
-                  ~{num(resumoAnalise.autonomiaSemanasSaldo, 1)} sem. ao ritmo ~
-                  {num(resumoAnalise.ritmoSemanalReferencia, 0)}/sem
-                  {resumoAnalise.autonomiaDiasSaldo != null &&
-                    ` (${resumoAnalise.autonomiaDiasSaldo} dias)`}
-                  {resumoAnalise.empenhoAcabaAntesDoPeriodo &&
-                    ` · faltam ${resumoAnalise.semanasPeriodoRestantes} sem. no período`}
+                  {resumoAnalise.saudeEmpenho.semanasDecorridas}/
+                  {resumoAnalise.saudeEmpenho.semanasTotal} sem. · sustentável ~
+                  {num(resumoAnalise.saudeEmpenho.ritmoSustentavel, 0)}/sem · real ~
+                  {num(resumoAnalise.saudeEmpenho.ritmoRealMedio, 0)}/sem
+                  {resumoAnalise.empenhoAcabaAntesDoPeriodo
+                    ? ' · fora do trilho'
+                    : ` · proj. ${num(resumoAnalise.saudeEmpenho.fechamentoProjetadoProcesso, 0)}/${num(resumoAnalise.saudeEmpenho.totalEmpenho, 0)}`}
+                </>
+              ) : resumoAnalise.autonomiaSemanasSaldo != null ? (
+                <>
+                  ~{num(resumoAnalise.autonomiaSemanasSaldo, 1)} sem. restantes
                 </>
               ) : (
                 'Lance envios para calcular'

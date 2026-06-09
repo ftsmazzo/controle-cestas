@@ -440,6 +440,12 @@
   color: #92400e;
 }
 
+.mit-conformidade-nota {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.82rem;
+  color: var(--muted, #64748b);
+}
+
 .mit-conformidade p {
   margin: 0;
   flex: 1 1 12rem;

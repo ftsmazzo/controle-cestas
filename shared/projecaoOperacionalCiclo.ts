@@ -1,4 +1,7 @@
-import { auditoriaPlanoJunCiclo1 } from './conformidadePlano.js';
+import {
+  auditoriaPlanoJunCiclo1,
+  planejadoFlexJunSemana,
+} from './conformidadePlano.js';
 import type { EmergencialMonitoramento } from './emergencyMonitoring.js';
 import { planoJunSemana } from './planoAprovadoCiclo1.js';
 import {
@@ -183,6 +186,69 @@ export function projecaoEquipamentoCiclo(
   }
 
   return Math.min(metaMensal, Math.round(enviadoCicloEq + futuro));
+}
+
+export interface LimiteSemanaCiclo {
+  limite: number;
+  margemCiclo: number;
+  semanasRestantes: number;
+  planejadoSemana: number | null;
+  fonte: 'plano' | 'margem_ciclo';
+}
+
+/** Teto da semana = margem restante do ciclo ÷ semanas restantes (ou plano aprovado) */
+export function limiteSemanaCicloOperacional(
+  payload: ServicesPayload,
+  mesAnalise: string,
+  semanaAnalise: number,
+  enviadoCiclo: number,
+  tetoCiclo: number,
+  empenhoMeses: string[],
+): LimiteSemanaCiclo {
+  const mon = payload.emergencial.monitoramento;
+  const idx = indiceOperacionalCivil(mesAnalise, semanaAnalise, empenhoMeses);
+  const semanaNoCiclo = idx != null ? semanaNoCicloDeIndice(idx) : 1;
+  const semanasRestantes = Math.max(
+    1,
+    SEMANAS_POR_CICLO_OPERACIONAL - semanaNoCiclo + 1,
+  );
+  const margemCiclo = Math.max(0, tetoCiclo - enviadoCiclo);
+  const margemPorSemana = Math.round(margemCiclo / semanasRestantes);
+
+  let planejadoSemana: number | null = null;
+  if (idx != null) {
+    const civil = civilPorIndiceOperacional(idx, empenhoMeses);
+    const junKey = parseMonthKey('Jun/2026');
+    if (
+      civil &&
+      parseMonthKey(civil.mes) === junKey &&
+      (civil.semana === 1 || civil.semana === 2)
+    ) {
+      const t = planejadoFlexJunSemana(
+        payload.services,
+        civil.semana as 1 | 2,
+      );
+      if (t > 0) planejadoSemana = t;
+    }
+  }
+
+  if (planejadoSemana != null) {
+    return {
+      limite: Math.min(margemCiclo, planejadoSemana),
+      margemCiclo,
+      semanasRestantes,
+      planejadoSemana,
+      fonte: 'plano',
+    };
+  }
+
+  return {
+    limite: margemPorSemana,
+    margemCiclo,
+    semanasRestantes,
+    planejadoSemana: null,
+    fonte: 'margem_ciclo',
+  };
 }
 
 export function labelFonteProjecao(fonte: FonteProjecaoOperacional): string {

@@ -59,7 +59,9 @@ export function cotaFixaPorUnidade(nome: string): number | null {
   const n = norm(nome);
   if (n === 'saica' || n.includes('saica')) return COTA_MENSAL_FIXA[UNIDADE_SAICA];
   if (n.includes('waraos')) return COTA_MENSAL_FIXA[UNIDADE_WARAOS];
-  if (n.includes('maos dadas')) return COTA_MENSAL_FIXA[UNIDADE_MAOS_DADAS];
+  if (n.includes('maos dadas') || n.includes('nucleos maos')) {
+    return COTA_MENSAL_FIXA[UNIDADE_MAOS_DADAS];
+  }
   return null;
 }
 

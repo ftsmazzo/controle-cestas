@@ -17,10 +17,15 @@ import {
 } from './operationalWeeks.js';
 import {
   labelFonteProjecao,
+  limiteSemanaCicloOperacional,
   projecaoEquipamentoCiclo,
   projecaoFimCicloOperacional,
   type FonteProjecaoOperacional,
 } from './projecaoOperacionalCiclo.js';
+import {
+  buildSaudeEmpenhoProcesso,
+  type SaudeEmpenhoProcesso,
+} from './saudeEmpenhoProcesso.js';
 import {
   estouroAcimaLimite,
   margemAteLimite,
@@ -46,6 +51,10 @@ import type { ProcessoRiscoItem } from './processTypes.js';
 import type { MonthAllocationResult, ServicesPayload } from './serviceTypes.js';
 import type { ProcessoEmergencialConfig } from './processTypes.js';
 import { isServicoCotaMensalUnica } from './coderpRequisitanteRules.js';
+import {
+  planejadoFlexJunSemana,
+  totalFlexSemana,
+} from './conformidadePlano.js';
 
 /** Envio semanal por equipamento (Banco de Alimentos) */
 export interface EntradaSemanalEquipamento {
@@ -195,6 +204,17 @@ export interface MonitoramentoResumo {
   usaPlanoOperacional?: boolean;
   ritmoOperacionalForward?: number;
   novoCicloPlanejamento?: boolean;
+  /** Semanas restantes no ciclo (inclui a atual) */
+  semanasRestantesCiclo?: number;
+  /** Plano flexível para a semana em análise */
+  planejadoSemanaAtual?: number | null;
+  /** Lançamento flexível da semana (sem SAICA/WARAOS/Mãos Dadas) */
+  enviadoSemanaFlex?: number;
+  /** Plano flexível Jun S1/S2 quando aplicável */
+  planejadoSemanaFlex?: number | null;
+  limiteSemanaFonte?: 'plano' | 'margem_ciclo';
+  /** Empenho cumulativo 16 sem. / 5.000 — não zera ao mudar ciclo */
+  saudeEmpenho?: SaudeEmpenhoProcesso;
 }
 
 export function defaultEmergencialMonitoring(): EmergencialMonitoramento {
@@ -783,8 +803,8 @@ export function buildMonitoramentoResumo(
   );
   let autonomiaSemanasSaldo = autonomiaOp.autonomiaSemanas;
   let autonomiaDiasSaldo = autonomiaOp.autonomiaDias;
-  const ritmoSemanalReferencia = autonomiaOp.ritmoReferencia;
-  const cestasDisponiveisEmpenho = autonomiaOp.cestasDisponiveis;
+  let ritmoSemanalReferencia = autonomiaOp.ritmoReferencia;
+  let cestasDisponiveisEmpenho = autonomiaOp.cestasDisponiveis;
   const semanasPeriodoRestantes = autonomiaOp.semanasPeriodoRestantes;
   const semanasPeriodoTotal = autonomiaOp.semanasPeriodoTotal;
   let empenhoAcabaAntesDoPeriodo = autonomiaOp.empenhoAcabaAntesDoPeriodo;
@@ -950,6 +970,11 @@ export function buildMonitoramentoResumo(
   let usaPlanoOperacional = false;
   let ritmoOperacionalForward: number | undefined;
   let novoCicloPlanejamento = false;
+  let semanasRestantesCiclo: number | undefined;
+  let planejadoSemanaAtual: number | null | undefined;
+  let enviadoSemanaFlex: number | undefined;
+  let planejadoSemanaFlex: number | null | undefined;
+  let limiteSemanaFonte: 'plano' | 'margem_ciclo' | undefined;
 
   if (usarCiclo) {
     const idxAnalise = indiceOperacionalCivil(
@@ -1003,9 +1028,6 @@ export function buildMonitoramentoResumo(
       indiceBase != null ? indiceBase - inicioCicloOp + 1 : cicloInfo.semanasNoCiclo;
 
     metaMesTotal = tetoMaximoCicloOperacional(cicloAtual);
-    limiteSemanal = Math.round(
-      metaMesTotal / SEMANAS_POR_CICLO_OPERACIONAL,
-    );
     enviadoMesTotal = cicloInfo.enviado;
     enviadoAteBaseRitmo = cicloInfo.enviado;
     enviadoAcumulado = cicloInfo.enviado;
@@ -1019,21 +1041,53 @@ export function buildMonitoramentoResumo(
     );
 
     pctMes = pctUsoLimite(enviadoMesTotal, metaMesTotal);
-    pctLimiteSemana = pctUsoLimite(enviadoSemanaAtual, limiteSemanal);
     estouroMes = estouroAcimaLimite(enviadoMesTotal, metaMesTotal);
-    estouroSemana = estouroAcimaLimite(enviadoSemanaAtual, limiteSemanal);
     margemMes = margemAteLimite(enviadoMesTotal, metaMesTotal);
+
+    const limiteSem = limiteSemanaCicloOperacional(
+      payload,
+      mes,
+      semanaAnalise,
+      enviadoMesTotal,
+      metaMesTotal,
+      empenhoMesesAnalise,
+    );
+    limiteSemanal = limiteSem.limite;
+    semanasRestantesCiclo = limiteSem.semanasRestantes;
+    planejadoSemanaAtual = limiteSem.planejadoSemana;
+    limiteSemanaFonte = limiteSem.fonte;
+
+    enviadoSemanaFlex = totalFlexSemana(
+      mon,
+      mes,
+      semanaAnalise,
+      payload.services,
+    );
+    const junKey = parseMonthKey('Jun/2026');
+    planejadoSemanaFlex =
+      parseMonthKey(mes) === junKey &&
+      (semanaAnalise === 1 || semanaAnalise === 2)
+        ? planejadoFlexJunSemana(
+            payload.services,
+            semanaAnalise as 1 | 2,
+          )
+        : null;
+
+    enviadoSemanaAtual = enviadoSemanaFlex;
+    if (planejadoSemanaFlex != null) {
+      planejadoSemanaAtual = planejadoSemanaFlex;
+      if (limiteSemanaFonte === 'plano') {
+        limiteSemanal = Math.min(limiteSem.margemCiclo, planejadoSemanaFlex);
+      }
+    }
+
+    pctLimiteSemana = pctUsoLimite(enviadoSemanaAtual, limiteSemanal);
+    estouroSemana = estouroAcimaLimite(enviadoSemanaAtual, limiteSemanal);
     margemSemana = margemAteLimite(enviadoSemanaAtual, limiteSemanal);
     pctRitmoGeral =
       metaAcumuladaEsperada > 0
         ? (enviadoAcumulado / metaAcumuladaEsperada) * 100
         : 0;
-    ritmoSemanalMedio =
-      semanasNoPeriodoControleVal > 0
-        ? enviadoAcumulado / semanasNoPeriodoControleVal
-        : enviadoSemanaAtual > 0
-          ? enviadoSemanaAtual
-          : 0;
 
     const projecaoOp = projecaoFimCicloOperacional(
       payload,
@@ -1048,28 +1102,17 @@ export function buildMonitoramentoResumo(
     projecaoFonte = projecaoOp.fonte;
     usaPlanoOperacional = projecaoOp.usaPlanoAprovado;
     ritmoOperacionalForward = projecaoOp.ritmoOperacionalForward;
-
-    if (
-      projecaoOp.ritmoOperacionalForward > 0 &&
-      (projecaoOp.usaPlanoAprovado || novoCicloPlanejamento)
-    ) {
-      const autonomiaOpPlano = computeAutonomiaOperacional(
-        payload,
-        projecaoOp.ritmoOperacionalForward,
-        enviadoSemanaAtual,
-        mes,
-        semanaAnalise,
-      );
-      autonomiaSemanasSaldo = autonomiaOpPlano.autonomiaSemanas;
-      autonomiaDiasSaldo = autonomiaOpPlano.autonomiaDias;
-      empenhoAcabaAntesDoPeriodo = autonomiaOpPlano.empenhoAcabaAntesDoPeriodo;
-    }
+    ritmoSemanalMedio =
+      enviadoSemanaAtual > 0
+        ? enviadoSemanaAtual
+        : projecaoOp.ritmoOperacionalForward ?? 0;
 
     for (let i = alertas.length - 1; i >= 0; i--) {
       const titulo = alertas[i].titulo;
       if (
         titulo === 'Projeção: teto mensal antes do fim do mês' ||
         titulo === 'Margem mensal apertada' ||
+        titulo === 'Empenho não chega ao fim do período' ||
         (titulo === 'Ritmo estoura o mês civil antes do fim' &&
           projecaoOp.dentroDoTeto)
       ) {
@@ -1155,6 +1198,23 @@ export function buildMonitoramentoResumo(
 
   const familias = groupByFamilia(equipamentos, payload.services);
 
+  const saudeEmpenho = usarCiclo
+    ? buildSaudeEmpenhoProcesso(
+        payload,
+        mes,
+        semanaAnalise,
+        empenhoMesesAnalise,
+      )
+    : undefined;
+  if (saudeEmpenho) {
+    empenhoAcabaAntesDoPeriodo =
+      !saudeEmpenho.noTrilho || saudeEmpenho.acimaRitmoSustentavel;
+    cestasDisponiveisEmpenho = saudeEmpenho.restante;
+    ritmoSemanalReferencia = saudeEmpenho.ritmoSustentavel;
+    autonomiaSemanasSaldo = saudeEmpenho.semanasRestantes;
+    autonomiaDiasSaldo = Math.round(saudeEmpenho.semanasRestantes * 7);
+  }
+
   return {
     mes,
     semanaAtual,
@@ -1210,6 +1270,12 @@ export function buildMonitoramentoResumo(
     usaPlanoOperacional,
     ritmoOperacionalForward,
     novoCicloPlanejamento,
+    semanasRestantesCiclo,
+    planejadoSemanaAtual,
+    enviadoSemanaFlex,
+    planejadoSemanaFlex,
+    limiteSemanaFonte,
+    saudeEmpenho,
   };
 }
 
