@@ -9,6 +9,7 @@ import {
 } from './emergencyMonitoring.js';
 import { suggestEmpenhoMeses } from './empenhoControle.js';
 import {
+  CICLO_INICIO_CONTROLE_ESTOURO,
   EMPENHO_TOTAL_CESTAS,
   LABEL_PERIODO_LEIGO,
   SEMANAS_POR_CICLO_OPERACIONAL,
@@ -111,6 +112,8 @@ export interface VisaoPublicaOperacional {
   semanaNoCiclo: number;
   semanasRestantesCiclo: number;
   atualizadoEm: string | null;
+  /** Compensação/desconto por estouro — false no ciclo 1 (retomada excepcional) */
+  controleEstouroAtivo: boolean;
   alertasEstouroSemana: AlertaEstouroSemanal[];
 }
 
@@ -255,6 +258,8 @@ function buildAlertasEstouroSemana(
   cotasPorId: Map<string, CotasSemanaEquipamento>,
   empenhoMeses: string[],
 ): AlertaEstouroSemanal[] {
+  if (cicloFechado < CICLO_INICIO_CONTROLE_ESTOURO) return [];
+
   const mon = payload.emergencial.monitoramento;
   const alertas: AlertaEstouroSemanal[] = [];
   const inicioCiclo = (cicloFechado - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
@@ -586,6 +591,7 @@ export function buildVisaoPublicaOperacional(
     semanaNoCiclo: refPedidos?.semanaNoCiclo ?? refFechada?.semanaNoCiclo ?? 1,
     semanasRestantesCiclo: Math.max(1, semanasRestantesCiclo),
     atualizadoEm: cfg.monitoramento.saldoAtualizadoEm,
+    controleEstouroAtivo: cicloFechado >= CICLO_INICIO_CONTROLE_ESTOURO,
     alertasEstouroSemana,
   };
 }

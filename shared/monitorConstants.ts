@@ -18,6 +18,12 @@ export const GORDURA_CICLO_1 = 200;
 export const GORDURA_PERIODO_CICLO = GORDURA_CICLO_1;
 export const GORDURA_RESTANTE_MAXIMA = 200;
 
+/**
+ * Alertas de estouro (compensação / desconto) só a partir deste ciclo.
+ * Ciclo 1 teve retomada excepcional (gordura + cortes) — fora desta régua.
+ */
+export const CICLO_INICIO_CONTROLE_ESTOURO = 2;
+
 /** Processo completo: 16 ciclos de 4 semanas */
 export const TOTAL_CICLOS_OPERACIONAIS = 16;
 export const EMPENHO_TOTAL_CESTAS = 5000;

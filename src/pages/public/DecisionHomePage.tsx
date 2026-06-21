@@ -138,7 +138,20 @@ export default function DecisionHomePage() {
             Este período usou teto de <strong>1.350</strong> (+200 de margem).
             Gordura usada: {num(visao.gorduraUsada)} · ainda disponível no
             processo: {num(visao.gorduraRestante)}. Períodos seguintes: teto{' '}
-            <strong>1.150</strong>.
+            <strong>1.150</strong>. O controle de compensação/desconto por
+            estouro começa no <strong>período 2</strong> — este período fica
+            fora dessa régua.
+          </p>
+        </section>
+      )}
+
+      {!visao.controleEstouroAtivo && visao.cicloNumero >= 2 && (
+        <section className="panel public-ciclo1-note">
+          <h3>Controle de estouro</h3>
+          <p className="hint">
+            Compensação e desconto por estouro passam a valer quando a
+            primeira semana do <strong>período 2</strong> fechar (terça).
+            Enquanto isso, use as cotas do plano sem ajuste automático.
           </p>
         </section>
       )}
@@ -163,9 +176,11 @@ export default function DecisionHomePage() {
             conforme o consumo das 4 semanas.
           </li>
           <li>
-            <strong>Alerta inteligente:</strong> passar da cota semanal só gera
-            desconto se estourar o <em>período de 4 semanas</em>. Quem compensou
-            (ex.: não pediu na semana anterior) aparece em azul, sem corte.
+            <strong>Alerta inteligente:</strong> a partir do{' '}
+            <strong>período 2</strong>, passar da cota semanal só gera desconto
+            se estourar o <em>período de 4 semanas</em>. Quem compensou (ex.:
+            não pediu na semana anterior) aparece em azul, sem corte. O período
+            1 (retomada) fica fora desta régua.
           </li>
           <li>
             <strong>Saldo do ciclo:</strong> barra por equipamento — quanto
