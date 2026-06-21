@@ -1,21 +1,13 @@
 import { useEffect, useState } from 'react';
-import EmergencialMonitorPanel from '../../components/EmergencialMonitorPanel';
-import MonitorPublicacaoBanner from '../../components/MonitorPublicacaoBanner';
+import AdminMonitorSemanal from '../../components/AdminMonitorSemanal';
 import { useData } from '../../context/DataContext';
 import { saveServices } from '../../lib/servicesApi';
-import {
-  EMPENHO_TOTAL_CESTAS,
-} from '@shared/monitorConstants';
-import {
-  PERIODO_REFERENCIA_FIM,
-  PERIODO_REFERENCIA_INICIO,
-  prepararProcessoEmergencialOperacional,
-} from '@shared/processoEmergencial';
+import { EMPENHO_TOTAL_CESTAS } from '@shared/monitorConstants';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import './AdminMonitorEmergencialPage.css';
 
 export default function AdminMonitorEmergencialPage() {
-  const { payload, reload, loading, dashboard } = useData();
+  const { payload, reload, loading } = useData();
   const [draft, setDraft] = useState<ServicesPayload | null>(null);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -37,7 +29,7 @@ export default function AdminMonitorEmergencialPage() {
       await saveServices(draft);
       await reload();
       setDirty(false);
-      setMsg('Monitoramento salvo.');
+      setMsg('Publicado. O painel em / já reflete estes números.');
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Erro ao salvar');
     } finally {
@@ -45,63 +37,40 @@ export default function AdminMonitorEmergencialPage() {
     }
   };
 
-  const prepararProcesso = () => {
-    const ok = window.confirm(
-      'Preparar processo emergencial?\n\n' +
-        `· Saldo inicial ${EMPENHO_TOTAL_CESTAS.toLocaleString('pt-BR')}\n` +
-        '· Zera lançamentos semanais\n' +
-        '· Mantém equipamentos; limpa histórico fora Set/2025–Mar/2026\n\n' +
-        'Importe o histórico Coderp e os PDFs semanais em seguida. Salve ao terminar.',
-    );
-    if (!ok) return;
-    setDraft(prepararProcessoEmergencialOperacional(draft));
-    setDirty(true);
-    setMsg('Processo preparado. Importe histórico ref. e PDFs semanais, depois Salvar.');
-  };
-
   return (
     <div className="monitor-page">
       <header className="monitor-page-head panel">
         <div>
-          <h1>Monitor — Processo emergencial</h1>
+          <h1>Publicar semana</h1>
           <p className="hint">
-            <strong>Fluxo:</strong> escolha a semana qua–ter → importe o PDF RME →{' '}
-            <strong>Salvar</strong>. Empenho{' '}
-            <strong>{EMPENHO_TOTAL_CESTAS.toLocaleString('pt-BR')}</strong> · período ={' '}
-            <strong>1.150</strong> (P1: 1.350) · cotas do estudo{' '}
-            {PERIODO_REFERENCIA_INICIO}–{PERIODO_REFERENCIA_FIM}.
+            Processo {EMPENHO_TOTAL_CESTAS.toLocaleString('pt-BR')} cestas · mesma
+            régua do painel público (períodos qua–ter, 1.150/4 semanas).
           </p>
         </div>
         <div className="monitor-page-actions">
-          <button
-            type="button"
-            className="secondary"
-            onClick={prepararProcesso}
-          >
-            Preparar processo
-          </button>
           <button
             type="button"
             className="primary-btn"
             disabled={!dirty || saving}
             onClick={() => void save()}
           >
-            {saving ? 'Salvando…' : 'Salvar'}
+            {saving ? 'Salvando…' : 'Salvar e publicar'}
           </button>
         </div>
         {msg && (
-          <p className={msg.includes('Erro') ? 'error' : 'hint monitor-page-msg'}>{msg}</p>
+          <p className={msg.includes('Erro') ? 'error' : 'hint monitor-page-msg'}>
+            {msg}
+          </p>
         )}
         {dirty && (
-          <p className="alerta-box alerta-nivel-moderado">Alterações não salvas.</p>
+          <p className="alerta-box alerta-nivel-moderado">
+            Alterações no rascunho — clique em Salvar para publicar.
+          </p>
         )}
       </header>
 
-      <MonitorPublicacaoBanner payload={draft} />
-
-      <EmergencialMonitorPanel
+      <AdminMonitorSemanal
         data={draft}
-        decisionDashboard={dashboard}
         onUpdate={(next) => {
           setDraft(next);
           setDirty(true);

@@ -1,8 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { ultimoLancamentoSemanal } from '@shared/emergencyMonitoring';
 import {
-  listarSemanasOperacionaisControle,
-  proximaSemanaOperacional,
   refSemanaOperacional,
   type SemanaOperacionalControle,
 } from '@shared/operationalWeeks';
@@ -17,7 +15,10 @@ function num(n: number): string {
 interface Props {
   data: ServicesPayload;
   empenhoMeses: string[];
+  /** Semanas visíveis no seletor (já filtradas) */
+  semanas: SemanaOperacionalControle[];
   indice: number;
+  indiceSugerido: number;
   onIndiceChange: (indice: number) => void;
   onApplyImport: (next: ServicesPayload) => void;
   saldoSlot: ReactNode;
@@ -27,56 +28,31 @@ interface Props {
 export default function MonitorSemanaOperacionalImport({
   data,
   empenhoMeses,
+  semanas,
   indice,
+  indiceSugerido,
   onIndiceChange,
   onApplyImport,
   saldoSlot,
   readOnly,
 }: Props) {
   const mon = data.emergencial.monitoramento;
-
-  const semanas = useMemo(
-    () => listarSemanasOperacionaisControle(mon, empenhoMeses),
-    [mon, empenhoMeses],
-  );
-
   const ultimo = useMemo(() => ultimoLancamentoSemanal(mon), [mon]);
 
-  const indiceSugerido = useMemo(() => {
-    if (!ultimo) return semanas[0]?.indice ?? 1;
-    const prox = proximaSemanaOperacional(ultimo.mes, ultimo.semana, empenhoMeses);
-    if (prox) return prox.indice;
-    const found = semanas.find(
-      (s) => s.mes === ultimo.mes && s.semana === ultimo.semana,
-    );
-    return found?.indice ?? semanas[0]?.indice ?? 1;
-  }, [ultimo, empenhoMeses, semanas]);
-
-  const sel: SemanaOperacionalControle | undefined =
-    semanas.find((s) => s.indice === indice) ?? semanas[0];
-
+  const sel = semanas.find((s) => s.indice === indice) ?? semanas[0];
   const ref = sel ? refSemanaOperacional(sel.indice, empenhoMeses) : null;
 
   return (
     <section className="panel monitor-semana-import">
-      <h2 className="monitor-section-title">
-        <span>1 ·</span> Publicar semana (PDF → Salvar)
-      </h2>
-      <ol className="monitor-semana-steps">
-        <li>
-          Escolha a <strong>semana qua–ter</strong> que o PDF representa (geralmente a
-          que fechou na terça).
-        </li>
-        <li>Importe o PDF RME e confira a prévia.</li>
-        <li>
-          Clique em <strong>Salvar</strong> no topo da página para publicar no painel
-          público.
-        </li>
-      </ol>
+      <h2>Importar semana</h2>
+      <p className="hint">
+        Terça fechou → quarta importe o PDF RME da semana qua–ter →{' '}
+        <strong>Salvar</strong> no topo.
+      </p>
 
       <div className="monitor-semana-toolbar">
         <label className="monitor-semana-picker">
-          Semana operacional
+          Semana qua–ter
           <select
             value={sel?.indice ?? indice}
             disabled={readOnly}
@@ -85,7 +61,7 @@ export default function MonitorSemanaOperacionalImport({
             {semanas.map((s) => (
               <option key={s.indice} value={s.indice}>
                 P{s.ciclo} · S{s.semanaNoCiclo} — {s.periodo}
-                {s.temDados ? ` · ${num(s.enviado)} cestas` : ' · vazio'}
+                {s.temDados ? ` · ${num(s.enviado)}` : ''}
                 {s.indice === indiceSugerido ? ' · sugerida' : ''}
               </option>
             ))}
@@ -96,19 +72,17 @@ export default function MonitorSemanaOperacionalImport({
 
       {sel && (
         <p className="monitor-semana-resumo">
-          <strong>{sel.label}</strong> · {sel.periodo}
           {sel.temDados ? (
             <>
-              {' '}
-              · já lançado: <strong>{num(sel.enviado)}</strong> cestas
+              Esta semana: <strong>{num(sel.enviado)}</strong> cestas lançadas.
             </>
           ) : (
-            <> · sem lançamento ainda</>
+            <>Sem lançamento nesta semana.</>
           )}
           {ultimo && (
             <>
               {' '}
-              · último salvo:{' '}
+              Última salva:{' '}
               {(() => {
                 const idx = semanas.find(
                   (s) => s.mes === ultimo.mes && s.semana === ultimo.semana,
@@ -118,8 +92,8 @@ export default function MonitorSemanaOperacionalImport({
                     ? refSemanaOperacional(idx, empenhoMeses)
                     : null;
                 return refUlt
-                  ? `${refUlt.periodo} (${num(ultimo.totalCestas)} cestas)`
-                  : `${ultimo.mes} S${ultimo.semana} (${num(ultimo.totalCestas)} cestas)`;
+                  ? `${refUlt.periodo} (${num(ultimo.totalCestas)})`
+                  : `${num(ultimo.totalCestas)} cestas`;
               })()}
             </>
           )}

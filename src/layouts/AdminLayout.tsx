@@ -3,8 +3,8 @@ import { useData } from '../context/DataContext';
 import './Shell.css';
 
 const ADMIN_NAV = [
-  ['/admin/monitoramento', 'Monitor'],
-  ['/admin/importar', 'Importar'],
+  ['/admin/monitoramento', 'Publicar semana'],
+  ['/admin/importar', 'Histórico / importar'],
   ['/admin/equipamentos', 'Equipamentos'],
   ['/admin/contratos', 'Contratos'],
   ['/admin/metodologia', 'Metodologia (legado)'],
