@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import AdminMonitorSemanal from '../../components/AdminMonitorSemanal';
 import { useData } from '../../context/DataContext';
 import { saveServices } from '../../lib/servicesApi';
-import { EMPENHO_TOTAL_CESTAS } from '@shared/monitorConstants';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import './AdminMonitorEmergencialPage.css';
 
@@ -43,8 +42,9 @@ export default function AdminMonitorEmergencialPage() {
         <div>
           <h1>Publicar semana</h1>
           <p className="hint">
-            Processo {EMPENHO_TOTAL_CESTAS.toLocaleString('pt-BR')} cestas · mesma
-            régua do painel público (períodos qua–ter, 1.150/4 semanas).
+            Importe o PDF da semana qua–ter e publique. Consumo detalhado e
+            ajustes manuais ficam em Consumo semanal; saldo do empenho e estoque
+            no Banco em Processo.
           </p>
         </div>
         <div className="monitor-page-actions">

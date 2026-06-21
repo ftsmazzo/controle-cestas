@@ -10,6 +10,12 @@ export interface AppSettings {
   contratoMensal: number;
   contratoAnual: number;
   methodology: MethodologySettings;
+  /** Sobrescrita manual da cota semanal por equipamento (id → cestas/sem) */
+  cotasSemanaisOverrides?: Record<string, number>;
+  admin?: {
+    /** Exibe item Legado no menu admin */
+    menuLegadoVisivel?: boolean;
+  };
 }
 
 export function defaultAppSettings(): AppSettings {
@@ -18,6 +24,8 @@ export function defaultAppSettings(): AppSettings {
     contratoMensal: 1200,
     contratoAnual: 14400,
     methodology: defaultMethodologySettings(),
+    cotasSemanaisOverrides: {},
+    admin: { menuLegadoVisivel: false },
   };
 }
 
@@ -38,5 +46,10 @@ export function mergeAppSettings(
       base.methodology,
       partial.methodology ?? undefined,
     ),
+    cotasSemanaisOverrides:
+      partial.cotasSemanaisOverrides !== undefined
+        ? partial.cotasSemanaisOverrides
+        : base.cotasSemanaisOverrides,
+    admin: partial.admin !== undefined ? { ...base.admin, ...partial.admin } : base.admin,
   };
 }

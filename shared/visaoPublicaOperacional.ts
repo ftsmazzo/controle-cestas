@@ -150,7 +150,10 @@ function cotaSemanaPlanoFlex(
   ciclo: number,
   mes: string,
   semana: number,
+  overrides?: Record<string, number>,
 ): number {
+  if (overrides?.[u.id] != null) return overrides[u.id]!;
+
   if (isServicoCotaMensalUnica(u)) return 0;
 
   if (usaPlanoSemanalPadrao(ciclo)) {
@@ -177,6 +180,7 @@ function cotaSemanaPedidos(
   semanaPedidos: number,
   enviadoNoCiclo: number,
   fixosReaisPorCiclo: ServicesPayload['emergencial']['monitoramento']['fixosReaisPorCiclo'],
+  overrides?: Record<string, number>,
 ): Pick<CotasSemanaEquipamento, 'cotaSemana' | 'cotaMensalCiclo' | 'tipo' | 'observacao'> {
   if (isServicoCotaMensalUnica(u)) {
     const cotaMensal = getCotaFixaDinamica(
@@ -196,7 +200,8 @@ function cotaSemanaPedidos(
   }
 
   if (usaPlanoSemanalPadrao(cicloPedidos)) {
-    const cota = planoCotaSemanalParaUnidade(u.nome) ?? 0;
+    const cota =
+      overrides?.[u.id] ?? planoCotaSemanalParaUnidade(u.nome) ?? 0;
     return {
       cotaSemana: cota,
       cotaMensalCiclo: cota * SEMANAS_POR_CICLO_OPERACIONAL,
@@ -222,7 +227,13 @@ function cotaSemanaPedidos(
     };
   }
 
-  const padrao = cotaSemanaPlanoFlex(u, cicloPedidos, mesPedidos, semanaPedidos);
+  const padrao = cotaSemanaPlanoFlex(
+    u,
+    cicloPedidos,
+    mesPedidos,
+    semanaPedidos,
+    overrides,
+  );
   return {
     cotaSemana: padrao,
     cotaMensalCiclo: padrao * SEMANAS_POR_CICLO_OPERACIONAL,
@@ -236,6 +247,7 @@ function cotaPeriodoEquipamento(
   u: ServiceDef,
   ciclo: number,
   empenhoMeses: string[],
+  overrides?: Record<string, number>,
 ): number {
   const inicio = (ciclo - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
   const fim = ciclo * SEMANAS_POR_CICLO_OPERACIONAL;
@@ -243,7 +255,13 @@ function cotaPeriodoEquipamento(
   for (let i = inicio; i <= fim; i++) {
     const civil = civilPorIndiceOperacional(i, empenhoMeses);
     if (!civil) continue;
-    total += cotaSemanaPlanoFlex(u, ciclo, civil.mes, civil.semana);
+    total += cotaSemanaPlanoFlex(
+      u,
+      ciclo,
+      civil.mes,
+      civil.semana,
+      overrides,
+    );
   }
   return total;
 }
@@ -257,6 +275,7 @@ function buildAlertasEstouroSemana(
   semanaNoCicloFechada: number,
   cotasPorId: Map<string, CotasSemanaEquipamento>,
   empenhoMeses: string[],
+  overrides?: Record<string, number>,
 ): AlertaEstouroSemanal[] {
   if (cicloFechado < CICLO_INICIO_CONTROLE_ESTOURO) return [];
 
@@ -292,6 +311,7 @@ function buildAlertasEstouroSemana(
       cicloFechado,
       ultimo.mes,
       ultimo.semana,
+      overrides,
     );
     if (cotaPrevista <= 0) continue;
 
@@ -299,7 +319,12 @@ function buildAlertasEstouroSemana(
     const excessoSemanal = Math.max(0, enviado - cotaPrevista);
     if (excessoSemanal <= 0) continue;
 
-    const cotaPeriodo = cotaPeriodoEquipamento(u, cicloFechado, empenhoMeses);
+    const cotaPeriodo = cotaPeriodoEquipamento(
+      u,
+      cicloFechado,
+      empenhoMeses,
+      overrides,
+    );
     const enviadoPeriodo = enviadoPeriodoMap.get(u.id) ?? 0;
     const saldoPeriodo = cotaPeriodo - enviadoPeriodo;
     const excessoPeriodo = Math.max(0, enviadoPeriodo - cotaPeriodo);
@@ -318,6 +343,7 @@ function buildAlertasEstouroSemana(
         cicloFechado,
         civilAnterior.mes,
         civilAnterior.semana,
+        overrides,
       );
     }
 
@@ -418,6 +444,8 @@ export function buildVisaoPublicaOperacional(
   const cfg = payload.emergencial;
   if (!cfg.monitoramento.entradasSemanais.length) return null;
 
+  const cotasOverrides = payload.settings?.cotasSemanaisOverrides ?? {};
+
   const empenhoMeses =
     cfg.empenhoMeses?.length
       ? cfg.empenhoMeses
@@ -509,6 +537,7 @@ export function buildVisaoPublicaOperacional(
       semanaPedidos,
       enviadoCicloEq,
       cfg.monitoramento.fixosReaisPorCiclo,
+      cotasOverrides,
     );
     return {
       servicoId: u.id,
@@ -533,6 +562,7 @@ export function buildVisaoPublicaOperacional(
     refFechada?.semanaNoCiclo ?? 1,
     cotasPorId,
     empenhoMeses,
+    cotasOverrides,
   );
   const cotasAjustadas = aplicarAjustesEstouro(cotasSemana, alertasEstouroSemana);
 

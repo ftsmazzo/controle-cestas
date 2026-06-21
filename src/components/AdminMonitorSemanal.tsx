@@ -8,7 +8,6 @@ import {
 import { suggestEmpenhoMeses } from '@shared/empenhoControle';
 import {
   MONITOR_CONTROLE_MES_INICIO,
-  registerSaldoSemanal,
   ultimoLancamentoSemanal,
 } from '@shared/emergencyMonitoring';
 import {
@@ -17,9 +16,7 @@ import {
   proximaSemanaOperacional,
 } from '@shared/operationalWeeks';
 import { buildVisaoPublicaOperacional } from '@shared/visaoPublicaOperacional';
-import { consumptionUnits } from '@shared/serviceFamilies';
 import type { ServicesPayload } from '@shared/serviceTypes';
-import { getWeeklyQty } from '@shared/weeklyQty';
 import MonitorSemanaOperacionalImport from './MonitorSemanaOperacionalImport';
 import PublicProgressBar, { toneFromPctRestante } from './ui/PublicProgressBar';
 import './AdminMonitorSemanal.css';
@@ -27,11 +24,6 @@ import './AdminMonitorSemanal.css';
 function num(n: number | null | undefined, dec = 0): string {
   if (n == null || Number.isNaN(n)) return '—';
   return n.toLocaleString('pt-BR', { maximumFractionDigits: dec });
-}
-
-function parseQty(s: string): number {
-  const v = parseFloat(s.replace(/\./g, '').replace(',', '.'));
-  return Number.isNaN(v) ? 0 : Math.max(0, Math.round(v));
 }
 
 interface Props {
@@ -82,27 +74,11 @@ export default function AdminMonitorSemanal({ data, onUpdate }: Props) {
 
   const [indiceEdit, setIndiceEdit] = useState<number | null>(null);
   const indiceAtivo = indiceEdit ?? indiceSugerido;
-  const semanaSel =
-    semanas.find((s) => s.indice === indiceAtivo) ?? semanasVisiveis[0];
 
   const visao = useMemo(
     () => buildVisaoPublicaOperacional(data),
     [data],
   );
-
-  const linhasSemana = useMemo(() => {
-    if (!semanaSel) return [];
-    const cfg = data.emergencial.monitoramento;
-    return consumptionUnits(data.services)
-      .map((u) => ({
-        nome: u.nome,
-        qty: getWeeklyQty(cfg, semanaSel.mes, semanaSel.semana, u.id),
-      }))
-      .filter((r) => r.qty > 0)
-      .sort((a, b) => b.qty - a.qty);
-  }, [data, semanaSel]);
-
-  const totalSemana = linhasSemana.reduce((s, r) => s + r.qty, 0);
 
   const patchMonitoring = (nextMon: typeof mon) => {
     onUpdate({
@@ -120,37 +96,6 @@ export default function AdminMonitorSemanal({ data, onUpdate }: Props) {
       patchMonitoring({ ...mon, mesAtivo: civil.mes });
     }
   };
-
-  const setSaldo = (saldo: number | null) => {
-    if (!semanaSel) return;
-    if (saldo == null) {
-      patchMonitoring({
-        ...mon,
-        saldoAtual: null,
-        saldoAtualizadoEm: new Date().toISOString(),
-      });
-      return;
-    }
-    patchMonitoring(
-      registerSaldoSemanal(mon, semanaSel.mes, semanaSel.semana, saldo),
-    );
-  };
-
-  const saldoInput = (
-    <label className="admin-monitor-saldo">
-      Saldo no banco
-      <input
-        type="text"
-        inputMode="numeric"
-        placeholder="Ex.: 450"
-        value={mon.saldoAtual != null ? String(mon.saldoAtual) : ''}
-        onChange={(e) => {
-          const v = e.target.value.trim();
-          setSaldo(v === '' ? null : parseQty(v));
-        }}
-      />
-    </label>
-  );
 
   const pill = visao?.semaforoPeriodo ?? 'verde';
   const pctRestantePeriodo = visao
@@ -170,7 +115,6 @@ export default function AdminMonitorSemanal({ data, onUpdate }: Props) {
         indiceSugerido={indiceSugerido}
         onIndiceChange={onSelectIndice}
         onApplyImport={onUpdate}
-        saldoSlot={saldoInput}
       />
 
       {visao ? (
@@ -242,52 +186,6 @@ export default function AdminMonitorSemanal({ data, onUpdate }: Props) {
               </article>
             </div>
           </section>
-
-          {semanaSel && (
-            <section className="panel admin-monitor-lancamentos">
-              <h3>
-                Lançamentos — {semanaSel.periodo}
-                {semanaSel.temDados ? (
-                  <span className="hint-inline">
-                    {' '}
-                    · total {num(totalSemana)} cestas
-                  </span>
-                ) : (
-                  <span className="hint-inline"> · vazio</span>
-                )}
-              </h3>
-              {linhasSemana.length === 0 ? (
-                <p className="hint">Nenhum equipamento nesta semana. Importe o PDF acima.</p>
-              ) : (
-                <table className="admin-monitor-lancamentos-table">
-                  <thead>
-                    <tr>
-                      <th>Equipamento</th>
-                      <th>Cestas</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {linhasSemana.map((r) => (
-                      <tr key={r.nome}>
-                        <td>{r.nome}</td>
-                        <td>{num(r.qty)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td>
-                        <strong>Total</strong>
-                      </td>
-                      <td>
-                        <strong>{num(totalSemana)}</strong>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              )}
-            </section>
-          )}
         </>
       ) : (
         <section className="panel empty">
@@ -299,9 +197,10 @@ export default function AdminMonitorSemanal({ data, onUpdate }: Props) {
       )}
 
       <p className="hint admin-monitor-foot">
-        Histórico de referência (Set/2025–Mar/2026) e importações antigas ficam
-        em <a href="/admin/importar">Admin → Importar</a> — não entram neste
-        fluxo semanal.
+        Consumo por equipamento e semana:{' '}
+        <a href="/admin/consumo">Admin → Consumo semanal</a>. Saldo físico no
+        Banco e parâmetros do lote:{' '}
+        <a href="/admin/processo">Admin → Processo</a>.
       </p>
     </div>
   );

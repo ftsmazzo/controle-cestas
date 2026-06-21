@@ -21,7 +21,7 @@ interface Props {
   indiceSugerido: number;
   onIndiceChange: (indice: number) => void;
   onApplyImport: (next: ServicesPayload) => void;
-  saldoSlot: ReactNode;
+  saldoSlot?: ReactNode;
   readOnly?: boolean;
 }
 

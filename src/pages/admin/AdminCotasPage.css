@@ -1,0 +1,53 @@
+.admin-cotas-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-cotas-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.admin-cotas-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.admin-cotas-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-cotas-table th,
+.admin-cotas-table td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.admin-cotas-table th:not(:first-child),
+.admin-cotas-table td:not(:first-child) {
+  text-align: right;
+}
+
+.admin-cotas-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.row-fixo {
+  background: #f5f3ff;
+}
+
+.admin-cotas-input {
+  width: 3.5rem;
+  padding: 0.25rem;
+  text-align: right;
+}
+
+.admin-cotas-soma {
+  margin-bottom: 0.75rem;
+}

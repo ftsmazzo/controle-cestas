@@ -11,6 +11,11 @@ import AdminMethodologyPage from './pages/admin/AdminMethodologyPage';
 import AdminSyncPage from './pages/admin/AdminSyncPage';
 import AdminAssistancePage from './pages/admin/AdminAssistancePage';
 import AdminMonitorEmergencialPage from './pages/admin/AdminMonitorEmergencialPage';
+import AdminConsumoPage from './pages/admin/AdminConsumoPage';
+import AdminCotasPage from './pages/admin/AdminCotasPage';
+import AdminProcessoPage from './pages/admin/AdminProcessoPage';
+import AdminConfiguracoesPage from './pages/admin/AdminConfiguracoesPage';
+import AdminLegadoLayout from './pages/admin/AdminLegadoLayout';
 import AnalisePage from './pages/public/AnalisePage';
 import DecisionHomePage from './pages/public/DecisionHomePage';
 import EmergencyContractPage from './pages/public/EmergencyContractPage';
@@ -40,16 +45,29 @@ export default function AppRouter() {
             }
           >
             <Route index element={<Navigate to="monitoramento" replace />} />
-            <Route path="importar" element={<AdminImportPage />} />
-            <Route path="equipamentos" element={<AdminEquipmentsPage />} />
-            <Route path="metodologia" element={<AdminMethodologyPage />} />
-            <Route path="contratos" element={<AdminContractsPage />} />
-            <Route
-              path="monitoramento"
-              element={<AdminMonitorEmergencialPage />}
-            />
-            <Route path="sincronizar" element={<AdminSyncPage />} />
-            <Route path="atendimentos" element={<AdminAssistancePage />} />
+            <Route path="monitoramento" element={<AdminMonitorEmergencialPage />} />
+            <Route path="consumo" element={<AdminConsumoPage />} />
+            <Route path="cotas" element={<AdminCotasPage />} />
+            <Route path="processo" element={<AdminProcessoPage />} />
+            <Route path="configuracoes" element={<AdminConfiguracoesPage />} />
+
+            <Route path="legado" element={<AdminLegadoLayout />}>
+              <Route index element={<Navigate to="importar" replace />} />
+              <Route path="importar" element={<AdminImportPage />} />
+              <Route path="equipamentos" element={<AdminEquipmentsPage />} />
+              <Route path="contratos" element={<AdminContractsPage />} />
+              <Route path="metodologia" element={<AdminMethodologyPage />} />
+              <Route path="sincronizar" element={<AdminSyncPage />} />
+              <Route path="atendimentos" element={<AdminAssistancePage />} />
+            </Route>
+
+            {/* Atalhos antigos → legado */}
+            <Route path="importar" element={<Navigate to="/admin/legado/importar" replace />} />
+            <Route path="equipamentos" element={<Navigate to="/admin/legado/equipamentos" replace />} />
+            <Route path="contratos" element={<Navigate to="/admin/legado/contratos" replace />} />
+            <Route path="metodologia" element={<Navigate to="/admin/legado/metodologia" replace />} />
+            <Route path="sincronizar" element={<Navigate to="/admin/legado/sincronizar" replace />} />
+            <Route path="atendimentos" element={<Navigate to="/admin/legado/atendimentos" replace />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

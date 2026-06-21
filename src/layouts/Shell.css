@@ -34,6 +34,12 @@
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
 }
 
+.shell-nav--sub {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .shell-sticky {
   position: sticky;
   top: 0;

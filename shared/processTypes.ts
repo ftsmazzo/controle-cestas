@@ -8,6 +8,7 @@ import {
   EMPENHO_DURACAO_MESES_PADRAO,
   suggestEmpenhoMeses,
 } from './empenhoControle.js';
+import { TOTAL_CICLOS_OPERACIONAIS } from './monitorConstants.js';
 import { suggestPlanningMonths, excludedMonthKeysFromRows } from './planningMonths.js';
 import { processedRowsFromPayload, validMonthKeysForPayload } from './payloadAnalysis.js';
 import type { MonthlyPlan, ServicesPayload } from './serviceTypes.js';
@@ -27,6 +28,17 @@ export interface ProcessoEmergencialConfig {
   empenhoMeses?: string[];
   /** Acompanhamento semanal em produção (envios por equipamento + saldo Banco) */
   monitoramento: EmergencialMonitoramento;
+  /** Nome exibido do processo (ex.: Emergencial Mai–Ago/2026) */
+  nomeProcesso?: string;
+  /** Total de ciclos operacionais (4 sem. cada) — padrão 16 */
+  totalCiclosOperacionais?: number;
+  /** Início do controle qua–ter (ISO YYYY-MM-DD), ex.: 2026-05-20 */
+  dataInicioOperacional?: string;
+  /**
+   * Estoque físico no Banco de Alimentos (cestas no galpão).
+   * Configuração do processo — não é lançamento semanal.
+   */
+  saldoBancoFisico?: number | null;
 }
 
 /** Processo regular: registro/leito de 12 meses — totais mensais, previsão e risco contratual */
@@ -99,6 +111,10 @@ export function defaultEmergencialConfig(
     empenhoMeses,
     plans: empenhoMeses.map((mes) => ({ mes, totalDisponivel: 1150 })),
     observacao: 'Processo emergencial — distribuir por equipamento para evitar ruptura.',
+    nomeProcesso: 'Processo emergencial — cestas básicas',
+    totalCiclosOperacionais: TOTAL_CICLOS_OPERACIONAIS,
+    dataInicioOperacional: '2026-05-20',
+    saldoBancoFisico: null,
     monitoramento: defaultEmergencialMonitoring(),
   };
 }

@@ -4,16 +4,19 @@ import './Shell.css';
 
 const ADMIN_NAV = [
   ['/admin/monitoramento', 'Publicar semana'],
-  ['/admin/importar', 'Histórico / importar'],
-  ['/admin/equipamentos', 'Equipamentos'],
-  ['/admin/contratos', 'Contratos'],
-  ['/admin/metodologia', 'Metodologia (legado)'],
-  ['/admin/sincronizar', 'Sincronizar'],
-  ['/admin/atendimentos', 'Atendimentos (futuro)'],
+  ['/admin/consumo', 'Consumo semanal'],
+  ['/admin/cotas', 'Cotas'],
+  ['/admin/processo', 'Processo'],
+  ['/admin/configuracoes', 'Configurações'],
 ] as const;
 
 export default function AdminLayout() {
-  const { apiOk, error, loading } = useData();
+  const { apiOk, error, loading, payload } = useData();
+  const legadoVisivel = payload?.settings?.admin?.menuLegadoVisivel === true;
+
+  const navItems = legadoVisivel
+    ? [...ADMIN_NAV, ['/admin/legado', 'Legado'] as const]
+    : ADMIN_NAV;
 
   return (
     <div className="app">
@@ -21,7 +24,11 @@ export default function AdminLayout() {
         <header className="header">
           <div>
             <h1>Administração — Cestas Básicas</h1>
-            <p className="subtitle">Monitoramento emergencial e configuração</p>
+            <p className="subtitle">
+              {payload?.emergencial?.nomeProcesso
+                ? payload.emergencial.nomeProcesso
+                : 'Monitoramento emergencial'}
+            </p>
           </div>
           <div className="header-badges">
             <span className="mode-badge mode-admin">Administração</span>
@@ -35,7 +42,7 @@ export default function AdminLayout() {
         </header>
 
         <nav className="shell-nav" aria-label="Administração">
-          {ADMIN_NAV.map(([to, label]) => (
+          {navItems.map(([to, label]) => (
             <NavLink
               key={to}
               to={to}
