@@ -163,9 +163,9 @@ export default function DecisionHomePage() {
             conforme o consumo das 4 semanas.
           </li>
           <li>
-            <strong>Alerta de estouro:</strong> se alguém passou da cota na
-            semana que fechou, aparece aviso e a cota da próxima semana já vem
-            descontada na tabela.
+            <strong>Alerta inteligente:</strong> passar da cota semanal só gera
+            desconto se estourar o <em>período de 4 semanas</em>. Quem compensou
+            (ex.: não pediu na semana anterior) aparece em azul, sem corte.
           </li>
           <li>
             <strong>Saldo do ciclo:</strong> barra por equipamento — quanto

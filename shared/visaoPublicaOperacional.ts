@@ -55,14 +55,29 @@ export interface CotasSemanaEquipamento {
   observacao: string | null;
 }
 
+export type TipoAlertaEstouro = 'penalidade' | 'compensacao';
+
 export interface AlertaEstouroSemanal {
   servicoId: string;
   servicoNome: string;
   semanaFechadaLabel: string;
+  semanaNoCiclo: number;
   cotaSemanaPrevista: number;
   enviadoSemana: number;
-  excesso: number;
-  pctAcima: number;
+  /** Acima da cota só desta semana */
+  excessoSemanal: number;
+  pctAcimaSemana: number;
+  /** Desconto aplicado na próxima semana (0 se compensação) */
+  excessoPenalizavel: number;
+  enviadoPeriodo: number;
+  cotaPeriodo: number;
+  saldoPeriodo: number;
+  enviadoSemanaAnterior: number | null;
+  cotaSemanaAnterior: number | null;
+  semanaAnteriorLabel: string | null;
+  tipo: TipoAlertaEstouro;
+  aplicaDesconto: boolean;
+  motivo: string;
   cotaPlanoProximaSemana: number;
   cotaAjustadaProximaSemana: number;
 }
@@ -213,15 +228,59 @@ function cotaSemanaPedidos(
   };
 }
 
+  return planoCotaSemanalParaUnidade(u.nome) ?? 0;
+}
+
+/** Cota total do equipamento no período de 4 semanas */
+function cotaPeriodoEquipamento(
+  u: ServiceDef,
+  ciclo: number,
+  empenhoMeses: string[],
+): number {
+  const inicio = (ciclo - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
+  const fim = ciclo * SEMANAS_POR_CICLO_OPERACIONAL;
+  let total = 0;
+  for (let i = inicio; i <= fim; i++) {
+    const civil = civilPorIndiceOperacional(i, empenhoMeses);
+    if (!civil) continue;
+    total += cotaSemanaPlanoFlex(u, ciclo, civil.mes, civil.semana);
+  }
+  return total;
+}
+
 function buildAlertasEstouroSemana(
   payload: ServicesPayload,
   ultimo: { mes: string; semana: number },
   cicloFechado: number,
+  idxUltimo: number,
   semanaFechadaLabel: string,
+  semanaNoCicloFechada: number,
   cotasPorId: Map<string, CotasSemanaEquipamento>,
+  empenhoMeses: string[],
 ): AlertaEstouroSemanal[] {
   const mon = payload.emergencial.monitoramento;
   const alertas: AlertaEstouroSemanal[] = [];
+  const inicioCiclo = (cicloFechado - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
+  const enviadoPeriodoMap = enviadoPorEquipamentoCiclo(
+    payload,
+    cicloFechado,
+    idxUltimo,
+    empenhoMeses,
+  );
+
+  let semanaAnteriorLabel: string | null = null;
+  let civilAnterior: { mes: string; semana: number } | null = null;
+  if (idxUltimo > inicioCiclo) {
+    civilAnterior = civilPorIndiceOperacional(idxUltimo - 1, empenhoMeses);
+    const refAnt = civilAnterior
+      ? refSemanaOperacionalCivil(
+          civilAnterior.mes,
+          civilAnterior.semana,
+          empenhoMeses,
+        )
+      : null;
+    semanaAnteriorLabel = refAnt?.label ?? null;
+  }
 
   for (const u of consumptionUnits(payload.services)) {
     if (isServicoCotaMensalUnica(u)) continue;
@@ -235,29 +294,102 @@ function buildAlertasEstouroSemana(
     if (cotaPrevista <= 0) continue;
 
     const enviado = getWeeklyQty(mon, ultimo.mes, ultimo.semana, u.id);
-    const excesso = Math.max(0, enviado - cotaPrevista);
-    if (excesso <= 0) continue;
+    const excessoSemanal = Math.max(0, enviado - cotaPrevista);
+    if (excessoSemanal <= 0) continue;
+
+    const cotaPeriodo = cotaPeriodoEquipamento(u, cicloFechado, empenhoMeses);
+    const enviadoPeriodo = enviadoPeriodoMap.get(u.id) ?? 0;
+    const saldoPeriodo = cotaPeriodo - enviadoPeriodo;
+    const excessoPeriodo = Math.max(0, enviadoPeriodo - cotaPeriodo);
+
+    let enviadoSemanaAnterior: number | null = null;
+    let cotaSemanaAnterior: number | null = null;
+    if (civilAnterior) {
+      enviadoSemanaAnterior = getWeeklyQty(
+        mon,
+        civilAnterior.mes,
+        civilAnterior.semana,
+        u.id,
+      );
+      cotaSemanaAnterior = cotaSemanaPlanoFlex(
+        u,
+        cicloFechado,
+        civilAnterior.mes,
+        civilAnterior.semana,
+      );
+    }
 
     const cotaPedidos = cotasPorId.get(u.id);
     const cotaPlanoProxima = cotaPedidos?.cotaSemana ?? 0;
-    const cotaAjustada = Math.max(0, cotaPlanoProxima - excesso);
+
+    const folgaSemanaAnterior =
+      enviadoSemanaAnterior != null && cotaSemanaAnterior != null
+        ? Math.max(0, cotaSemanaAnterior - enviadoSemanaAnterior)
+        : 0;
+
+    let tipo: TipoAlertaEstouro;
+    let excessoPenalizavel: number;
+    let aplicaDesconto: boolean;
+    let motivo: string;
+
+    if (excessoPeriodo > 0) {
+      tipo = 'penalidade';
+      excessoPenalizavel = excessoPeriodo;
+      aplicaDesconto = true;
+      motivo =
+        `Estourou o teto do período de 4 semanas (${enviadoPeriodo} de ${cotaPeriodo} cestas). ` +
+        `O desconto na próxima semana é de ${excessoPenalizavel} cesta${excessoPenalizavel > 1 ? 's' : ''} (excesso do período, não só desta semana).`;
+    } else {
+      tipo = 'compensacao';
+      excessoPenalizavel = 0;
+      aplicaDesconto = false;
+      if (folgaSemanaAnterior > 0 && semanaAnteriorLabel) {
+        motivo =
+          `Pediu ${enviado} nesta semana (cota ${cotaPrevista}, +${excessoSemanal}), mas ` +
+          `em ${semanaAnteriorLabel} pediu só ${enviadoSemanaAnterior} (cota ${cotaSemanaAnterior}). ` +
+          `No período de 4 semanas vai ${enviadoPeriodo} de ${cotaPeriodo} — compensação dentro do período, sem desconto.`;
+      } else {
+        motivo =
+          `Acima da cota desta semana (+${excessoSemanal}), porém ainda dentro do ` +
+          `período de 4 semanas (${enviadoPeriodo} de ${cotaPeriodo} cestas). Sem desconto na próxima semana.`;
+      }
+    }
+
+    const cotaAjustada = aplicaDesconto
+      ? Math.max(0, cotaPlanoProxima - excessoPenalizavel)
+      : cotaPlanoProxima;
 
     alertas.push({
       servicoId: u.id,
       servicoNome: u.nome,
       semanaFechadaLabel,
+      semanaNoCiclo: semanaNoCicloFechada,
       cotaSemanaPrevista: cotaPrevista,
       enviadoSemana: enviado,
-      excesso,
-      pctAcima: (excesso / cotaPrevista) * 100,
+      excessoSemanal,
+      pctAcimaSemana:
+        cotaPrevista > 0 ? (excessoSemanal / cotaPrevista) * 100 : 0,
+      excessoPenalizavel,
+      enviadoPeriodo,
+      cotaPeriodo,
+      saldoPeriodo,
+      enviadoSemanaAnterior,
+      cotaSemanaAnterior,
+      semanaAnteriorLabel,
+      tipo,
+      aplicaDesconto,
+      motivo,
       cotaPlanoProximaSemana: cotaPlanoProxima,
       cotaAjustadaProximaSemana: cotaAjustada,
     });
   }
 
-  return alertas.sort(
-    (a, b) => b.excesso - a.excesso || b.pctAcima - a.pctAcima,
-  );
+  return alertas.sort((a, b) => {
+    if (a.aplicaDesconto !== b.aplicaDesconto) {
+      return a.aplicaDesconto ? -1 : 1;
+    }
+    return b.excessoSemanal - a.excessoSemanal;
+  });
 }
 
 function aplicarAjustesEstouro(
@@ -267,12 +399,12 @@ function aplicarAjustesEstouro(
   const porId = new Map(alertas.map((a) => [a.servicoId, a]));
   return cotas.map((c) => {
     const a = porId.get(c.servicoId);
-    if (!a || c.tipo !== 'rateio') return c;
+    if (!a || c.tipo !== 'rateio' || !a.aplicaDesconto) return c;
     return {
       ...c,
       cotaPlanoOriginal: a.cotaPlanoProximaSemana,
       cotaSemana: a.cotaAjustadaProximaSemana,
-      observacao: `Ajuste −${a.excesso} (estouro ${a.semanaFechadaLabel})`,
+      observacao: `Ajuste −${a.excessoPenalizavel} (período estourado)`,
     };
   });
 }
@@ -394,8 +526,11 @@ export function buildVisaoPublicaOperacional(
     payload,
     ultimo,
     cicloFechado,
+    idxUltimo,
     semanaFechadaLabel,
+    refFechada?.semanaNoCiclo ?? 1,
     cotasPorId,
+    empenhoMeses,
   );
   const cotasAjustadas = aplicarAjustesEstouro(cotasSemana, alertasEstouroSemana);
 

@@ -1,6 +1,6 @@
 .public-alerta-estouro {
-  border: 1px solid #fecaca;
-  background: linear-gradient(180deg, #fff7ed 0%, #fff 100%);
+  border: 1px solid #e2e8f0;
+  background: #fafafa;
   margin-top: 0;
 }
 
@@ -10,26 +10,67 @@
   gap: 0.5rem;
   margin: 0 0 0.35rem;
   font-size: 1.1rem;
-  color: #9a3412;
+  color: #0f172a;
 }
 
 .public-alerta-estouro-sub {
   margin: 0;
+  max-width: 48rem;
+  line-height: 1.45;
+}
+
+.public-alerta-estouro-bloco {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.public-alerta-estouro-bloco:first-of-type {
+  margin-top: 0.85rem;
+  padding-top: 0;
+  border-top: none;
+}
+
+.public-alerta-estouro-bloco-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.public-alerta-estouro-bloco-title--penalidade {
+  color: #9a3412;
+}
+
+.public-alerta-estouro-bloco-title--compensacao {
+  color: #1e40af;
+}
+
+.public-alerta-estouro-bloco-hint {
+  margin: 0 0 0.75rem;
   max-width: 44rem;
 }
 
 .public-alerta-estouro-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 0.75rem;
-  margin-top: 1rem;
 }
 
 .public-alerta-estouro-card {
   padding: 0.85rem 1rem;
   border-radius: 10px;
-  border: 1px solid #fed7aa;
   background: #fff;
+}
+
+.public-alerta-estouro-card--penalidade {
+  border: 1px solid #fecaca;
+}
+
+.public-alerta-estouro-card--compensacao {
+  border: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, #eff6ff 0%, #fff 100%);
 }
 
 .public-alerta-estouro-card h3 {
@@ -48,8 +89,12 @@
   color: #b91c1c;
 }
 
+.public-alerta-estouro-excesso--info strong {
+  color: #1d4ed8;
+}
+
 .public-alerta-estouro-dl {
-  margin: 0;
+  margin: 0 0 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -70,13 +115,42 @@
   font-weight: 600;
 }
 
-.public-alerta-estouro-ajuste dd strong {
-  font-size: 1.15rem;
-  color: #0f766e;
+.public-alerta-estouro-ok {
+  color: #047857;
+  font-weight: 700;
 }
 
 .public-alerta-estouro-ajuste {
   margin-top: 0.25rem;
   padding-top: 0.35rem;
-  border-top: 1px dashed #fed7aa;
+  border-top: 1px dashed #fecaca;
+}
+
+.public-alerta-estouro-ajuste--ok {
+  border-top-color: #bfdbfe;
+}
+
+.public-alerta-estouro-ajuste dd strong {
+  font-size: 1.15rem;
+  color: #0f766e;
+}
+
+.public-alerta-estouro-card--penalidade .public-alerta-estouro-ajuste dd strong {
+  color: #b91c1c;
+}
+
+.public-alerta-estouro-riscado {
+  text-decoration: line-through;
+  color: var(--muted);
+  margin-right: 0.35rem;
+  font-weight: 600;
+}
+
+.public-alerta-estouro-motivo {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
+  padding-top: 0.35rem;
+  border-top: 1px solid #f1f5f9;
 }
