@@ -70,19 +70,19 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
       <div className="monitor-saude-escopos">
         <article className={`monitor-saude-escopo monitor-saude-escopo--${saude.nivelCicloSemana}`}>
           <div className="monitor-saude-escopo-head">
-            <h4>Ciclo e semana</h4>
-            <NivelBadge nivel={saude.nivelCicloSemana} label="4 semanas · zera a cada ciclo" />
+            <h4>Período operacional (4 sem.)</h4>
+            <NivelBadge nivel={saude.nivelCicloSemana} label="4 semanas · zera a cada período" />
           </div>
           <p className="hint monitor-saude-lead">{saude.resumoDecisaoCiclo}</p>
           {resumo.novoCicloPlanejamento && (
             <p className="monitor-saude-escopo-nota">
-              Novo ciclo em planejamento — contadores de ciclo/semana reiniciam no teto{' '}
+              Novo período em planejamento — contadores reiniciam no teto{' '}
               {num(saude.limiteMensal, 0)}.
             </p>
           )}
           {saude.pctProjecaoMes > 0 && (
             <p className="monitor-saude-prazo-proj">
-              Projeção fim do {resumo.usaCicloOperacional ? 'ciclo' : 'mês'}:{' '}
+              Projeção fim do {resumo.usaCicloOperacional ? 'período' : 'mês'}:{' '}
               <strong>{num(saude.projecaoMesTotal, 0)}</strong> cestas (
               {num(saude.pctProjecaoMes, 0)}% do teto)
               {saude.estouroProjetadoMes > 0 && (
@@ -154,7 +154,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           className={`monitor-saude-card${saude.estouroMes > 0 ? ' monitor-saude-card--over' : ''}`}
         >
           <span className="monitor-saude-card-label">
-            {resumo.usaCicloOperacional ? 'Teto do ciclo' : 'Teto mensal'}
+            {resumo.usaCicloOperacional ? 'Teto do período' : 'Teto mensal'}
           </span>
           <strong>{num(saude.limiteMensal, 0)}</strong>
           <span className="monitor-saude-card-sub">
@@ -179,7 +179,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
               ? ` · plano ${num(resumo.planejadoSemanaAtual)}`
               : ''}
             {resumo.semanasRestantesCiclo != null
-              ? ` · margem ciclo ${num(resumo.margemMes)}`
+              ? ` · margem período ${num(resumo.margemMes)}`
               : ''}
           </span>
         </article>
@@ -187,7 +187,7 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
           className={`monitor-saude-card${saude.estouroProjetadoMes > 0 ? ' monitor-saude-card--over' : ''}`}
         >
           <span className="monitor-saude-card-label">
-            {resumo.usaCicloOperacional ? 'Projeção fim do ciclo' : 'Projeção fim do mês'}
+            {resumo.usaCicloOperacional ? 'Projeção fim do período' : 'Projeção fim do mês'}
           </span>
           <strong>{num(saude.projecaoMesTotal, 0)}</strong>
           <span className="monitor-saude-card-sub">
@@ -269,12 +269,12 @@ export default function MonitorSaudePanel({ data, resumo, dashboard }: Props) {
 
       <div className="monitor-saude-legend">
         <span>
-          <i className="dot dot-estoque" /> Ciclo/semana (50%): teto, semana e projeção do ciclo — zera
+          <i className="dot dot-estoque" /> Período/semana (50%): teto, semana e projeção — zera
           a cada 4 semanas
         </span>
         <span>
-          <i className="dot dot-ritmo" /> Empenho processo (50%): 5.000 em 16 semanas (1.350 + 1.150×3)
-          — cumulativo, não zera entre ciclos
+          <i className="dot dot-ritmo" /> Processo (50%): 5.000 em 16 semanas (1.350 + 1.150×3)
+          — cumulativo, não zera entre períodos
         </span>
       </div>
     </section>

@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useData } from '../../context/DataContext';
+import EmergencialMonitorPanel from '../../components/EmergencialMonitorPanel';
 import MonitorPublicacaoBanner from '../../components/MonitorPublicacaoBanner';
+import { useData } from '../../context/DataContext';
 import { saveServices } from '../../lib/servicesApi';
-import { EMPENHO_TOTAL_CESTAS } from '@shared/monitorConstants';
+import {
+  CICLO_INICIO_CONTROLE_ESTOURO,
+  EMPENHO_TOTAL_CESTAS,
+} from '@shared/monitorConstants';
+import { prepararProcessoEmergencialOperacional } from '@shared/processoEmergencial';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import './AdminMonitorEmergencialPage.css';
 
@@ -61,7 +66,8 @@ export default function AdminMonitorEmergencialPage() {
             <strong>Salvar</strong> para publicar cotas. Empenho{' '}
             <strong>{EMPENHO_TOTAL_CESTAS.toLocaleString('pt-BR')}</strong> cestas · período de 4
             semanas = <strong>1.150</strong> (período 1: 1.350) · ponto zero{' '}
-            <strong>20/05/2026</strong> (semana qua–ter).
+            <strong>20/05/2026</strong> (semana qua–ter). Compensação/desconto
+            por estouro a partir do <strong>período {CICLO_INICIO_CONTROLE_ESTOURO}</strong>.
           </p>
         </div>
         <div className="monitor-page-actions">

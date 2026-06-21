@@ -196,8 +196,8 @@ export default function EmergencialMonitorPanel({
       <td className="cell-unidade">
         {eq.servicoNome}
         {eq.cotaMensalUnica && (
-          <span className="badge badge-cota-mes" title="Cota mensal única">
-            mês
+          <span className="badge badge-cota-mes" title="Entrega única no período de 4 semanas">
+            fixo
           </span>
         )}
       </td>
@@ -345,7 +345,8 @@ export default function EmergencialMonitorPanel({
       {/* —— 1 · Situação agora —— */}
       <section className={`panel emerg-monitor-kpis emerg-monitor-kpis--${riskClass} monitor-section`}>
         <h2 className="monitor-section-title">
-          <span>1 ·</span> Situação agora — {resumoAnalise.labelCiclo ?? resumoAnalise.mes}
+          <span>1 ·</span> Situação agora —{' '}
+          {resumoAnalise.labelCiclo ?? `período · ${resumoAnalise.mes}`}
         </h2>
         {resumoAnalise.ultimaSemanaComDados === 0 && resumoAnalise.enviadoMesTotal === 0 && (
           <p className="alerta-box alerta-nivel-alto">
@@ -358,13 +359,13 @@ export default function EmergencialMonitorPanel({
             {resumoAnalise.novoCicloPlanejamento ? (
               <>
                 {' '}
-                Novo ciclo — contagem reinicia no teto{' '}
+                Novo período — contagem reinicia no teto{' '}
                 <strong>{num(resumoAnalise.metaMesTotal)}</strong>.
               </>
             ) : (
               <>
                 {' '}
-                Acumulado no ciclo até a última semana lançada:{' '}
+                Acumulado no período até a última semana lançada:{' '}
                 <strong>{num(resumoAnalise.enviadoMesTotal)}</strong> cestas.
               </>
             )}
@@ -374,8 +375,8 @@ export default function EmergencialMonitorPanel({
           Análise no <strong>último lançamento salvo</strong> ({resumoAnalise.mes} S
           {resumoAnalise.semanaAnalise}
           {resumoAnalise.labelSemanaAnalise ? ` · ${resumoAnalise.labelSemanaAnalise}` : ''}) — teto{' '}
-          <strong>{num(TETO_MENSAL_OPERACIONAL)}</strong>/ciclo (4 sem. operacionais). Aba{' '}
-          <strong>{mesAtivo}</strong> = só lançamentos da grade.{' '}
+          <strong>{num(resumoAnalise.metaMesTotal)}</strong> do período (4 sem. qua–ter). Aba{' '}
+          <strong>{mesAtivo}</strong> = grade civil (só lançamentos).{' '}
           {readOnly ? 'Consulta.' : 'Importe o PDF abaixo e salve.'}
         </p>
 
@@ -497,7 +498,7 @@ export default function EmergencialMonitorPanel({
             </span>
           </article>
           <article className={`emerg-kpi${resumoAnalise.estouroMes > 0 ? ' emerg-kpi--over' : ''}`}>
-            <span className="emerg-kpi-label">Uso do teto do ciclo</span>
+            <span className="emerg-kpi-label">Uso do período (4 sem.)</span>
             <strong>
               {num(resumoAnalise.enviadoMesTotal)} / {num(resumoAnalise.metaMesTotal)}
             </strong>
@@ -512,7 +513,7 @@ export default function EmergencialMonitorPanel({
             className={`emerg-kpi${resumoAnalise.estouroSemana > 0 ? ' emerg-kpi--over' : ''}`}
           >
             <span className="emerg-kpi-label">
-              Semana {resumoAnalise.semanaNoCiclo ?? resumoAnalise.semanaAnalise} do ciclo
+              Semana {resumoAnalise.semanaNoCiclo ?? resumoAnalise.semanaAnalise} do período
             </span>
             <strong>
               {num(resumoAnalise.enviadoSemanaAtual)} / {num(resumoAnalise.limiteSemanal)}
@@ -526,7 +527,7 @@ export default function EmergencialMonitorPanel({
                 ? ` · plano ${num(resumoAnalise.planejadoSemanaAtual)}`
                 : ''}
               {resumoAnalise.semanasRestantesCiclo != null
-                ? ` · ${resumoAnalise.semanasRestantesCiclo} sem. rest. no ciclo (margem ${num(resumoAnalise.margemMes)})`
+                ? ` · ${resumoAnalise.semanasRestantesCiclo} sem. rest. no período (margem ${num(resumoAnalise.margemMes)})`
                 : ''}
             </span>
           </article>
@@ -535,7 +536,7 @@ export default function EmergencialMonitorPanel({
               resumoAnalise.empenhoAcabaAntesDoPeriodo ? ' emerg-kpi--over' : ''
             }`}
           >
-            <span className="emerg-kpi-label">Empenho (16 sem.)</span>
+            <span className="emerg-kpi-label">Saldo do processo</span>
             <strong>
               {num(
                 resumoAnalise.saudeEmpenho?.restante ??
@@ -566,7 +567,7 @@ export default function EmergencialMonitorPanel({
               resumoAnalise.estouroProjetadoMes > 0 ? ' emerg-kpi--over' : ''
             }`}
           >
-            <span className="emerg-kpi-label">Projeção fim do ciclo</span>
+            <span className="emerg-kpi-label">Projeção fim do período</span>
             <strong>{num(resumoAnalise.projecaoMesTotal)}</strong>
             <span className="emerg-kpi-sub">
               {num(resumoAnalise.pctProjecaoMes, 0)}% do teto
@@ -631,7 +632,7 @@ export default function EmergencialMonitorPanel({
         )}
         <PrintableTable
           title={`Distribuição por setor — ${resumoTabela.mes}`}
-          subtitle={`Lançamento S${semanaEdit} · grade civil · análise/KPIs no ciclo operacional (${resumoAnalise.labelCiclo ?? ''})`}
+          subtitle={`Lançamento S${semanaEdit} · grade civil · KPIs no período operacional (${resumoAnalise.labelCiclo ?? ''})`}
           wrapClassName="emerg-monitor-table-wrap"
           orientation="landscape"
         >
@@ -639,8 +640,10 @@ export default function EmergencialMonitorPanel({
             <thead>
               <tr>
                 <th rowSpan={2}>Equipamento</th>
-                <th rowSpan={2}>Teto mês</th>
-                <th rowSpan={2}>Teto/sem</th>
+                <th rowSpan={2} title="Rateio ref. ao mês civil da grade — KPIs usam o período operacional">
+                  Teto grade
+                </th>
+                <th rowSpan={2}>Cota/sem</th>
                 {Array.from({ length: resumoTabela.semanasNoMes }, (_, i) => i + 1).map(
                   (w) => (
                     <th
@@ -661,10 +664,10 @@ export default function EmergencialMonitorPanel({
                   ),
                 )}
                 <th rowSpan={2}>Total</th>
-                <th rowSpan={2}>% mês</th>
+                <th rowSpan={2}>% grade</th>
                 <th rowSpan={2}>% sem. {semanaEdit}</th>
                 <th rowSpan={2} title="Se o ritmo das semanas de controle continuar">
-                  % proj. mês
+                  % proj. grade
                 </th>
                 <th rowSpan={2}>Status</th>
               </tr>
@@ -747,8 +750,8 @@ export default function EmergencialMonitorPanel({
         </PrintableTable>
         <p className="hint">
           Envios reais por semana (colunas verdes = já lançadas). Ao mudar a semana no seletor, o
-          histórico permanece. KPIs e mitigação usam o <strong>ciclo operacional</strong> (4 semanas,
-          teto 1.150), não o mês civil desta grade.
+          histórico permanece.           KPIs e mitigação usam o <strong>período operacional</strong> (4 semanas
+          qua–ter, teto 1.150), não o mês civil desta grade.
         </p>
       </section>
 
@@ -760,7 +763,7 @@ export default function EmergencialMonitorPanel({
           )}
           <p className="hint">
             Cotas por setor a partir do histórico sem racionamento — só orienta o rateio do teto{' '}
-            {num(TETO_MENSAL_OPERACIONAL)}/mês.
+            {num(TETO_MENSAL_OPERACIONAL)}/período (referência histórica).
           </p>
           <PrintableTable
             title="Referência de rateio (Set/25–Mar/26)"
