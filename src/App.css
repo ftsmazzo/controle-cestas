@@ -428,6 +428,7 @@ th {
   align-items: flex-start;
   gap: 0.35rem;
   min-width: 0;
+  width: 100%;
   padding: 0.65rem 0.75rem;
   border-radius: var(--radius-md);
   transition: background 0.2s ease;
@@ -503,6 +504,11 @@ th {
   color: var(--muted);
   line-height: 1.4;
   max-width: 220px;
+}
+
+.home-kpi-hint--bar {
+  max-width: 100%;
+  margin-top: 0.15rem;
 }
 
 .home-kpi-hint a {

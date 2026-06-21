@@ -1,0 +1,194 @@
+.public-cotas-panel {
+  margin-top: 1rem;
+  overflow: hidden;
+}
+
+.public-cotas-head h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+}
+
+.public-cotas-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.public-cotas-badge {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.public-cotas-grupos-resumo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.public-cotas-grupo-kpi {
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: #fafafa;
+}
+
+.public-cotas-grupo-kpi--cras {
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #eff6ff 0%, #fff 100%);
+}
+
+.public-cotas-grupo-kpi--creas {
+  border-color: #c4b5fd;
+  background: linear-gradient(180deg, #f5f3ff 0%, #fff 100%);
+}
+
+.public-cotas-grupo-kpi--pse {
+  border-color: #a7f3d0;
+  background: linear-gradient(180deg, #ecfdf5 0%, #fff 100%);
+}
+
+.public-cotas-grupo-kpi--fixos {
+  border-color: #fde68a;
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 100%);
+}
+
+.public-cotas-grupo-kpi-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.public-cotas-grupo-kpi-valor {
+  display: block;
+  font-size: 1.35rem;
+  margin-bottom: 0.4rem;
+  color: var(--text);
+}
+
+.public-cotas-table-wrap {
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  overflow: auto;
+}
+
+.public-cotas-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.public-cotas-table th,
+.public-cotas-table td {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.public-cotas-table th {
+  background: #f8fafc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.public-cotas-table .col-num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.public-cotas-grupo-row td {
+  background: #f1f5f9;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.public-cotas-grupo-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.public-cotas-grupo-tag--cras { color: #1d4ed8; }
+.public-cotas-grupo-tag--creas { color: #6d28d9; }
+.public-cotas-grupo-tag--pse { color: #047857; }
+.public-cotas-grupo-tag--fixos { color: #b45309; }
+
+.public-cotas-data-row:hover {
+  background: #fafafa;
+}
+
+.public-cotas-nome {
+  font-weight: 600;
+}
+
+.public-cotas-tag-fixo {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.public-cotas-cota {
+  font-weight: 700;
+  color: #0f766e;
+  font-size: 1rem;
+}
+
+.public-cotas-pct-cell {
+  min-width: 7rem;
+}
+
+.public-cotas-subtotal-row {
+  background: #f8fafc;
+}
+
+.public-cotas-subtotal-row td {
+  border-bottom: 2px solid #e2e8f0;
+  font-size: 0.85rem;
+}
+
+.public-cotas-total-row {
+  background: linear-gradient(90deg, #eef2ff 0%, #f8fafc 100%);
+}
+
+.public-cotas-total-row td {
+  border-bottom: none;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 720px) {
+  .public-cotas-table th:nth-child(4),
+  .public-cotas-table td:nth-child(4),
+  .public-cotas-table th:nth-child(5),
+  .public-cotas-table td:nth-child(5) {
+    display: none;
+  }
+}

@@ -8,10 +8,19 @@ import {
 import { buildVisaoPublicaOperacional } from '@shared/visaoPublicaOperacional';
 import { useData } from '../../context/DataContext';
 import PublicCotasSemanaTable from '../../components/PublicCotasSemanaTable';
+import PublicConsumoSemanalChart from '../../components/PublicConsumoSemanalChart';
+import PublicTopExcessoCicloCard from '../../components/PublicTopExcessoCicloCard';
+import PublicProgressBar from '../../components/ui/PublicProgressBar';
 
 function num(n: number | null | undefined, dec = 0): string {
   if (n == null || Number.isNaN(n)) return '—';
   return n.toLocaleString('pt-BR', { maximumFractionDigits: dec });
+}
+
+function toneFromPct(pctRestante: number): 'verde' | 'amarelo' | 'vermelho' {
+  if (pctRestante <= 10) return 'vermelho';
+  if (pctRestante <= 25) return 'amarelo';
+  return 'verde';
 }
 
 export default function DecisionHomePage() {
@@ -39,6 +48,8 @@ export default function DecisionHomePage() {
   }
 
   const pill = visao.semaforoPeriodo;
+  const pctRestantePeriodo = Math.max(0, 100 - visao.pctPeriodo);
+  const pctRestanteProcesso = Math.max(0, 100 - visao.pctProcesso);
 
   return (
     <>
@@ -61,8 +72,13 @@ export default function DecisionHomePage() {
             <span className="home-kpi-number">{num(visao.enviadoPeriodo)}</span>
             <span className="home-kpi-unit">/ {num(visao.tetoPeriodo)}</span>
           </p>
-          <span className="home-kpi-hint">
-            Restam {num(visao.restantePeriodo)} · {visao.cicloLabel}
+          <PublicProgressBar
+            pct={pctRestantePeriodo}
+            tone={toneFromPct(pctRestantePeriodo)}
+            label={`Saldo do período: ${num(visao.restantePeriodo)} cestas`}
+          />
+          <span className="home-kpi-hint home-kpi-hint--bar">
+            Restam {num(visao.restantePeriodo)} cestas · {visao.cicloLabel}
           </span>
           <span className={`home-kpi-pill home-kpi-pill--${pill}`}>
             {pill === 'verde' ? 'VERDE' : pill === 'amarelo' ? 'AMARELO' : 'VERMELHO'}
@@ -78,7 +94,12 @@ export default function DecisionHomePage() {
             <span className="home-kpi-number">{num(visao.saldoProcesso)}</span>
             <span className="home-kpi-unit">cestas</span>
           </p>
-          <span className="home-kpi-hint">
+          <PublicProgressBar
+            pct={pctRestanteProcesso}
+            tone={toneFromPct(pctRestanteProcesso)}
+            label={`Saldo do processo: ${num(visao.saldoProcesso)} cestas`}
+          />
+          <span className="home-kpi-hint home-kpi-hint--bar">
             de {num(visao.totalProcesso)} · usado {num(visao.consumidoProcesso)}
           </span>
         </article>
@@ -111,8 +132,8 @@ export default function DecisionHomePage() {
             <span className="home-kpi-unit">cestas previstas</span>
           </p>
           <span className="home-kpi-hint">
-            Flexível: {num(visao.totalCotaFlexSemana)} + fixos pendentes no
-            período · {visao.semanaPedidosPeriodo}
+            Flexível {num(visao.totalCotaFlexSemana)} + fixos ·{' '}
+            {visao.semanaPedidosPeriodo}
           </span>
         </article>
       </section>
@@ -133,23 +154,28 @@ export default function DecisionHomePage() {
         cotas={visao.cotasSemana}
         semanaPeriodo={visao.semanaPedidosPeriodo}
         totalCota={visao.totalCotaSemanaPedidos}
+        totalFlex={visao.totalCotaFlexSemana}
       />
+
+      <PublicConsumoSemanalChart payload={payload} />
+
+      <PublicTopExcessoCicloCard payload={payload} />
 
       <section className="panel public-legenda">
         <h3>Como ler estes números</h3>
         <ul className="public-legenda-list">
           <li>
-            <strong>Período de 4 semanas (1.150):</strong> é o “mês” operacional
-            — soma das 4 semanas qua–ter. Acompanhe aqui se estamos dentro do
-            limite antes de olhar o saldo total.
+            <strong>Barra do período:</strong> começa em 100% e vai caindo
+            conforme o consumo das 4 semanas. Verde = folga; vermelho = perto do
+            limite.
           </li>
           <li>
-            <strong>Saldo do processo (5.000):</strong> total da compra
-            emergencial; diminui cada semana com os envios registrados.
+            <strong>Cotas por grupo:</strong> CRAS, CREAS, PSE e fixos mensais
+            — subtotais somam o total da semana de pedidos.
           </li>
           <li>
-            <strong>Cota da semana:</strong> quanto cada equipamento pode pedir
-            no outro sistema nesta semana de solicitações.
+            <strong>Gráfico semanal:</strong> barras empilhadas por grupo; linha
+            = total. Chips abaixo mostram variação vs semana anterior.
           </li>
         </ul>
       </section>

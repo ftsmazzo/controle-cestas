@@ -1,0 +1,133 @@
+.public-consumo-panel {
+  margin-top: 1.25rem;
+}
+
+.public-consumo-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.public-consumo-head h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.public-consumo-sub {
+  margin: 0;
+  max-width: 36rem;
+}
+
+.public-consumo-ultima-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  min-width: 140px;
+}
+
+.public-consumo-ultima-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.public-consumo-ultima-valor {
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.public-consumo-delta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.public-consumo-delta--up { color: #b91c1c; }
+.public-consumo-delta--down { color: #047857; }
+.public-consumo-delta--flat { color: var(--muted); }
+
+.public-consumo-delta-pct {
+  opacity: 0.85;
+}
+
+.public-consumo-delta-text {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+}
+
+.consumo-trend--up { color: #b91c1c; }
+.consumo-trend--down { color: #047857; }
+.consumo-trend--flat { color: var(--muted); }
+
+.public-consumo-chart {
+  width: 100%;
+  min-height: 280px;
+}
+
+.public-consumo-semanas-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.public-consumo-semana-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font-size: 0.75rem;
+  min-width: 3.5rem;
+}
+
+.public-consumo-semana-chip--up {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.public-consumo-semana-chip--down {
+  border-color: #bbf7d0;
+  background: #ecfdf5;
+}
+
+.public-consumo-chip-label {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.public-consumo-chip-delta {
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.public-consumo-semana-chip--up .public-consumo-chip-delta { color: #b91c1c; }
+.public-consumo-semana-chip--down .public-consumo-chip-delta { color: #047857; }
+
+@media (max-width: 640px) {
+  .public-consumo-ultima-kpi {
+    align-items: flex-start;
+    width: 100%;
+  }
+}
