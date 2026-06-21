@@ -21,7 +21,7 @@ export interface ProcessoEmergencialConfig {
   cestasPorMes: number;
   plans: MonthlyPlan[];
   observacao: string;
-  /** Total do empenho do período (ex. 4.800 em 4 meses) */
+  /** Total do empenho do período (ex. 5.000 em 16 ciclos) */
   empenhoTotalCestas?: number;
   /** Meses cobertos pelo empenho (ex. Mai–Ago/2026) */
   empenhoMeses?: string[];

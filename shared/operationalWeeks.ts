@@ -278,6 +278,35 @@ export function semanasAlvoMitigacao(
 }
 
 /** Gordura consumida (acima de 1.150) por ciclo operacional concluído ou em curso */
+/** Total enviado desde o índice operacional 1 (20/05/2026) até o índice inclusive */
+export function totalEnviadoOperacionalAte(
+  mon: EmergencialMonitoramento,
+  ateIndice: number,
+  empenhoMeses?: string[],
+): number {
+  if (ateIndice <= 0) return 0;
+  let total = 0;
+  for (let i = 1; i <= ateIndice; i++) {
+    const civil = civilPorIndiceOperacional(i, empenhoMeses);
+    if (!civil) continue;
+    total += totalEnviadoNaSemana(mon, civil.mes, civil.semana);
+  }
+  return total;
+}
+
+/** Semana operacional seguinte ao par civil (para cotas de pedidos na quarta) */
+export function proximaSemanaOperacional(
+  mes: string,
+  semana: number,
+  empenhoMeses?: string[],
+): (CivilWeekKey & { indice: number }) | null {
+  const idx = indiceOperacionalCivil(mes, semana, empenhoMeses);
+  if (idx == null) return null;
+  const civil = civilPorIndiceOperacional(idx + 1, empenhoMeses);
+  if (!civil) return null;
+  return { ...civil, indice: idx + 1 };
+}
+
 export function gorduraUsadaPeriodoOperacional(
   mon: EmergencialMonitoramento,
   ateIndiceOperacional: number,

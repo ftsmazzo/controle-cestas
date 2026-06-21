@@ -27,7 +27,7 @@ import {
 } from '@shared/operationalWeeks';
 import { labelFonteProjecao } from '@shared/projecaoOperacionalCiclo';
 import type { DashboardState } from '@shared/types';
-import PrintableTable from './ui/PrintableTable';
+import MonitorAjustesOperacionais from './MonitorAjustesOperacionais';
 import './EmergencialMonitorPanel.css';
 
 function num(n: number | null | undefined, dec = 0): string {
@@ -467,6 +467,14 @@ export default function EmergencialMonitorPanel({
             </span>
           )}
         </div>
+
+        {!readOnly && resumoAnalise.cicloAtual != null && (
+          <MonitorAjustesOperacionais
+            data={data}
+            cicloAtual={resumoAnalise.cicloAtual}
+            onUpdate={onUpdate}
+          />
+        )}
 
         <RegistroSemanalPdfImport
           data={data}

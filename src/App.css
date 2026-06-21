@@ -545,6 +545,59 @@ th {
   }
 }
 
+.public-context-banner {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  margin-bottom: 1rem;
+}
+
+.public-context-banner p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #0c4a6e;
+}
+
+.public-cotas-panel {
+  margin-top: 1rem;
+}
+
+.public-cotas-head h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.public-cotas-cota {
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.public-cotas-obs {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.public-ciclo1-note {
+  margin-top: 1rem;
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+}
+
+.public-legenda {
+  margin-top: 1rem;
+  background: #f8fafc;
+}
+
+.public-legenda-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  color: #475569;
+  font-size: 0.92rem;
+}
+
+.public-legenda-list li + li {
+  margin-top: 0.5rem;
+}
+
 .consumo-filtros {
   margin-bottom: 1rem;
 }

@@ -91,7 +91,8 @@ export function metodologiaReferenciaFixa(
 
 /**
  * Zera operação emergencial e prepara para relançamento:
- * saldo 4.800, ponto zero Mai/2026 S3, histórico ref. limpo.
+ * Zera operação emergencial e prepara para relançamento:
+ * saldo 5.000, ponto zero 20/05/2026, histórico ref. limpo.
  */
 export function prepararProcessoEmergencialOperacional(
   payload: ServicesPayload,
@@ -137,7 +138,7 @@ export function prepararProcessoEmergencialOperacional(
         TETO_MENSAL_OPERACIONAL,
       ),
       observacao:
-        'Processo emergencial Mai–Ago/2026 · empenho 4.800 · teto 1.150/mês · ref. Set/25–Mar/26.',
+        'Processo emergencial Mai–Ago/2026 · empenho 5.000 · teto 1.150/período · ref. Set/25–Mar/26.',
       monitoramento,
     },
     regular: {

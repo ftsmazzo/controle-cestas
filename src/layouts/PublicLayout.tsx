@@ -21,7 +21,7 @@ export default function PublicLayout() {
           <div>
             <h1>Dashboard de Cestas Básicas</h1>
             <p className="subtitle">
-              Controle semanal do processo emergencial — SEMAS
+              Monitoramento do processo emergencial — consulta de consumo e cotas
             </p>
           </div>
           <div className="header-badges">

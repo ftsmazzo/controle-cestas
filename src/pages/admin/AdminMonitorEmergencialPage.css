@@ -40,3 +40,62 @@
   font-weight: 600;
   margin-right: 0.35rem;
 }
+
+.monitor-pub-banner {
+  margin-bottom: 1rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.monitor-pub-banner--empty {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.monitor-pub-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.monitor-pub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.monitor-pub-label {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 0.2rem;
+}
+
+.monitor-ajustes {
+  margin: 1rem 0;
+  background: #f8fafc;
+}
+
+.monitor-ajustes h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.monitor-ajustes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.monitor-ajustes-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.monitor-ajustes-grid input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}

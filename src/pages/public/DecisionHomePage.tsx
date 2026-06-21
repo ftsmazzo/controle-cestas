@@ -1,164 +1,71 @@
 import { useMemo } from 'react';
 import {
-  buildMonitoramentoResumo,
-  MONITOR_CONTROLE_MES_INICIO,
-  MONITOR_CONTROLE_SEMANA_INICIO,
-  resolveContextoPainelPublico,
-} from '@shared/emergencyMonitoring';
-import { buildCenarioMitigacao } from '@shared/cenarioMitigacao';
-import { buildEmpenhoControle } from '@shared/empenhoControle';
-import {
-  TETO_MENSAL_OPERACIONAL,
-  TETO_CONTRATUAL_MENSAL,
-} from '@shared/processoEmergencial';
-import {
-  Activity,
   CalendarRange,
   Package,
-  ShieldAlert,
   Target,
+  TrendingDown,
 } from 'lucide-react';
+import { buildVisaoPublicaOperacional } from '@shared/visaoPublicaOperacional';
 import { useData } from '../../context/DataContext';
-import CessaoEquipamentosTable from '../../components/CessaoEquipamentosTable';
-import TopEstourosRetomadaCard from '../../components/TopEstourosRetomadaCard';
-import MitigacaoCenarioPanel from '../../components/MitigacaoCenarioPanel';
+import PublicCotasSemanaTable from '../../components/PublicCotasSemanaTable';
 
-function num(n: number | null | undefined, dec = 1): string {
+function num(n: number | null | undefined, dec = 0): string {
   if (n == null || Number.isNaN(n)) return '—';
   return n.toLocaleString('pt-BR', { maximumFractionDigits: dec });
-}
-
-function saudeCiclo(
-  enviado: number,
-  teto: number,
-  dentroDoTeto: boolean,
-): { label: string; mod: 'verde' | 'amarelo' | 'vermelho' } {
-  const pct = teto > 0 ? (enviado / teto) * 100 : 0;
-  if (!dentroDoTeto || pct > 100) return { label: 'VERMELHO', mod: 'vermelho' };
-  if (pct >= 90) return { label: 'AMARELO', mod: 'amarelo' };
-  return { label: 'VERDE', mod: 'verde' };
 }
 
 export default function DecisionHomePage() {
   const { loading, payload } = useData();
 
-  const emergencial = useMemo(() => {
-    if (!payload) return null;
-    const ctx = resolveContextoPainelPublico(payload.emergencial);
-    const resumo = buildMonitoramentoResumo(payload, {
-      mesReferencia: ctx.mes,
-      semanaReferencia: ctx.semanaReferencia,
-      usarCicloOperacional: true,
-    });
-    const empenho = buildEmpenhoControle(payload);
-    const cenario = buildCenarioMitigacao(payload, 2);
-    const tetoCiclo = resumo.metaMesTotal;
-    const fechamentoProjetado =
-      cenario.fechamentoCicloProjetado ?? resumo.enviadoMesTotal;
-    const pill = saudeCiclo(
-      fechamentoProjetado,
-      tetoCiclo,
-      cenario.dentroDoTetoCiclo ?? fechamentoProjetado <= tetoCiclo,
-    );
-    return { resumo, empenho, cenario, pill, ctx };
-  }, [payload]);
+  const visao = useMemo(
+    () => (payload ? buildVisaoPublicaOperacional(payload) : null),
+    [payload],
+  );
 
   if (loading) return null;
 
-  if (!payload || !emergencial) {
+  if (!payload || !visao) {
     return (
       <section className="panel empty">
-        <h3>Processo emergencial não configurado</h3>
+        <h3>Monitoramento ainda não publicado</h3>
         <p className="hint">
-          Acesse <a href="/admin/monitoramento">Admin → Monitor</a> e use{' '}
-          <strong>Preparar processo</strong> para iniciar o acompanhamento.
+          Importe o PDF semanal em{' '}
+          <a href="/admin/monitoramento">Admin → Monitor</a> e clique em{' '}
+          <strong>Salvar</strong>. Na quarta, após fechar a semana (terça), os
+          equipamentos verão aqui o consumo e as cotas para pedir.
         </p>
       </section>
     );
   }
 
-  const { empenho, cenario, pill, resumo } = emergencial;
+  const pill = visao.semaforoPeriodo;
 
   return (
     <>
-      <section className={`home-kpi-strip home-kpi-strip--${pill.mod}`}>
+      <section className="public-context-banner panel">
+        <p>
+          <strong>Uma régua de tempo:</strong> semanas qua–ter · período de 4
+          semanas = <strong>1.150 cestas</strong> · processo total ={' '}
+          <strong>5.000 cestas</strong>. Números abaixo são só da operação
+          atual (desde 20/05/2026).
+        </p>
+      </section>
+
+      <section className={`home-kpi-strip home-kpi-strip--${pill}`}>
         <article className="home-kpi-tile home-kpi-tile--primary">
           <span className="home-kpi-icon" aria-hidden>
             <Target size={20} />
           </span>
-          <span className="home-kpi-label">
-            {resumo.labelCiclo ?? 'Ciclo operacional'}
-          </span>
+          <span className="home-kpi-label">Período atual (4 semanas)</span>
           <p className="home-kpi-value-line">
-            <span className="home-kpi-number">
-              {num(resumo.enviadoMesTotal, 0)}
-            </span>
-            <span className="home-kpi-unit">/ {num(resumo.metaMesTotal, 0)}</span>
+            <span className="home-kpi-number">{num(visao.enviadoPeriodo)}</span>
+            <span className="home-kpi-unit">/ {num(visao.tetoPeriodo)}</span>
           </p>
           <span className="home-kpi-hint">
-            Fechamento projetado {num(cenario.fechamentoCicloProjetado, 0)} ·{' '}
-            {cenario.dentroDoTetoCiclo ? 'dentro do teto' : 'acima do teto'}
+            Restam {num(visao.restantePeriodo)} · {visao.cicloLabel}
           </span>
-          <span className={`home-kpi-pill home-kpi-pill--${pill.mod}`}>
-            {pill.label}
-          </span>
-        </article>
-
-        <article className="home-kpi-tile">
-          <span className="home-kpi-icon" aria-hidden>
-            <Activity size={20} />
-          </span>
-          <span className="home-kpi-label">
-            {resumo.labelSemanaAnalise ?? `Semana S${resumo.semanaAnalise}`}
-          </span>
-          <p className="home-kpi-value-line">
-            <span className="home-kpi-number">
-              {num(resumo.enviadoSemanaFlex ?? resumo.enviadoSemanaAtual, 0)}
-            </span>
-            {resumo.planejadoSemanaFlex != null ? (
-              <span className="home-kpi-unit">
-                / {num(resumo.planejadoSemanaFlex, 0)} plano flex
-              </span>
-            ) : (
-              <span className="home-kpi-unit">cestas flex (sem fixos)</span>
-            )}
-          </p>
-          <span className="home-kpi-hint">
-            {resumo.saudeEmpenho
-              ? `Empenho 16 sem.: sustentável ~${num(resumo.saudeEmpenho.ritmoSustentavel, 0)}/sem · ${resumo.saudeEmpenho.semanasDecorridas}/${resumo.saudeEmpenho.semanasTotal} sem.`
-              : 'Semana flexível — SAICA/WARAOS/Mãos Dadas fora do rateio'}
-          </span>
-        </article>
-
-        <article className="home-kpi-tile">
-          <span className="home-kpi-icon" aria-hidden>
-            <ShieldAlert size={20} />
-          </span>
-          <span className="home-kpi-label">Teto por ciclo</span>
-          <p className="home-kpi-value-line">
-            <span className="home-kpi-number">
-              {num(TETO_MENSAL_OPERACIONAL, 0)}
-            </span>
-            <span className="home-kpi-unit">cestas</span>
-          </p>
-          <span className="home-kpi-hint">
-            Ciclo 1: 1.350 (1.150 + 200 gordura) · contrato{' '}
-            {num(TETO_CONTRATUAL_MENSAL, 0)}
-          </span>
-        </article>
-
-        <article className="home-kpi-tile">
-          <span className="home-kpi-icon" aria-hidden>
-            <CalendarRange size={20} />
-          </span>
-          <span className="home-kpi-label">Ponto zero</span>
-          <p className="home-kpi-value-line">
-            <span className="home-kpi-text">
-              {MONITOR_CONTROLE_MES_INICIO} S{MONITOR_CONTROLE_SEMANA_INICIO}
-            </span>
-          </p>
-          <span className="home-kpi-hint">
-            Âncora operacional — independente do mês no Admin
+          <span className={`home-kpi-pill home-kpi-pill--${pill}`}>
+            {pill === 'verde' ? 'VERDE' : pill === 'amarelo' ? 'AMARELO' : 'VERMELHO'}
           </span>
         </article>
 
@@ -166,22 +73,85 @@ export default function DecisionHomePage() {
           <span className="home-kpi-icon" aria-hidden>
             <Package size={20} />
           </span>
-          <span className="home-kpi-label">Saldo empenho</span>
+          <span className="home-kpi-label">Saldo do processo</span>
           <p className="home-kpi-value-line">
-            <span className="home-kpi-number">{num(empenho.restante, 0)}</span>
+            <span className="home-kpi-number">{num(visao.saldoProcesso)}</span>
             <span className="home-kpi-unit">cestas</span>
           </p>
           <span className="home-kpi-hint">
-            de {num(empenho.totalEmpenho, 0)} · usado {num(empenho.totalConsumido, 0)}
+            de {num(visao.totalProcesso)} · usado {num(visao.consumidoProcesso)}
+          </span>
+        </article>
+
+        <article className="home-kpi-tile">
+          <span className="home-kpi-icon" aria-hidden>
+            <CalendarRange size={20} />
+          </span>
+          <span className="home-kpi-label">Semana que fechou (terça)</span>
+          <p className="home-kpi-value-line">
+            <span className="home-kpi-number">
+              {num(visao.enviadoSemanaFechada)}
+            </span>
+            <span className="home-kpi-unit">cestas</span>
+          </p>
+          <span className="home-kpi-hint">
+            {visao.semanaFechadaPeriodo} · {visao.semanaFechadaLabel}
+          </span>
+        </article>
+
+        <article className="home-kpi-tile">
+          <span className="home-kpi-icon" aria-hidden>
+            <TrendingDown size={20} />
+          </span>
+          <span className="home-kpi-label">Semana de pedidos (quarta)</span>
+          <p className="home-kpi-value-line">
+            <span className="home-kpi-number">
+              {num(visao.totalCotaSemanaPedidos)}
+            </span>
+            <span className="home-kpi-unit">cestas previstas</span>
+          </p>
+          <span className="home-kpi-hint">
+            {visao.semanaPedidosPeriodo} · veja tabela abaixo
           </span>
         </article>
       </section>
 
-      <TopEstourosRetomadaCard payload={payload} />
+      {visao.ciclo1Excecao && (
+        <section className="panel public-ciclo1-note">
+          <h3>Período 1 — ajuste de retomada</h3>
+          <p className="hint">
+            Este período usou teto de <strong>1.350</strong> (+200 de margem).
+            Gordura usada: {num(visao.gorduraUsada)} · ainda disponível no
+            processo: {num(visao.gorduraRestante)}. Períodos seguintes: teto{' '}
+            <strong>1.150</strong>.
+          </p>
+        </section>
+      )}
 
-      <MitigacaoCenarioPanel payload={payload} />
+      <PublicCotasSemanaTable
+        cotas={visao.cotasSemana}
+        semanaPeriodo={visao.semanaPedidosPeriodo}
+        totalCota={visao.totalCotaSemanaPedidos}
+      />
 
-      <CessaoEquipamentosTable payload={payload} />
+      <section className="panel public-legenda">
+        <h3>Como ler estes números</h3>
+        <ul className="public-legenda-list">
+          <li>
+            <strong>Período de 4 semanas (1.150):</strong> é o “mês” operacional
+            — soma das 4 semanas qua–ter. Acompanhe aqui se estamos dentro do
+            limite antes de olhar o saldo total.
+          </li>
+          <li>
+            <strong>Saldo do processo (5.000):</strong> total da compra
+            emergencial; diminui cada semana com os envios registrados.
+          </li>
+          <li>
+            <strong>Cota da semana:</strong> quanto cada equipamento pode pedir
+            no outro sistema nesta semana de solicitações.
+          </li>
+        </ul>
+      </section>
     </>
   );
 }

@@ -81,6 +81,25 @@ export function isServicoCotaMensalUnica(nomeOuServico: string | { nome: string 
   return isUnidadeFixaEspecial(nome);
 }
 
+/** Cota fixa base ou valor real lançado no ciclo (sobras quando pediram menos) */
+export function getCotaFixaDinamica(
+  nome: string,
+  ciclo: number,
+  fixosReaisPorCiclo?: Record<number, Record<string, number>>,
+): number {
+  const base = cotaFixaPorUnidade(nome);
+  if (base == null) return 0;
+  const snap = fixosReaisPorCiclo?.[ciclo];
+  if (!snap) return base;
+  const n = norm(nome);
+  if (n.includes('saica')) return snap.SAICA ?? snap[UNIDADE_SAICA] ?? base;
+  if (n.includes('waraos')) return snap.WARAOS ?? snap[UNIDADE_WARAOS] ?? base;
+  if (n.includes('maos dadas') || n.includes('nucleos maos')) {
+    return snap['MÃOS DADAS'] ?? snap[UNIDADE_MAOS_DADAS] ?? base;
+  }
+  return base;
+}
+
 /**
  * Divide o total do requisitante Banco/Nutrição entre Mãos Dadas, SAICA e WARAOS
  * conforme cotas mensais × meses do período (proporção do que era pedido via Banco).

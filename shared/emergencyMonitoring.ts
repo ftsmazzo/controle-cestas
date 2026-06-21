@@ -92,6 +92,12 @@ import {
 } from './calendarWeeks.js';
 import { totalEnviadoNaSemana } from './weeklyQty.js';
 
+export interface FixosReaisPorCiclo {
+  SAICA?: number;
+  WARAOS?: number;
+  'MÃOS DADAS'?: number;
+}
+
 export interface EmergencialMonitoramento {
   saldoAtual: number | null;
   saldoAtualizadoEm: string | null;
@@ -103,6 +109,10 @@ export interface EmergencialMonitoramento {
   semanaInicioControle?: number | null;
   /** Mês em que vale semanaInicioControle (meses posteriores contam da S1) */
   mesInicioControle?: string | null;
+  /** Ajuste de saldo por perdas (positivo = perda real a descontar do rateio) */
+  perdaAjuste?: number | null;
+  /** Valores reais lançados dos fixos por ciclo (captura sobras quando pediram menos) */
+  fixosReaisPorCiclo?: Record<number, FixosReaisPorCiclo>;
 }
 
 export type MonitorEquipStatus = 'ok' | 'atencao' | 'critico' | 'sem_meta';
@@ -253,6 +263,12 @@ export function mergeEmergencialMonitoring(
       partial.semanaInicioControle !== undefined
         ? partial.semanaInicioControle
         : base.semanaInicioControle,
+    perdaAjuste:
+      partial.perdaAjuste !== undefined ? partial.perdaAjuste : base.perdaAjuste,
+    fixosReaisPorCiclo:
+      partial.fixosReaisPorCiclo !== undefined
+        ? partial.fixosReaisPorCiclo
+        : base.fixosReaisPorCiclo,
   };
 }
 
