@@ -164,6 +164,17 @@
   min-width: 7rem;
 }
 
+.public-cotas-usado-cell {
+  min-width: 8.5rem;
+}
+
+.public-cotas-usado-num {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+  text-align: right;
+}
+
 .public-cotas-subtotal-row {
   background: #f8fafc;
 }

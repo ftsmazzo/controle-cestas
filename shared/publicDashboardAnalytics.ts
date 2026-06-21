@@ -6,12 +6,15 @@ import { ultimoLancamentoSemanal } from './emergencyMonitoring.js';
 import { suggestEmpenhoMeses } from './empenhoControle.js';
 import { parseMonthKey } from './monthUtils.js';
 import { SEMANAS_POR_CICLO_OPERACIONAL } from './monitorConstants.js';
+import { buildConsumoSemanalEmergencial } from './consumoSemanalEmergencial.js';
 import {
   cicloOperacionalDeIndice,
   civilPorIndiceOperacional,
   indiceOperacionalCivil,
+  labelCicloOperacional,
   proximaSemanaOperacional,
   refSemanaOperacional,
+  tetoMaximoCicloOperacional,
 } from './operationalWeeks.js';
 import { planoJunSemana } from './planoAprovadoCiclo1.js';
 import {
@@ -330,6 +333,229 @@ function enviadoCicloEquipamento(
     out.set(u.id, t);
   }
   return out;
+}
+
+export function classificarGrupoConsumo(
+  nome: string,
+  cotaMensalUnica: boolean,
+): GrupoCotaId {
+  if (cotaMensalUnica) return 'fixos';
+  const n = normNome(nome);
+  if (/^CRAS\s+\d/.test(n)) return 'cras';
+  if (/^CREAS\s+[IVX\d]/.test(n)) return 'creas';
+  return 'pse';
+}
+
+export interface SemanaConsumoChip {
+  label: string;
+  periodo: string;
+  quantidade: number;
+  acimaCota: boolean;
+}
+
+export interface ConsumoEquipamentoPublico {
+  servicoId: string;
+  servicoNome: string;
+  cotaMensalUnica: boolean;
+  cotaCiclo: number;
+  usadoCiclo: number;
+  pctRestanteCiclo: number;
+  acumuladoControle: number;
+  cotaSemanalRef: number;
+  semanas: SemanaConsumoChip[];
+  semanasAcimaCota: number;
+}
+
+export interface GrupoConsumoPublico {
+  id: GrupoCotaId;
+  titulo: string;
+  equipamentos: ConsumoEquipamentoPublico[];
+  subtotalUsadoCiclo: number;
+  subtotalCotaCiclo: number;
+  subtotalPctRestante: number;
+}
+
+export interface VisaoConsumoPublico {
+  cicloAtual: number;
+  cicloLabel: string;
+  semanaNoCiclo: number;
+  totalSemanasRegistradas: number;
+  totalAcumuladoControle: number;
+  usadoCicloAtual: number;
+  tetoCicloAtual: number;
+  pctRestanteCicloAtual: number;
+  ultimaSemanaLabel: string;
+  ultimaSemanaPeriodo: string;
+  ultimaSemanaTotal: number;
+  deltaUltimaSemana: number | null;
+  tendenciaUltima: TendenciaSemana;
+  grupos: GrupoConsumoPublico[];
+  temDados: boolean;
+  periodoLabel: string;
+}
+
+function pctRestanteCiclo(usado: number, cota: number): number {
+  if (cota <= 0) return 100;
+  return Math.max(0, ((cota - usado) / cota) * 100);
+}
+
+function sortConsumoGrupo(
+  id: GrupoCotaId,
+  a: ConsumoEquipamentoPublico,
+  b: ConsumoEquipamentoPublico,
+): number {
+  const asCota = {
+    servicoId: a.servicoId,
+    servicoNome: a.servicoNome,
+    familiaCodigo: undefined,
+    cotaSemana: 0,
+    cotaMensalCiclo: 0,
+    enviadoCiclo: 0,
+    tipo: a.cotaMensalUnica ? ('fixo_mensal' as const) : ('rateio' as const),
+    observacao: null,
+  };
+  const bsCota = { ...asCota, servicoId: b.servicoId, servicoNome: b.servicoNome };
+  return sortGrupo(id, asCota, bsCota);
+}
+
+export function buildVisaoConsumoPublico(
+  payload: ServicesPayload,
+): VisaoConsumoPublico | null {
+  const consumo = buildConsumoSemanalEmergencial(payload);
+  if (!consumo.temDados) return null;
+
+  const cfg = payload.emergencial;
+  const empenhoMeses =
+    cfg.empenhoMeses?.length
+      ? cfg.empenhoMeses
+      : suggestEmpenhoMeses(cfg.duracaoMeses ?? 4);
+
+  const ultimo = ultimoLancamentoSemanal(cfg.monitoramento);
+  if (!ultimo) return null;
+
+  const idxUltimo = indiceOperacionalCivil(
+    ultimo.mes,
+    ultimo.semana,
+    empenhoMeses,
+  );
+  if (idxUltimo == null) return null;
+
+  const cicloFechado = cicloOperacionalDeIndice(idxUltimo);
+  const prox = proximaSemanaOperacional(
+    ultimo.mes,
+    ultimo.semana,
+    empenhoMeses,
+  );
+  const cicloAtual = prox
+    ? cicloOperacionalDeIndice(prox.indice)
+    : cicloFechado;
+  const semanaNoCiclo =
+    ((idxUltimo - 1) % SEMANAS_POR_CICLO_OPERACIONAL) + 1;
+  const novoCiclo = prox != null && cicloAtual > cicloFechado;
+
+  const fixos = cfg.monitoramento.fixosReaisPorCiclo;
+  const units = consumptionUnits(payload.services);
+  const byId = new Map(units.map((u) => [u.id, u]));
+  const enviadoMap = enviadoCicloEquipamento(
+    payload,
+    novoCiclo ? cicloAtual : cicloFechado,
+    empenhoMeses,
+  );
+
+  if (novoCiclo) {
+    for (const id of enviadoMap.keys()) enviadoMap.set(id, 0);
+  }
+
+  const equipamentos: ConsumoEquipamentoPublico[] = consumo.equipamentos.map(
+    (row) => {
+      const u = byId.get(row.servicoId);
+      const cicloRef = novoCiclo ? cicloAtual : cicloFechado;
+      const cotaCiclo =
+        u != null
+          ? cotaPrevistaCicloEquipamento(u, cicloRef, empenhoMeses, fixos)
+          : row.cotaMensalUnica
+            ? row.cotaMensal
+            : row.cotaSemanal * SEMANAS_POR_CICLO_OPERACIONAL;
+      const usadoCiclo = enviadoMap.get(row.servicoId) ?? 0;
+
+      return {
+        servicoId: row.servicoId,
+        servicoNome: row.servicoNome,
+        cotaMensalUnica: row.cotaMensalUnica,
+        cotaCiclo,
+        usadoCiclo,
+        pctRestanteCiclo: pctRestanteCiclo(usadoCiclo, cotaCiclo),
+        acumuladoControle: row.acumulado,
+        cotaSemanalRef: row.cotaSemanal,
+        semanas: consumo.colunas.map((col, i) => ({
+          label: col.label,
+          periodo: col.periodo,
+          quantidade: row.celulas[i]?.quantidade ?? 0,
+          acimaCota: row.celulas[i]?.acimaCota ?? false,
+        })),
+        semanasAcimaCota: row.semanasAcimaCota,
+      };
+    },
+  );
+
+  const ordem: GrupoCotaId[] = ['cras', 'creas', 'pse', 'fixos'];
+  const buckets = new Map<GrupoCotaId, ConsumoEquipamentoPublico[]>();
+  for (const e of equipamentos) {
+    const g = classificarGrupoConsumo(e.servicoNome, e.cotaMensalUnica);
+    const list = buckets.get(g) ?? [];
+    list.push(e);
+    buckets.set(g, list);
+  }
+
+  const grupos: GrupoConsumoPublico[] = ordem
+    .map((id) => {
+      const items = (buckets.get(id) ?? []).sort((a, b) =>
+        sortConsumoGrupo(id, a, b),
+      );
+      if (!items.length) return null;
+      const subtotalUsadoCiclo = items.reduce((s, e) => s + e.usadoCiclo, 0);
+      const subtotalCotaCiclo = items.reduce((s, e) => s + e.cotaCiclo, 0);
+      return {
+        id,
+        titulo: GRUPO_TITULOS[id],
+        equipamentos: items,
+        subtotalUsadoCiclo,
+        subtotalCotaCiclo,
+        subtotalPctRestante: pctRestanteCiclo(
+          subtotalUsadoCiclo,
+          subtotalCotaCiclo,
+        ),
+      };
+    })
+    .filter((g): g is GrupoConsumoPublico => g != null);
+
+  const usadoCicloAtual = [...enviadoMap.values()].reduce((s, v) => s + v, 0);
+  const tetoCicloAtual = tetoMaximoCicloOperacional(cicloAtual);
+  const totalAcumuladoControle = consumo.totaisSemana.reduce((a, b) => a + b, 0);
+  const ultimaIdx = consumo.totaisSemana.length - 1;
+  const ultimaSemanaTotal = consumo.totaisSemana[ultimaIdx] ?? 0;
+  const penultima = ultimaIdx > 0 ? consumo.totaisSemana[ultimaIdx - 1]! : null;
+  const deltaUltimaSemana =
+    penultima != null ? ultimaSemanaTotal - penultima : null;
+
+  return {
+    cicloAtual,
+    cicloLabel: labelCicloOperacional(cicloAtual),
+    semanaNoCiclo: novoCiclo ? 1 : semanaNoCiclo,
+    totalSemanasRegistradas: consumo.colunas.length,
+    totalAcumuladoControle,
+    usadoCicloAtual,
+    tetoCicloAtual,
+    pctRestanteCicloAtual: pctRestanteCiclo(usadoCicloAtual, tetoCicloAtual),
+    ultimaSemanaLabel: consumo.colunas[ultimaIdx]?.label ?? '—',
+    ultimaSemanaPeriodo: consumo.colunas[ultimaIdx]?.periodo ?? '—',
+    ultimaSemanaTotal,
+    deltaUltimaSemana,
+    tendenciaUltima: tendenciaDeDelta(deltaUltimaSemana),
+    grupos,
+    temDados: true,
+    periodoLabel: consumo.periodoLabel,
+  };
 }
 
 export function buildTopExcessoUltimoCiclo(

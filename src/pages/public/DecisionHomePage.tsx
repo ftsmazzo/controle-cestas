@@ -10,17 +10,11 @@ import { useData } from '../../context/DataContext';
 import PublicCotasSemanaTable from '../../components/PublicCotasSemanaTable';
 import PublicConsumoSemanalChart from '../../components/PublicConsumoSemanalChart';
 import PublicTopExcessoCicloCard from '../../components/PublicTopExcessoCicloCard';
-import PublicProgressBar from '../../components/ui/PublicProgressBar';
+import PublicProgressBar, { toneFromPctRestante } from '../../components/ui/PublicProgressBar';
 
 function num(n: number | null | undefined, dec = 0): string {
   if (n == null || Number.isNaN(n)) return '—';
   return n.toLocaleString('pt-BR', { maximumFractionDigits: dec });
-}
-
-function toneFromPct(pctRestante: number): 'verde' | 'amarelo' | 'vermelho' {
-  if (pctRestante <= 10) return 'vermelho';
-  if (pctRestante <= 25) return 'amarelo';
-  return 'verde';
 }
 
 export default function DecisionHomePage() {
@@ -74,7 +68,7 @@ export default function DecisionHomePage() {
           </p>
           <PublicProgressBar
             pct={pctRestantePeriodo}
-            tone={toneFromPct(pctRestantePeriodo)}
+            tone={toneFromPctRestante(pctRestantePeriodo)}
             label={`Saldo do período: ${num(visao.restantePeriodo)} cestas`}
           />
           <span className="home-kpi-hint home-kpi-hint--bar">
@@ -96,7 +90,7 @@ export default function DecisionHomePage() {
           </p>
           <PublicProgressBar
             pct={pctRestanteProcesso}
-            tone={toneFromPct(pctRestanteProcesso)}
+            tone={toneFromPctRestante(pctRestanteProcesso)}
             label={`Saldo do processo: ${num(visao.saldoProcesso)} cestas`}
           />
           <span className="home-kpi-hint home-kpi-hint--bar">
@@ -168,6 +162,10 @@ export default function DecisionHomePage() {
             <strong>Barra do período:</strong> começa em 100% e vai caindo
             conforme o consumo das 4 semanas. Verde = folga; vermelho = perto do
             limite.
+          </li>
+          <li>
+            <strong>Saldo do ciclo:</strong> barra em 100% no início do período;
+            cai conforme o equipamento usa a cota das 4 semanas.
           </li>
           <li>
             <strong>Cotas por grupo:</strong> CRAS, CREAS, PSE e fixos mensais

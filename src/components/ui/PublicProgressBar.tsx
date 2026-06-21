@@ -2,6 +2,18 @@ import './PublicProgressBar.css';
 
 export type ProgressBarTone = 'verde' | 'amarelo' | 'vermelho' | 'neutro';
 
+/** Saldo restante do ciclo/período — verde com folga, vermelho perto de zerar */
+export function toneFromPctRestante(pctRestante: number): ProgressBarTone {
+  if (pctRestante <= 10) return 'vermelho';
+  if (pctRestante <= 25) return 'amarelo';
+  return 'verde';
+}
+
+export function pctRestante(usado: number, total: number): number {
+  if (total <= 0) return 100;
+  return Math.max(0, ((total - usado) / total) * 100);
+}
+
 interface Props {
   pct: number;
   tone?: ProgressBarTone;

@@ -1,7 +1,9 @@
 import { Fragment, useMemo } from 'react';
 import { agruparCotasPublicas } from '@shared/publicDashboardAnalytics';
 import type { CotasSemanaEquipamento } from '@shared/visaoPublicaOperacional';
-import PublicProgressBar from './ui/PublicProgressBar';
+import PublicProgressBar, {
+  toneFromPctRestante,
+} from './ui/PublicProgressBar';
 import './PublicCotasSemanaTable.css';
 
 function num(n: number): string {
@@ -10,6 +12,11 @@ function num(n: number): string {
 
 function numPct(n: number): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+}
+
+function pctRestanteCiclo(usado: number, cota: number): number {
+  if (cota <= 0) return 100;
+  return Math.max(0, ((cota - usado) / cota) * 100);
 }
 
 interface Props {
@@ -72,7 +79,7 @@ export default function PublicCotasSemanaTable({
               <th className="col-num">Cota semana</th>
               <th className="col-num">% do total</th>
               <th className="col-num">No período</th>
-              <th className="col-num">Usado</th>
+              <th className="col-num">Saldo ciclo</th>
             </tr>
           </thead>
           <tbody>
@@ -88,6 +95,7 @@ export default function PublicCotasSemanaTable({
                 {grupo.itens.map((c) => {
                   const pct =
                     totalCota > 0 ? (c.cotaSemana / totalCota) * 100 : 0;
+                  const pctSaldo = pctRestanteCiclo(c.enviadoCiclo, c.cotaMensalCiclo);
                   return (
                     <tr key={c.servicoId} className="public-cotas-data-row">
                       <td>
@@ -101,10 +109,23 @@ export default function PublicCotasSemanaTable({
                         <PublicProgressBar pct={pct} tone="neutro" size="sm" />
                       </td>
                       <td className="col-num">{num(c.cotaMensalCiclo)}</td>
-                      <td className="col-num">{num(c.enviadoCiclo)}</td>
+                      <td className="col-num public-cotas-usado-cell">
+                        <span className="public-cotas-usado-num">{num(c.enviadoCiclo)}</span>
+                        <PublicProgressBar
+                          pct={pctSaldo}
+                          tone={toneFromPctRestante(pctSaldo)}
+                          size="sm"
+                          showPct
+                        />
+                      </td>
                     </tr>
                   );
                 })}
+                {(() => {
+                  const subCota = grupo.itens.reduce((s, c) => s + c.cotaMensalCiclo, 0);
+                  const subUsado = grupo.itens.reduce((s, c) => s + c.enviadoCiclo, 0);
+                  const subSaldo = pctRestanteCiclo(subUsado, subCota);
+                  return (
                 <tr className="public-cotas-subtotal-row">
                   <td>
                     <strong>Subtotal {grupo.titulo}</strong>
@@ -115,10 +136,28 @@ export default function PublicCotasSemanaTable({
                   <td className="col-num">
                     <strong>{numPct(grupo.subtotalPct)}%</strong>
                   </td>
-                  <td className="col-num" colSpan={2} />
+                  <td className="col-num">
+                    <strong>{num(subCota)}</strong>
+                  </td>
+                  <td className="col-num public-cotas-usado-cell">
+                    <strong>{num(subUsado)}</strong>
+                    <PublicProgressBar
+                      pct={subSaldo}
+                      tone={toneFromPctRestante(subSaldo)}
+                      size="sm"
+                      showPct
+                    />
+                  </td>
                 </tr>
+                  );
+                })()}
               </Fragment>
             ))}
+            {(() => {
+              const totCotaCiclo = cotas.reduce((s, c) => s + c.cotaMensalCiclo, 0);
+              const totUsado = cotas.reduce((s, c) => s + c.enviadoCiclo, 0);
+              const totSaldo = pctRestanteCiclo(totUsado, totCotaCiclo);
+              return (
             <tr className="public-cotas-total-row">
               <td>
                 <strong>Total geral</strong>
@@ -129,8 +168,21 @@ export default function PublicCotasSemanaTable({
               <td className="col-num">
                 <strong>100%</strong>
               </td>
-              <td className="col-num" colSpan={2} />
+              <td className="col-num">
+                <strong>{num(totCotaCiclo)}</strong>
+              </td>
+              <td className="col-num public-cotas-usado-cell">
+                <strong>{num(totUsado)}</strong>
+                <PublicProgressBar
+                  pct={totSaldo}
+                  tone={toneFromPctRestante(totSaldo)}
+                  size="sm"
+                  showPct
+                />
+              </td>
             </tr>
+              );
+            })()}
           </tbody>
         </table>
       </div>
