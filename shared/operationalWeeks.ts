@@ -294,6 +294,42 @@ export function totalEnviadoOperacionalAte(
   return total;
 }
 
+export interface SemanaOperacionalControle {
+  indice: number;
+  mes: string;
+  semana: number;
+  label: string;
+  periodo: string;
+  ciclo: number;
+  semanaNoCiclo: number;
+  enviado: number;
+  temDados: boolean;
+}
+
+/** Lista semanas qua–ter do processo com totais lançados (para seletor admin) */
+export function listarSemanasOperacionaisControle(
+  mon: EmergencialMonitoramento,
+  empenhoMeses?: string[],
+): SemanaOperacionalControle[] {
+  const civis = listarSemanasCivisControle(empenhoMeses);
+  return civis.map((civil, i) => {
+    const indice = i + 1;
+    const ref = refSemanaOperacional(indice, empenhoMeses);
+    const enviado = totalEnviadoNaSemana(mon, civil.mes, civil.semana);
+    return {
+      indice,
+      mes: civil.mes,
+      semana: civil.semana,
+      label: ref?.label ?? `Sem ${indice}`,
+      periodo: ref?.periodo ?? '',
+      ciclo: ref?.ciclo ?? 1,
+      semanaNoCiclo: ref?.semanaNoCiclo ?? 1,
+      enviado,
+      temDados: enviado > 0,
+    };
+  });
+}
+
 /** Semana operacional seguinte ao par civil (para cotas de pedidos na quarta) */
 export function proximaSemanaOperacional(
   mes: string,

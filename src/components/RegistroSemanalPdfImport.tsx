@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { applyRegistroSemanalImport } from '@shared/registroSemanalImport';
 import type { RegistroSemanalParseResult } from '@shared/registroSemanalPdfParser';
-import { weekDateRangeLabel } from '@shared/emergencyMonitoring';
-import { getYearMonth } from '@shared/monthUtils';
+import type { SemanaOperacionalRef } from '@shared/operationalWeeks';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import { parseRegistroSemanalPdfFile } from '../lib/registroSemanalPdfImport';
 import PrintableTable from './ui/PrintableTable';
@@ -11,6 +10,8 @@ interface Props {
   data: ServicesPayload;
   mes: string;
   semana: number;
+  /** Rótulo qua–ter (P2·S1, 17–23 Jun…) */
+  semanaOperacional?: SemanaOperacionalRef | null;
   onApply: (next: ServicesPayload) => void;
   readOnly?: boolean;
 }
@@ -23,6 +24,7 @@ export default function RegistroSemanalPdfImport({
   data,
   mes,
   semana,
+  semanaOperacional,
   onApply,
   readOnly,
 }: Props) {
@@ -30,10 +32,13 @@ export default function RegistroSemanalPdfImport({
   const [preview, setPreview] = useState<RegistroSemanalParseResult | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const ym = getYearMonth(mes);
-  const year = ym?.year ?? new Date().getFullYear();
-  const month = ym?.month ?? new Date().getMonth() + 1;
-  const rangeLabel = weekDateRangeLabel(year, month, semana);
+  const periodoLabel =
+    semanaOperacional?.periodo ??
+    `${mes} · semana civil ${semana}`;
+  const tituloSemana =
+    semanaOperacional != null
+      ? `P${semanaOperacional.ciclo} · S${semanaOperacional.semanaNoCiclo}`
+      : `S${semana}`;
 
   if (readOnly) return null;
 
@@ -56,7 +61,7 @@ export default function RegistroSemanalPdfImport({
       const n = result.rows.filter((r) => r.semana === semana).length;
       if (!n) {
         setMsg(
-          `PDF lido, mas sem linhas para ${mes} semana ${semana} (${rangeLabel}). Ajuste a semana ou use o PDF do mês correto.`,
+          `PDF lido, mas sem linhas para ${tituloSemana} (${periodoLabel}). Escolha outra semana operacional ou confira o PDF.`,
         );
       }
     } catch (e) {
@@ -72,25 +77,23 @@ export default function RegistroSemanalPdfImport({
       applyRegistroSemanalImport(data, preview, mes, semana);
     onApply(payload);
     setMsg(
-      `Registro real aplicado: ${linhasAplicadas} unidade(s), total ${num(totalSemana)} cestas na S${semana} (${rangeLabel}). ` +
+      `Registro aplicado: ${linhasAplicadas} unidade(s), total ${num(totalSemana)} cestas · ${tituloSemana} (${periodoLabel}). ` +
         (warnings.length ? warnings[0] + ' ' : '') +
-        'Clique em Salvar monitoramento.',
+        'Clique em Salvar no topo da página.',
     );
     setPreview(null);
   };
 
   return (
-    <section className="panel registro-semanal-import">
-      <h3>Registro real da semana — PDF operacional</h3>
+    <section className="registro-semanal-import">
+      <h3>Importar PDF RME (envio real da semana)</h3>
       <p className="hint">
-        PDF padrão: relatório <strong>RME Coderp</strong> da semana (ex.{' '}
-        <em>CESTAS 18.05.26 A 24.05.26.pdf</em> — Consumo por requisitante, período
-        18/05–24/05). Cada setor (CRAS 1…12, CREAS I–V, NAEM…) vira envio real da
-        semana. <strong>Não</strong> altera metas (use o Coderp longo só para histórico).
+        Relatório <strong>Consumo por requisitante</strong> da semana qua–ter (ex.{' '}
+        <em>CESTAS 18.05.26 A 24.05.26.pdf</em>). Cada CRAS/CREAS/NAEM vira envio
+        real. <strong>Não</strong> altera cotas — só registra o que foi entregue.
       </p>
       <p className="hint">
-        Destino: <strong>{mes}</strong> · <strong>Semana {semana}</strong> ({rangeLabel}
-        ). Troque mês/semana nos seletores acima antes de importar.
+        Destino: <strong>{tituloSemana}</strong> · {periodoLabel}
       </p>
       <div className="config-grid">
         <label>
@@ -145,12 +148,12 @@ export default function RegistroSemanalPdfImport({
             </p>
           ))}
           <p className="hint">
-            Prévia para <strong>S{semana}</strong> ({rangeLabel}) —{' '}
+            Prévia — <strong>{tituloSemana}</strong> ({periodoLabel}) ·{' '}
             {rowsSemana.length} linha(s):
           </p>
           <PrintableTable
-            title={`Prévia envio semanal — S${semana}`}
-            subtitle={rangeLabel}
+            title={`Prévia envio — ${tituloSemana}`}
+            subtitle={periodoLabel}
             orientation="landscape"
           >
             <table>
@@ -193,7 +196,7 @@ export default function RegistroSemanalPdfImport({
             disabled={!rowsSemana.some((r) => r.match === 'ok')}
             onClick={aplicar}
           >
-            Aplicar envios da semana {semana}
+            Aplicar envios · {tituloSemana}
           </button>
         </>
       )}

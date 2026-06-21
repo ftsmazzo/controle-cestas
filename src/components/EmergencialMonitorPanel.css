@@ -261,3 +261,14 @@
 .row-cota-mes .cell-unidade {
   color: var(--text);
 }
+
+.monitor-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.25rem 0;
+}
+
+.monitor-details[open] summary {
+  margin-bottom: 0.75rem;
+}
