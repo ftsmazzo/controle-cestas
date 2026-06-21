@@ -6,7 +6,8 @@ import './Shell.css';
 const NAV = [
   ['/', 'Painel de decisão'],
   ['/historico', 'Consumo'],
-  ['/contrato-emergencial', 'Monitor emergencial'],
+  ['/analise', 'Análise'],
+  ['/contrato-emergencial', 'Processo'],
   ['/metodologia', 'Metodologia'],
 ] as const;
 

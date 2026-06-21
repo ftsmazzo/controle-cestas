@@ -5,7 +5,12 @@ import {
 import { ultimoLancamentoSemanal } from './emergencyMonitoring.js';
 import { suggestEmpenhoMeses } from './empenhoControle.js';
 import { parseMonthKey } from './monthUtils.js';
-import { SEMANAS_POR_CICLO_OPERACIONAL } from './monitorConstants.js';
+import {
+  EMPENHO_TOTAL_CESTAS,
+  SEMANAS_POR_CICLO_OPERACIONAL,
+  TETO_MENSAL_OPERACIONAL,
+  TOTAL_CICLOS_OPERACIONAIS,
+} from './monitorConstants.js';
 import { buildConsumoSemanalEmergencial } from './consumoSemanalEmergencial.js';
 import {
   cicloOperacionalDeIndice,
@@ -15,6 +20,7 @@ import {
   proximaSemanaOperacional,
   refSemanaOperacional,
   tetoMaximoCicloOperacional,
+  totalEnviadoOperacionalAte,
 } from './operationalWeeks.js';
 import { planoJunSemana } from './planoAprovadoCiclo1.js';
 import {
@@ -651,5 +657,158 @@ export function buildTopExcessoUltimoCiclo(
     cicloLabel,
     items: candidatos.slice(0, limit),
     temDados: [...enviadoMap.values()].some((v) => v > 0),
+  };
+}
+
+export type StatusCicloPublico = 'concluido' | 'em_curso' | 'futuro';
+
+export interface ResumoCicloPublico {
+  ciclo: number;
+  label: string;
+  periodo: string;
+  teto: number;
+  enviado: number;
+  pctUsado: number;
+  pctRestante: number;
+  gorduraUsada: number;
+  semanasComDados: number;
+  status: StatusCicloPublico;
+  estourouTeto: boolean;
+}
+
+export interface VisaoAnaliseCiclos {
+  cicloAtual: number;
+  ciclosConcluidos: number;
+  ciclosTotal: number;
+  totalProcesso: number;
+  consumidoProcesso: number;
+  saldoProcesso: number;
+  pctRestanteProcesso: number;
+  mediaPorCicloConcluido: number;
+  ciclos: ResumoCicloPublico[];
+  temDados: boolean;
+}
+
+function enviadoIndiceOperacional(
+  mon: ServicesPayload['emergencial']['monitoramento'],
+  indice: number,
+  empenhoMeses: string[],
+): number {
+  const civil = civilPorIndiceOperacional(indice, empenhoMeses);
+  if (!civil) return 0;
+  return totalEnviadoNaSemana(mon, civil.mes, civil.semana);
+}
+
+export function buildVisaoAnaliseCiclos(
+  payload: ServicesPayload,
+): VisaoAnaliseCiclos | null {
+  const cfg = payload.emergencial;
+  const empenhoMeses =
+    cfg.empenhoMeses?.length
+      ? cfg.empenhoMeses
+      : suggestEmpenhoMeses(cfg.duracaoMeses ?? 4);
+
+  const ultimo = ultimoLancamentoSemanal(cfg.monitoramento);
+  if (!ultimo) return null;
+
+  const idxUltimo = indiceOperacionalCivil(
+    ultimo.mes,
+    ultimo.semana,
+    empenhoMeses,
+  );
+  if (idxUltimo == null) return null;
+
+  const prox = proximaSemanaOperacional(
+    ultimo.mes,
+    ultimo.semana,
+    empenhoMeses,
+  );
+  const cicloFechado = cicloOperacionalDeIndice(idxUltimo);
+  const cicloAtual = prox
+    ? cicloOperacionalDeIndice(prox.indice)
+    : cicloFechado;
+  const novoCiclo = prox != null && cicloAtual > cicloFechado;
+
+  const mon = cfg.monitoramento;
+  const ciclos: ResumoCicloPublico[] = [];
+
+  for (let c = 1; c <= TOTAL_CICLOS_OPERACIONAIS; c++) {
+    const ini = (c - 1) * SEMANAS_POR_CICLO_OPERACIONAL + 1;
+    const fim = c * SEMANAS_POR_CICLO_OPERACIONAL;
+    let enviado = 0;
+    let semanasComDados = 0;
+
+    for (let i = ini; i <= fim; i++) {
+      const q = enviadoIndiceOperacional(mon, i, empenhoMeses);
+      if (q > 0) {
+        enviado += q;
+        semanasComDados++;
+      }
+    }
+
+    let status: StatusCicloPublico = 'futuro';
+    if (novoCiclo && c === cicloAtual) {
+      status = 'em_curso';
+    } else if (novoCiclo && c < cicloAtual) {
+      status = 'concluido';
+    } else if (!novoCiclo && idxUltimo >= fim) {
+      status = 'concluido';
+    } else if (!novoCiclo && idxUltimo >= ini && idxUltimo <= fim) {
+      status = 'em_curso';
+    } else if (c === cicloAtual && semanasComDados > 0) {
+      status = 'em_curso';
+    }
+
+    if (status === 'futuro' && semanasComDados === 0) continue;
+
+    const teto = tetoMaximoCicloOperacional(c);
+    const pctUsado = teto > 0 ? (enviado / teto) * 100 : 0;
+    const refIni = refSemanaOperacional(ini, empenhoMeses);
+    const refFim = refSemanaOperacional(fim, empenhoMeses);
+
+    ciclos.push({
+      ciclo: c,
+      label: `Ciclo ${c}`,
+      periodo:
+        refIni && refFim
+          ? `${refIni.periodo} – ${refFim.periodo}`
+          : labelCicloOperacional(c),
+      teto,
+      enviado,
+      pctUsado,
+      pctRestante: Math.max(0, 100 - pctUsado),
+      gorduraUsada: Math.max(0, enviado - TETO_MENSAL_OPERACIONAL),
+      semanasComDados,
+      status,
+      estourouTeto: enviado > teto,
+    });
+  }
+
+  const concluidos = ciclos.filter((c) => c.status === 'concluido');
+  const mediaPorCicloConcluido =
+    concluidos.length > 0
+      ? concluidos.reduce((s, c) => s + c.enviado, 0) / concluidos.length
+      : 0;
+
+  const consumidoProcesso = totalEnviadoOperacionalAte(
+    mon,
+    idxUltimo,
+    empenhoMeses,
+  );
+  const totalProcesso = cfg.empenhoTotalCestas ?? EMPENHO_TOTAL_CESTAS;
+  const saldoProcesso = Math.max(0, totalProcesso - consumidoProcesso);
+
+  return {
+    cicloAtual,
+    ciclosConcluidos: concluidos.length,
+    ciclosTotal: TOTAL_CICLOS_OPERACIONAIS,
+    totalProcesso,
+    consumidoProcesso,
+    saldoProcesso,
+    pctRestanteProcesso:
+      totalProcesso > 0 ? (saldoProcesso / totalProcesso) * 100 : 100,
+    mediaPorCicloConcluido,
+    ciclos,
+    temDados: ciclos.some((c) => c.enviado > 0),
   };
 }

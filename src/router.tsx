@@ -11,6 +11,7 @@ import AdminMethodologyPage from './pages/admin/AdminMethodologyPage';
 import AdminSyncPage from './pages/admin/AdminSyncPage';
 import AdminAssistancePage from './pages/admin/AdminAssistancePage';
 import AdminMonitorEmergencialPage from './pages/admin/AdminMonitorEmergencialPage';
+import AnalisePage from './pages/public/AnalisePage';
 import DecisionHomePage from './pages/public/DecisionHomePage';
 import EmergencyContractPage from './pages/public/EmergencyContractPage';
 import HistoryPage from './pages/public/HistoryPage';
@@ -25,6 +26,7 @@ export default function AppRouter() {
           <Route element={<PublicLayout />}>
             <Route index element={<DecisionHomePage />} />
             <Route path="historico" element={<HistoryPage />} />
+            <Route path="analise" element={<AnalisePage />} />
             <Route path="contrato-emergencial" element={<EmergencyContractPage />} />
             <Route path="metodologia" element={<MethodologyPage />} />
           </Route>
