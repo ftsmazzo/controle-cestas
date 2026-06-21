@@ -5,6 +5,10 @@ import {
   Target,
   TrendingDown,
 } from 'lucide-react';
+import {
+  PERIODO_REFERENCIA_FIM,
+  PERIODO_REFERENCIA_INICIO,
+} from '@shared/processoEmergencial';
 import { buildVisaoPublicaOperacional } from '@shared/visaoPublicaOperacional';
 import { useData } from '../../context/DataContext';
 import PublicCotasSemanaTable from '../../components/PublicCotasSemanaTable';
@@ -50,8 +54,12 @@ export default function DecisionHomePage() {
         <p>
           <strong>Uma régua de tempo:</strong> semanas qua–ter · período de 4
           semanas = <strong>1.150 cestas</strong> · processo total ={' '}
-          <strong>5.000 cestas</strong>. Números abaixo são só da operação
-          atual (desde 20/05/2026).
+          <strong>5.000 cestas</strong>. Operação desde 20/05/2026. Cotas
+          semanais = plano aprovado (264 flex.); estudo de demanda: histórico{' '}
+          <strong>
+            {PERIODO_REFERENCIA_INICIO}–{PERIODO_REFERENCIA_FIM}
+          </strong>{' '}
+          (<a href="/metodologia">metodologia</a>).
         </p>
       </section>
 
@@ -185,6 +193,12 @@ export default function DecisionHomePage() {
           <li>
             <strong>Saldo do ciclo:</strong> barra por equipamento — quanto
             ainda resta da cota das 4 semanas do período.
+          </li>
+          <li>
+            <strong>Cotas da tabela:</strong> plano fixo 264/semana (período
+            2+), derivado do estudo sobre {PERIODO_REFERENCIA_INICIO}–
+            {PERIODO_REFERENCIA_FIM} — ver{' '}
+            <a href="/metodologia">Metodologia</a>.
           </li>
           <li>
             Histórico detalhado em <a href="/historico">Consumo</a> · análise

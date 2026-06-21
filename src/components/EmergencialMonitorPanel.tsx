@@ -19,15 +19,19 @@ import MonitorSaudePanel from './MonitorSaudePanel';
 import MonitorSaldoEvolucao from './MonitorSaldoEvolucao';
 import RegistroSemanalPdfImport from './RegistroSemanalPdfImport';
 import { TOTAL_MENSAL_EMERGENCIAL_PADRAO } from '@shared/requisicaoHistorico';
-import { TETO_MENSAL_OPERACIONAL } from '@shared/processoEmergencial';
+import {
+  PERIODO_REFERENCIA_FIM,
+  PERIODO_REFERENCIA_INICIO,
+  TETO_MENSAL_OPERACIONAL,
+} from '@shared/processoEmergencial';
 import {
   formatSemanaOperacionalCurta,
-  periodoOperacionalCivil,
   refSemanaOperacionalCivil,
 } from '@shared/operationalWeeks';
 import { labelFonteProjecao } from '@shared/projecaoOperacionalCiclo';
 import type { DashboardState } from '@shared/types';
 import MonitorAjustesOperacionais from './MonitorAjustesOperacionais';
+import PrintableTable from './ui/PrintableTable';
 import './EmergencialMonitorPanel.css';
 
 function num(n: number | null | undefined, dec = 0): string {
@@ -623,6 +627,15 @@ export default function EmergencialMonitorPanel({
             </span>
           )}
         </h2>
+          <p className="hint">
+            Cotas semanais flexíveis (264) vêm do <strong>plano aprovado</strong>{' '}
+            (período 2+). O estudo proporcional usou o histórico{' '}
+            <strong>
+              {PERIODO_REFERENCIA_INICIO}–{PERIODO_REFERENCIA_FIM}
+            </strong>{' '}
+            — importe a requisição Coderp abaixo para conferir o rateio de
+            referência.
+          </p>
         {!resumoTabela.allocation && (
           <p className="alerta-box alerta-nivel-moderado">
             Importe a <strong>requisição Coderp</strong> abaixo e/ou a planilha pivot em Admin →

@@ -7,7 +7,11 @@ import {
   CICLO_INICIO_CONTROLE_ESTOURO,
   EMPENHO_TOTAL_CESTAS,
 } from '@shared/monitorConstants';
-import { prepararProcessoEmergencialOperacional } from '@shared/processoEmergencial';
+import {
+  PERIODO_REFERENCIA_FIM,
+  PERIODO_REFERENCIA_INICIO,
+  prepararProcessoEmergencialOperacional,
+} from '@shared/processoEmergencial';
 import type { ServicesPayload } from '@shared/serviceTypes';
 import './AdminMonitorEmergencialPage.css';
 
@@ -68,6 +72,11 @@ export default function AdminMonitorEmergencialPage() {
             semanas = <strong>1.150</strong> (período 1: 1.350) · ponto zero{' '}
             <strong>20/05/2026</strong> (semana qua–ter). Compensação/desconto
             por estouro a partir do <strong>período {CICLO_INICIO_CONTROLE_ESTOURO}</strong>.
+            Cotas semanais (264 flex.) = plano aprovado; estudo de demanda em{' '}
+            <strong>
+              {PERIODO_REFERENCIA_INICIO}–{PERIODO_REFERENCIA_FIM}
+            </strong>{' '}
+            (excl. COVID/2023/ruptura Abr/2026).
           </p>
         </div>
         <div className="monitor-page-actions">
