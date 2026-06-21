@@ -228,9 +228,6 @@ function cotaSemanaPedidos(
   };
 }
 
-  return planoCotaSemanalParaUnidade(u.nome) ?? 0;
-}
-
 /** Cota total do equipamento no período de 4 semanas */
 function cotaPeriodoEquipamento(
   u: ServiceDef,
