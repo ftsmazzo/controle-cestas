@@ -111,7 +111,8 @@ export default function DecisionHomePage() {
             <span className="home-kpi-unit">cestas previstas</span>
           </p>
           <span className="home-kpi-hint">
-            {visao.semanaPedidosPeriodo} · veja tabela abaixo
+            Flexível: {num(visao.totalCotaFlexSemana)} + fixos pendentes no
+            período · {visao.semanaPedidosPeriodo}
           </span>
         </article>
       </section>

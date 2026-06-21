@@ -22,9 +22,9 @@ export default function PublicCotasSemanaTable({
       <header className="public-cotas-head">
         <h2>Cotas para pedidos nesta semana</h2>
         <p className="hint">
-          Período de pedidos <strong>{semanaPeriodo}</strong> — use estes valores
-          no sistema de requisição. Total flexível da semana:{' '}
-          <strong>{num(totalCota)}</strong> cestas.
+          Período de pedidos <strong>{semanaPeriodo}</strong> — flexível:{' '}
+          <strong>{num(totalCota)}</strong> cestas/semana (plano 264 + fixos
+          mensais pendentes). Use no sistema de requisição.
         </p>
       </header>
       <div className="table-wrap">

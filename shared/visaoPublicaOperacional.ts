@@ -1,13 +1,7 @@
-import { computeServiceStats } from './allocation.js';
-import {
-  COTA_FIXA_BASE,
-  SERVICOS_FIXOS_NOMES,
-  subtrairFixosERatearProporcional,
-  tetoCicloOperacional,
-} from './cicloOperacionalAllocation.js';
 import {
   getCotaFixaDinamica,
   isServicoCotaMensalUnica,
+  TOTAL_RESERVA_COTA_MENSAL_UNICA,
 } from './coderpRequisitanteRules.js';
 import {
   buildMonitoramentoResumo,
@@ -22,6 +16,7 @@ import {
   TOTAL_CICLOS_OPERACIONAIS,
 } from './monitorConstants.js';
 import {
+  cicloOperacionalDeIndice,
   civilPorIndiceOperacional,
   enviadoCicloOperacionalAte,
   formatSemanaOperacionalCurta,
@@ -32,9 +27,16 @@ import {
   tetoMaximoCicloOperacional,
   totalEnviadoOperacionalAte,
 } from './operationalWeeks.js';
-import { filtrarHistoricoReferencia } from './processoEmergencial.js';
-import { limiteSemanaCicloOperacional } from './projecaoOperacionalCiclo.js';
+import { planoJunSemana } from './planoAprovadoCiclo1.js';
+import {
+  planoCotaSemanalParaUnidade,
+  TOTAL_FLEX_PERIODO_4SEM,
+  TOTAL_FLEX_SEMANAL_PADRAO,
+  usaPlanoSemanalPadrao,
+} from './planoCotaSemanalPadrao.js';
+import { parseMonthKey } from './monthUtils.js';
 import { consumptionUnits } from './serviceFamilies.js';
+import type { ServiceDef } from './serviceTypes.js';
 import type { ServicesPayload } from './serviceTypes.js';
 import { getWeeklyQty } from './weeklyQty.js';
 
@@ -58,6 +60,7 @@ export interface VisaoPublicaOperacional {
   semanaPedidosLabel: string;
   semanaPedidosPeriodo: string;
   totalCotaSemanaPedidos: number;
+  totalCotaFlexSemana: number;
   cotasSemana: CotasSemanaEquipamento[];
   labelPeriodoLeigo: string;
   cicloNumero: number;
@@ -87,46 +90,6 @@ function semaforoDePct(pct: number, estourou: boolean): SemaforoStatus {
   return 'verde';
 }
 
-function alocacaoCicloPorEquipamento(
-  payload: ServicesPayload,
-  ciclo: number,
-): Map<string, number> {
-  const teto = tetoCicloOperacional(ciclo);
-  const mon = payload.emergencial.monitoramento;
-  const history = filtrarHistoricoReferencia(payload);
-  const units = consumptionUnits(payload.services);
-  const stats = computeServiceStats(history, units.map((u) => u.id));
-  const fixosReais: Record<string, number> = {};
-  for (const nome of SERVICOS_FIXOS_NOMES) {
-    fixosReais[nome] = getCotaFixaDinamica(
-      nome,
-      ciclo,
-      mon.fixosReaisPorCiclo as Record<number, Record<string, number>>,
-    );
-  }
-  const medias = stats
-    .filter((s) => {
-      const u = units.find((x) => x.id === s.servicoId);
-      return u && !isServicoCotaMensalUnica(u);
-    })
-    .map((s) => ({
-      servicoId: s.servicoId,
-      media: s.mediaHistorica,
-    }));
-  const { alocacoes } = subtrairFixosERatearProporcional({
-    totalCiclo: teto,
-    fixosReais,
-    mediasHistoricas: medias,
-    servicosFixos: [...SERVICOS_FIXOS_NOMES],
-    perdasAjuste: mon.perdaAjuste ?? 0,
-  });
-  const byId = new Map<string, number>();
-  for (const u of units) {
-    byId.set(u.id, alocacoes.get(u.nome) ?? alocacoes.get(u.id) ?? 0);
-  }
-  return byId;
-}
-
 function enviadoPorEquipamentoCiclo(
   payload: ServicesPayload,
   ciclo: number,
@@ -148,6 +111,69 @@ function enviadoPorEquipamentoCiclo(
   return out;
 }
 
+/** Cota da semana de pedidos — plano aprovado, não rateio dinâmico por restante */
+function cotaSemanaPedidos(
+  u: ServiceDef,
+  cicloPedidos: number,
+  mesPedidos: string,
+  semanaPedidos: number,
+  enviadoNoCiclo: number,
+  fixosReaisPorCiclo: ServicesPayload['emergencial']['monitoramento']['fixosReaisPorCiclo'],
+): Pick<CotasSemanaEquipamento, 'cotaSemana' | 'cotaMensalCiclo' | 'tipo' | 'observacao'> {
+  if (isServicoCotaMensalUnica(u)) {
+    const cotaMensal = getCotaFixaDinamica(
+      u.nome,
+      cicloPedidos,
+      fixosReaisPorCiclo as Record<number, Record<string, number>>,
+    );
+    const jaLancouNoCiclo = enviadoNoCiclo > 0;
+    return {
+      cotaSemana: jaLancouNoCiclo ? 0 : cotaMensal,
+      cotaMensalCiclo: cotaMensal,
+      tipo: 'fixo_mensal',
+      observacao: jaLancouNoCiclo
+        ? 'Entrega única do período já registrada'
+        : 'Entrega única no período (fora das 264/semana)',
+    };
+  }
+
+  if (usaPlanoSemanalPadrao(cicloPedidos)) {
+    const cota = planoCotaSemanalParaUnidade(u.nome) ?? 0;
+    return {
+      cotaSemana: cota,
+      cotaMensalCiclo: cota * SEMANAS_POR_CICLO_OPERACIONAL,
+      tipo: 'rateio',
+      observacao: 'Plano aprovado pós-retomada',
+    };
+  }
+
+  // Ciclo 1 excepcional: Jun S1/S2 com plano de corte
+  const junKey = parseMonthKey('Jun/2026');
+  if (
+    parseMonthKey(mesPedidos) === junKey &&
+    (semanaPedidos === 1 || semanaPedidos === 2)
+  ) {
+    const cota =
+      planoJunSemana(u.nome, semanaPedidos as 1 | 2) ??
+      planoCotaSemanalParaUnidade(u.nome) ??
+      0;
+    return {
+      cotaSemana: cota,
+      cotaMensalCiclo: cota * SEMANAS_POR_CICLO_OPERACIONAL,
+      tipo: 'rateio',
+      observacao: `Plano ciclo 1 · Jun S${semanaPedidos}`,
+    };
+  }
+
+  const padrao = planoCotaSemanalParaUnidade(u.nome) ?? 0;
+  return {
+    cotaSemana: padrao,
+    cotaMensalCiclo: padrao * SEMANAS_POR_CICLO_OPERACIONAL,
+    tipo: 'rateio',
+    observacao: 'Plano aprovado',
+  };
+}
+
 export function buildVisaoPublicaOperacional(
   payload: ServicesPayload,
   now: Date = new Date(),
@@ -163,29 +189,42 @@ export function buildVisaoPublicaOperacional(
   const ultimo = ultimoLancamentoSemanal(cfg.monitoramento);
   if (!ultimo) return null;
 
-  const idxAtual = indiceOperacionalCivil(
+  const idxUltimo = indiceOperacionalCivil(
     ultimo.mes,
     ultimo.semana,
     empenhoMeses,
   );
-  if (idxAtual == null) return null;
+  if (idxUltimo == null) return null;
 
-  const cicloInfo = enviadoCicloOperacionalAte(
-    cfg.monitoramento,
+  const prox = proximaSemanaOperacional(
     ultimo.mes,
     ultimo.semana,
     empenhoMeses,
   );
-  const ciclo = cicloInfo.ciclo;
-  const tetoPeriodo = tetoMaximoCicloOperacional(ciclo);
-  const enviadoPeriodo = cicloInfo.enviado;
+
+  const cicloFechado = cicloOperacionalDeIndice(idxUltimo);
+  const cicloPedidos = prox
+    ? cicloOperacionalDeIndice(prox.indice)
+    : cicloFechado;
+
+  const cicloExibicao = cicloPedidos;
+  const tetoPeriodo = tetoMaximoCicloOperacional(cicloExibicao);
+  const enviadoPeriodo =
+    cicloPedidos > cicloFechado
+      ? 0
+      : enviadoCicloOperacionalAte(
+          cfg.monitoramento,
+          ultimo.mes,
+          ultimo.semana,
+          empenhoMeses,
+        ).enviado;
   const restantePeriodo = Math.max(0, tetoPeriodo - enviadoPeriodo);
   const pctPeriodo =
     tetoPeriodo > 0 ? (enviadoPeriodo / tetoPeriodo) * 100 : 0;
 
   const consumidoProcesso = totalEnviadoOperacionalAte(
     cfg.monitoramento,
-    idxAtual,
+    idxUltimo,
     empenhoMeses,
   );
   const totalProcesso = cfg.empenhoTotalCestas ?? EMPENHO_TOTAL_CESTAS;
@@ -203,100 +242,63 @@ export function buildVisaoPublicaOperacional(
     now,
   });
 
-  const prox = proximaSemanaOperacional(
-    ultimo.mes,
-    ultimo.semana,
-    empenhoMeses,
-  );
-  const resumoPedidos = prox
-    ? buildMonitoramentoResumo(payload, {
-        mesReferencia: prox.mes,
-        semanaReferencia: prox.semana,
-        usarCicloOperacional: true,
-        now,
-      })
-    : null;
-
   const refPedidos = prox
     ? refSemanaOperacionalCivil(prox.mes, prox.semana, empenhoMeses)
     : null;
 
-  const alocCiclo = alocacaoCicloPorEquipamento(payload, ciclo);
+  const idxEnvioCicloPedidos =
+    prox && cicloPedidos > cicloFechado
+      ? (cicloPedidos - 1) * SEMANAS_POR_CICLO_OPERACIONAL
+      : idxUltimo;
+
   const enviadoEquip = enviadoPorEquipamentoCiclo(
     payload,
-    ciclo,
-    idxAtual,
+    cicloPedidos,
+    idxEnvioCicloPedidos,
     empenhoMeses,
   );
 
-  const semanasRestantes =
-    resumoPedidos?.semanasRestantesCiclo ??
-    Math.max(1, SEMANAS_POR_CICLO_OPERACIONAL - (refFechada?.semanaNoCiclo ?? 1));
-
-  const limiteSem = prox
-    ? limiteSemanaCicloOperacional(
-        payload,
-        prox.mes,
-        prox.semana,
-        enviadoPeriodo,
-        tetoPeriodo,
-        empenhoMeses,
-      )
-    : null;
+  const mesPedidos = prox?.mes ?? ultimo.mes;
+  const semanaPedidos = prox?.semana ?? ultimo.semana;
 
   const cotasSemana: CotasSemanaEquipamento[] = consumptionUnits(
     payload.services,
   ).map((u) => {
-    const cotaMensalCiclo = alocCiclo.get(u.id) ?? 0;
     const enviadoCicloEq = enviadoEquip.get(u.id) ?? 0;
-    const fixo = isServicoCotaMensalUnica(u);
-
-    if (fixo) {
-      const jaLancou = enviadoCicloEq > 0;
-      const cota = jaLancou ? 0 : cotaMensalCiclo;
-      return {
-        servicoId: u.id,
-        servicoNome: u.nome,
-        familiaCodigo: u.familiaCodigo ?? undefined,
-        cotaSemana: cota,
-        cotaMensalCiclo,
-        enviadoCiclo: enviadoCicloEq,
-        tipo: 'fixo_mensal' as const,
-        observacao: jaLancou
-          ? 'Cota do período já lançada'
-          : 'Entrega única no período',
-      };
-    }
-
-    const cotaSemanalBase = Math.round(
-      cotaMensalCiclo / SEMANAS_POR_CICLO_OPERACIONAL,
+    const cotas = cotaSemanaPedidos(
+      u,
+      cicloPedidos,
+      mesPedidos,
+      semanaPedidos,
+      enviadoCicloEq,
+      cfg.monitoramento.fixosReaisPorCiclo,
     );
-    const restanteEquip = Math.max(0, cotaMensalCiclo - enviadoCicloEq);
-    const cotaSemana = Math.min(
-      cotaSemanalBase,
-      Math.ceil(restanteEquip / semanasRestantes),
-    );
-
     return {
       servicoId: u.id,
       servicoNome: u.nome,
       familiaCodigo: u.familiaCodigo ?? undefined,
-      cotaSemana,
-      cotaMensalCiclo,
       enviadoCiclo: enviadoCicloEq,
-      tipo: 'rateio' as const,
-      observacao:
-        resumoPedidos?.planejadoSemanaFlex != null
-          ? `Plano flex: ${resumoPedidos.planejadoSemanaFlex}`
-          : null,
+      ...cotas,
     };
   });
 
-  const totalCotaBruto = cotasSemana.reduce((s, c) => s + c.cotaSemana, 0);
+  const totalCotaFlexSemana = cotasSemana
+    .filter((c) => c.tipo === 'rateio')
+    .reduce((s, c) => s + c.cotaSemana, 0);
+
+  const totalFixosPendentes = cotasSemana
+    .filter((c) => c.tipo === 'fixo_mensal')
+    .reduce((s, c) => s + c.cotaSemana, 0);
 
   const gorduraUsada =
-    ciclo === 1 ? Math.max(0, enviadoPeriodo - TETO_MENSAL_OPERACIONAL) : 0;
+    cicloExibicao === 1
+      ? Math.max(0, enviadoPeriodo - TETO_MENSAL_OPERACIONAL)
+      : 0;
   const gorduraRestante = Math.max(0, 200 - gorduraUsada);
+
+  const semanasRestantesCiclo = prox
+    ? SEMANAS_POR_CICLO_OPERACIONAL - (refPedidos?.semanaNoCiclo ?? 1) + 1
+    : SEMANAS_POR_CICLO_OPERACIONAL - (refFechada?.semanaNoCiclo ?? 1);
 
   return {
     semanaFechadaLabel:
@@ -311,21 +313,20 @@ export function buildVisaoPublicaOperacional(
         ? formatSemanaOperacionalCurta(prox.mes, prox.semana, empenhoMeses)
         : '—'),
     semanaPedidosPeriodo: refPedidos?.periodo ?? '—',
-    totalCotaSemanaPedidos: limiteSem
-      ? Math.min(limiteSem.limite, totalCotaBruto)
-      : totalCotaBruto,
+    totalCotaSemanaPedidos: totalCotaFlexSemana + totalFixosPendentes,
+    totalCotaFlexSemana,
     cotasSemana: cotasSemana.sort((a, b) =>
       a.servicoNome.localeCompare(b.servicoNome, 'pt'),
     ),
     labelPeriodoLeigo: LABEL_PERIODO_LEIGO,
-    cicloNumero: ciclo,
-    cicloLabel: labelCicloOperacional(ciclo),
+    cicloNumero: cicloExibicao,
+    cicloLabel: labelCicloOperacional(cicloExibicao),
     tetoPeriodo,
     enviadoPeriodo,
     restantePeriodo,
     pctPeriodo,
     semaforoPeriodo: semaforoDePct(pctPeriodo, enviadoPeriodo > tetoPeriodo),
-    ciclo1Excecao: ciclo === 1 && tetoPeriodo > TETO_MENSAL_OPERACIONAL,
+    ciclo1Excecao: cicloExibicao === 1 && tetoPeriodo > TETO_MENSAL_OPERACIONAL,
     gorduraUsada,
     gorduraRestante,
     totalProcesso,
@@ -334,9 +335,15 @@ export function buildVisaoPublicaOperacional(
     pctProcesso:
       totalProcesso > 0 ? (consumidoProcesso / totalProcesso) * 100 : 0,
     ciclosTotal: TOTAL_CICLOS_OPERACIONAIS,
-    indiceOperacionalAtual: idxAtual,
-    semanaNoCiclo: refFechada?.semanaNoCiclo ?? 1,
-    semanasRestantesCiclo: semanasRestantes,
+    indiceOperacionalAtual: idxUltimo,
+    semanaNoCiclo: refPedidos?.semanaNoCiclo ?? refFechada?.semanaNoCiclo ?? 1,
+    semanasRestantesCiclo: Math.max(1, semanasRestantesCiclo),
     atualizadoEm: cfg.monitoramento.saldoAtualizadoEm,
   };
 }
+
+export {
+  TOTAL_FLEX_PERIODO_4SEM,
+  TOTAL_FLEX_SEMANAL_PADRAO,
+  TOTAL_RESERVA_COTA_MENSAL_UNICA,
+};
