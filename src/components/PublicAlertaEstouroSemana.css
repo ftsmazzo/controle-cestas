@@ -1,0 +1,82 @@
+.public-alerta-estouro {
+  border: 1px solid #fecaca;
+  background: linear-gradient(180deg, #fff7ed 0%, #fff 100%);
+  margin-top: 0;
+}
+
+.public-alerta-estouro-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+  color: #9a3412;
+}
+
+.public-alerta-estouro-sub {
+  margin: 0;
+  max-width: 44rem;
+}
+
+.public-alerta-estouro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.public-alerta-estouro-card {
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #fed7aa;
+  background: #fff;
+}
+
+.public-alerta-estouro-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.public-alerta-estouro-excesso {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.public-alerta-estouro-excesso strong {
+  font-size: 1.35rem;
+  color: #b91c1c;
+}
+
+.public-alerta-estouro-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.public-alerta-estouro-dl dt {
+  margin: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.public-alerta-estouro-dl dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.public-alerta-estouro-ajuste dd strong {
+  font-size: 1.15rem;
+  color: #0f766e;
+}
+
+.public-alerta-estouro-ajuste {
+  margin-top: 0.25rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed #fed7aa;
+}

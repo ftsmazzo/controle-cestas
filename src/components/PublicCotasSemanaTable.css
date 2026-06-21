@@ -160,6 +160,19 @@
   font-size: 1rem;
 }
 
+.public-cotas-cota-ajustada {
+  display: block;
+  color: #b45309;
+}
+
+.public-cotas-cota-plano {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .public-cotas-pct-cell {
   min-width: 7rem;
 }

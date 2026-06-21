@@ -47,10 +47,24 @@ export interface CotasSemanaEquipamento {
   servicoNome: string;
   familiaCodigo?: string;
   cotaSemana: number;
+  /** Plano antes do desconto por estouro na semana anterior */
+  cotaPlanoOriginal?: number;
   cotaMensalCiclo: number;
   enviadoCiclo: number;
   tipo: 'fixo_mensal' | 'rateio';
   observacao: string | null;
+}
+
+export interface AlertaEstouroSemanal {
+  servicoId: string;
+  servicoNome: string;
+  semanaFechadaLabel: string;
+  cotaSemanaPrevista: number;
+  enviadoSemana: number;
+  excesso: number;
+  pctAcima: number;
+  cotaPlanoProximaSemana: number;
+  cotaAjustadaProximaSemana: number;
 }
 
 export interface VisaoPublicaOperacional {
@@ -82,6 +96,7 @@ export interface VisaoPublicaOperacional {
   semanaNoCiclo: number;
   semanasRestantesCiclo: number;
   atualizadoEm: string | null;
+  alertasEstouroSemana: AlertaEstouroSemanal[];
 }
 
 function semaforoDePct(pct: number, estourou: boolean): SemaforoStatus {
@@ -109,6 +124,31 @@ function enviadoPorEquipamentoCiclo(
     out.set(u.id, t);
   }
   return out;
+}
+
+/** Cota semanal do plano (flexível) — sem fixos mensais */
+function cotaSemanaPlanoFlex(
+  u: ServiceDef,
+  ciclo: number,
+  mes: string,
+  semana: number,
+): number {
+  if (isServicoCotaMensalUnica(u)) return 0;
+
+  if (usaPlanoSemanalPadrao(ciclo)) {
+    return planoCotaSemanalParaUnidade(u.nome) ?? 0;
+  }
+
+  const junKey = parseMonthKey('Jun/2026');
+  if (parseMonthKey(mes) === junKey && (semana === 1 || semana === 2)) {
+    return (
+      planoJunSemana(u.nome, semana as 1 | 2) ??
+      planoCotaSemanalParaUnidade(u.nome) ??
+      0
+    );
+  }
+
+  return planoCotaSemanalParaUnidade(u.nome) ?? 0;
 }
 
 /** Cota da semana de pedidos — plano aprovado, não rateio dinâmico por restante */
@@ -147,7 +187,6 @@ function cotaSemanaPedidos(
     };
   }
 
-  // Ciclo 1 excepcional: Jun S1/S2 com plano de corte
   const junKey = parseMonthKey('Jun/2026');
   if (
     parseMonthKey(mesPedidos) === junKey &&
@@ -165,13 +204,77 @@ function cotaSemanaPedidos(
     };
   }
 
-  const padrao = planoCotaSemanalParaUnidade(u.nome) ?? 0;
+  const padrao = cotaSemanaPlanoFlex(u, cicloPedidos, mesPedidos, semanaPedidos);
   return {
     cotaSemana: padrao,
     cotaMensalCiclo: padrao * SEMANAS_POR_CICLO_OPERACIONAL,
     tipo: 'rateio',
     observacao: 'Plano aprovado',
   };
+}
+
+function buildAlertasEstouroSemana(
+  payload: ServicesPayload,
+  ultimo: { mes: string; semana: number },
+  cicloFechado: number,
+  semanaFechadaLabel: string,
+  cotasPorId: Map<string, CotasSemanaEquipamento>,
+): AlertaEstouroSemanal[] {
+  const mon = payload.emergencial.monitoramento;
+  const alertas: AlertaEstouroSemanal[] = [];
+
+  for (const u of consumptionUnits(payload.services)) {
+    if (isServicoCotaMensalUnica(u)) continue;
+
+    const cotaPrevista = cotaSemanaPlanoFlex(
+      u,
+      cicloFechado,
+      ultimo.mes,
+      ultimo.semana,
+    );
+    if (cotaPrevista <= 0) continue;
+
+    const enviado = getWeeklyQty(mon, ultimo.mes, ultimo.semana, u.id);
+    const excesso = Math.max(0, enviado - cotaPrevista);
+    if (excesso <= 0) continue;
+
+    const cotaPedidos = cotasPorId.get(u.id);
+    const cotaPlanoProxima = cotaPedidos?.cotaSemana ?? 0;
+    const cotaAjustada = Math.max(0, cotaPlanoProxima - excesso);
+
+    alertas.push({
+      servicoId: u.id,
+      servicoNome: u.nome,
+      semanaFechadaLabel,
+      cotaSemanaPrevista: cotaPrevista,
+      enviadoSemana: enviado,
+      excesso,
+      pctAcima: (excesso / cotaPrevista) * 100,
+      cotaPlanoProximaSemana: cotaPlanoProxima,
+      cotaAjustadaProximaSemana: cotaAjustada,
+    });
+  }
+
+  return alertas.sort(
+    (a, b) => b.excesso - a.excesso || b.pctAcima - a.pctAcima,
+  );
+}
+
+function aplicarAjustesEstouro(
+  cotas: CotasSemanaEquipamento[],
+  alertas: AlertaEstouroSemanal[],
+): CotasSemanaEquipamento[] {
+  const porId = new Map(alertas.map((a) => [a.servicoId, a]));
+  return cotas.map((c) => {
+    const a = porId.get(c.servicoId);
+    if (!a || c.tipo !== 'rateio') return c;
+    return {
+      ...c,
+      cotaPlanoOriginal: a.cotaPlanoProximaSemana,
+      cotaSemana: a.cotaAjustadaProximaSemana,
+      observacao: `Ajuste −${a.excesso} (estouro ${a.semanaFechadaLabel})`,
+    };
+  });
 }
 
 export function buildVisaoPublicaOperacional(
@@ -282,11 +385,25 @@ export function buildVisaoPublicaOperacional(
     };
   });
 
-  const totalCotaFlexSemana = cotasSemana
+  const semanaFechadaLabel =
+    refFechada?.label ??
+    formatSemanaOperacionalCurta(ultimo.mes, ultimo.semana, empenhoMeses);
+
+  const cotasPorId = new Map(cotasSemana.map((c) => [c.servicoId, c]));
+  const alertasEstouroSemana = buildAlertasEstouroSemana(
+    payload,
+    ultimo,
+    cicloFechado,
+    semanaFechadaLabel,
+    cotasPorId,
+  );
+  const cotasAjustadas = aplicarAjustesEstouro(cotasSemana, alertasEstouroSemana);
+
+  const totalCotaFlexSemana = cotasAjustadas
     .filter((c) => c.tipo === 'rateio')
     .reduce((s, c) => s + c.cotaSemana, 0);
 
-  const totalFixosPendentes = cotasSemana
+  const totalFixosPendentes = cotasAjustadas
     .filter((c) => c.tipo === 'fixo_mensal')
     .reduce((s, c) => s + c.cotaSemana, 0);
 
@@ -301,9 +418,7 @@ export function buildVisaoPublicaOperacional(
     : SEMANAS_POR_CICLO_OPERACIONAL - (refFechada?.semanaNoCiclo ?? 1);
 
   return {
-    semanaFechadaLabel:
-      refFechada?.label ??
-      formatSemanaOperacionalCurta(ultimo.mes, ultimo.semana, empenhoMeses),
+    semanaFechadaLabel,
     semanaFechadaPeriodo: refFechada?.periodo ?? '—',
     enviadoSemanaFechada:
       resumoFechada.enviadoSemanaFlex ?? resumoFechada.enviadoSemanaAtual,
@@ -315,7 +430,7 @@ export function buildVisaoPublicaOperacional(
     semanaPedidosPeriodo: refPedidos?.periodo ?? '—',
     totalCotaSemanaPedidos: totalCotaFlexSemana + totalFixosPendentes,
     totalCotaFlexSemana,
-    cotasSemana: cotasSemana.sort((a, b) =>
+    cotasSemana: cotasAjustadas.sort((a, b) =>
       a.servicoNome.localeCompare(b.servicoNome, 'pt'),
     ),
     labelPeriodoLeigo: LABEL_PERIODO_LEIGO,
@@ -339,6 +454,7 @@ export function buildVisaoPublicaOperacional(
     semanaNoCiclo: refPedidos?.semanaNoCiclo ?? refFechada?.semanaNoCiclo ?? 1,
     semanasRestantesCiclo: Math.max(1, semanasRestantesCiclo),
     atualizadoEm: cfg.monitoramento.saldoAtualizadoEm,
+    alertasEstouroSemana,
   };
 }
 

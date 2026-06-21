@@ -104,7 +104,21 @@ export default function PublicCotasSemanaTable({
                           <span className="public-cotas-tag-fixo">Fixo</span>
                         )}
                       </td>
-                      <td className="col-num public-cotas-cota">{num(c.cotaSemana)}</td>
+                      <td className="col-num public-cotas-cota">
+                        {c.cotaPlanoOriginal != null &&
+                        c.cotaPlanoOriginal !== c.cotaSemana ? (
+                          <>
+                            <span className="public-cotas-cota-ajustada">
+                              {num(c.cotaSemana)}
+                            </span>
+                            <span className="public-cotas-cota-plano">
+                              {num(c.cotaPlanoOriginal)}
+                            </span>
+                          </>
+                        ) : (
+                          num(c.cotaSemana)
+                        )}
+                      </td>
                       <td className="col-num public-cotas-pct-cell">
                         <PublicProgressBar pct={pct} tone="neutro" size="sm" />
                       </td>

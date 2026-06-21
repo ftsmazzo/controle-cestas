@@ -8,8 +8,7 @@ import {
 import { buildVisaoPublicaOperacional } from '@shared/visaoPublicaOperacional';
 import { useData } from '../../context/DataContext';
 import PublicCotasSemanaTable from '../../components/PublicCotasSemanaTable';
-import PublicConsumoSemanalChart from '../../components/PublicConsumoSemanalChart';
-import PublicTopExcessoCicloCard from '../../components/PublicTopExcessoCicloCard';
+import PublicAlertaEstouroSemana from '../../components/PublicAlertaEstouroSemana';
 import PublicProgressBar, { toneFromPctRestante } from '../../components/ui/PublicProgressBar';
 
 function num(n: number | null | undefined, dec = 0): string {
@@ -144,6 +143,11 @@ export default function DecisionHomePage() {
         </section>
       )}
 
+      <PublicAlertaEstouroSemana
+        alertas={visao.alertasEstouroSemana}
+        semanaPedidosPeriodo={visao.semanaPedidosPeriodo}
+      />
+
       <PublicCotasSemanaTable
         cotas={visao.cotasSemana}
         semanaPeriodo={visao.semanaPedidosPeriodo}
@@ -151,29 +155,25 @@ export default function DecisionHomePage() {
         totalFlex={visao.totalCotaFlexSemana}
       />
 
-      <PublicConsumoSemanalChart payload={payload} />
-
-      <PublicTopExcessoCicloCard payload={payload} />
-
       <section className="panel public-legenda">
         <h3>Como ler estes números</h3>
         <ul className="public-legenda-list">
           <li>
             <strong>Barra do período:</strong> começa em 100% e vai caindo
-            conforme o consumo das 4 semanas. Verde = folga; vermelho = perto do
-            limite.
+            conforme o consumo das 4 semanas.
           </li>
           <li>
-            <strong>Saldo do ciclo:</strong> barra em 100% no início do período;
-            cai conforme o equipamento usa a cota das 4 semanas.
+            <strong>Alerta de estouro:</strong> se alguém passou da cota na
+            semana que fechou, aparece aviso e a cota da próxima semana já vem
+            descontada na tabela.
           </li>
           <li>
-            <strong>Cotas por grupo:</strong> CRAS, CREAS, PSE e fixos mensais
-            — subtotais somam o total da semana de pedidos.
+            <strong>Saldo do ciclo:</strong> barra por equipamento — quanto
+            ainda resta da cota das 4 semanas do período.
           </li>
           <li>
-            <strong>Gráfico semanal:</strong> barras empilhadas por grupo; linha
-            = total. Chips abaixo mostram variação vs semana anterior.
+            Histórico detalhado em <a href="/historico">Consumo</a> · análise
+            por ciclo em <a href="/analise">Análise</a>.
           </li>
         </ul>
       </section>
