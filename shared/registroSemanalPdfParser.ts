@@ -1,4 +1,9 @@
-import { parseCoderpPdfText, parseCoderpPeriod } from './coderpPdfParser.js';
+import {
+  isCoderpAnaliticoPdf,
+  parseCoderpAnaliticoPdfText,
+  parseCoderpPdfText,
+  parseCoderpPeriod,
+} from './coderpPdfParser.js';
 import {
   calendarWeekRangesInMonth,
   dayToWeekNumber,
@@ -23,7 +28,7 @@ export interface RegistroSemanalRow {
   match: 'ok' | 'unmatched';
 }
 
-export type RegistroModoPdf = 'rme_semanal' | 'colunas_mes' | 'semana_unica';
+export type RegistroModoPdf = 'rme_semanal' | 'rme_analitico' | 'colunas_mes' | 'semana_unica';
 
 export interface RegistroParseOptions {
   mesAlvo?: string | null;
@@ -215,35 +220,52 @@ export function isRmeSemanalPdf(text: string): boolean {
   );
 }
 
-function parseRmeSemanalRegistro(
+function resolveSemanaFromCoderpPeriod(
   text: string,
-  services: ServiceDef[],
   opts: RegistroParseOptions,
-): RegistroSemanalParseResult {
-  const warnings: string[] = [];
+  mesDetectado: string | null,
+  semanaAplicada: number | null,
+): { mesDetectado: string | null; semanaAplicada: number | null } {
   const period = parseCoderpPeriod(text);
-  const coderp = parseCoderpPdfText(text, services);
-
-  let mesDetectado = opts.mesAlvo ?? null;
-  let semanaAplicada = opts.semanaAlvo ?? null;
+  let mes = mesDetectado;
+  let semana = semanaAplicada;
 
   if (period.inicio) {
     const parts = parseBrDateParts(period.inicio);
     if (parts) {
-      if (!mesDetectado) {
-        mesDetectado = formatMonthKeyPt(parts.year * 100 + parts.month);
+      if (!mes) {
+        mes = formatMonthKeyPt(parts.year * 100 + parts.month);
       }
-      if (semanaAplicada == null) {
-        semanaAplicada = dayToWeekNumber(parts.year, parts.month, parts.day);
+      if (semana == null) {
+        semana = dayToWeekNumber(parts.year, parts.month, parts.day);
       }
     }
   }
 
-  if (semanaAplicada == null && opts.fileName) {
-    semanaAplicada = detectSemanaFromFileName(opts.fileName, mesDetectado);
+  if (semana == null && opts.fileName) {
+    semana = detectSemanaFromFileName(opts.fileName, mes);
   }
 
-  const semanaFinal = semanaAplicada ?? 1;
+  return { mesDetectado: mes, semanaAplicada: semana };
+}
+
+function parseRmeCoderpRegistro(
+  text: string,
+  services: ServiceDef[],
+  opts: RegistroParseOptions,
+  coderp: ReturnType<typeof parseCoderpPdfText>,
+  modo: 'rme_semanal' | 'rme_analitico',
+  formatoLabel: string,
+): RegistroSemanalParseResult {
+  const warnings: string[] = [];
+  const period = parseCoderpPeriod(text);
+  const resolved = resolveSemanaFromCoderpPeriod(
+    text,
+    opts,
+    opts.mesAlvo ?? null,
+    opts.semanaAlvo ?? null,
+  );
+  const semanaFinal = resolved.semanaAplicada ?? 1;
 
   const rows: RegistroSemanalRow[] = coderp.rows.map((r) =>
     mapRowToRegistro(
@@ -258,7 +280,7 @@ function parseRmeSemanalRegistro(
 
   if (period.label) {
     warnings.push(
-      `Formato RME semanal (${period.label}) — ${rows.length} requisitante(s) no PDF.`,
+      `${formatoLabel} (${period.label}) — ${rows.length} requisitante(s) no PDF.`,
     );
   }
 
@@ -272,12 +294,57 @@ function parseRmeSemanalRegistro(
   warnings.push(...coderp.warnings.slice(0, 2));
 
   return {
-    mesDetectado,
+    mesDetectado: resolved.mesDetectado,
     semanasDetectadas: [semanaFinal],
     semanaAplicada: semanaFinal,
-    modo: 'rme_semanal',
+    modo,
     rows,
     warnings,
+  };
+}
+
+function parseRmeSemanalRegistro(
+  text: string,
+  services: ServiceDef[],
+  opts: RegistroParseOptions,
+): RegistroSemanalParseResult {
+  const coderp = parseCoderpPdfText(text, services);
+  return parseRmeCoderpRegistro(
+    text,
+    services,
+    opts,
+    coderp,
+    'rme_semanal',
+    'Formato RME semanal',
+  );
+}
+
+function parseRmeAnaliticoRegistro(
+  text: string,
+  services: ServiceDef[],
+  opts: RegistroParseOptions,
+): RegistroSemanalParseResult {
+  const coderp = parseCoderpAnaliticoPdfText(text, services);
+  return parseRmeCoderpRegistro(
+    text,
+    services,
+    opts,
+    coderp,
+    'rme_analitico',
+    'Formato RME analítico',
+  );
+}
+
+function applySemanaAlvoRme(
+  rme: RegistroSemanalParseResult,
+  semanaAlvo: number,
+): RegistroSemanalParseResult {
+  if (!rme.rows.length) return rme;
+  return {
+    ...rme,
+    semanaAplicada: semanaAlvo,
+    semanasDetectadas: [semanaAlvo],
+    rows: rme.rows.map((row) => ({ ...row, semana: semanaAlvo })),
   };
 }
 
@@ -487,17 +554,16 @@ export function parseRegistroSemanalPdfText(
 ): RegistroSemanalParseResult {
   if (isRmeSemanalPdf(text)) {
     const rme = parseRmeSemanalRegistro(text, services, opts);
-    if (
-      opts.semanaAlvo != null &&
-      opts.semanaAlvo > 0 &&
-      rme.rows.length
-    ) {
-      return {
-        ...rme,
-        semanaAplicada: opts.semanaAlvo,
-        semanasDetectadas: [opts.semanaAlvo],
-        rows: rme.rows.map((row) => ({ ...row, semana: opts.semanaAlvo! })),
-      };
+    if (opts.semanaAlvo != null && opts.semanaAlvo > 0 && rme.rows.length) {
+      return applySemanaAlvoRme(rme, opts.semanaAlvo);
+    }
+    return rme;
+  }
+
+  if (isCoderpAnaliticoPdf(text)) {
+    const rme = parseRmeAnaliticoRegistro(text, services, opts);
+    if (opts.semanaAlvo != null && opts.semanaAlvo > 0 && rme.rows.length) {
+      return applySemanaAlvoRme(rme, opts.semanaAlvo);
     }
     return rme;
   }

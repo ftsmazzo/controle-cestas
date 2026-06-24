@@ -96,9 +96,11 @@ export default function RegistroSemanalPdfImport({
     <section className="registro-semanal-import">
       <h3>Importar PDF RME (envio real da semana)</h3>
       <p className="hint">
-        Relatório <strong>Consumo por requisitante</strong> da semana qua–ter (ex.{' '}
-        <em>CESTAS 18.05.26 A 24.05.26.pdf</em>). Cada CRAS/CREAS/NAEM vira envio
-        real. <strong>Não</strong> altera cotas — só registra o que foi entregue.
+        Relatório Coderp da semana qua–ter: <strong>Consumo por requisitante</strong>{' '}
+        (ex. <em>CESTAS 18.05.26 A 24.05.26.pdf</em>) ou{' '}
+        <strong>Atendimento analítico</strong> (ex.{' '}
+        <em>relatorio 17 a 23 de junho.pdf</em>). Cada CRAS/CREAS/NAEM vira envio real.{' '}
+        <strong>Não</strong> altera cotas — só registra o que foi entregue.
       </p>
       <p className="hint">
         Destino: <strong>{tituloSemana}</strong> · {periodoLabel}
@@ -123,10 +125,10 @@ export default function RegistroSemanalPdfImport({
           {preview.mesDetectado && (
             <p className="hint">
               Mês no PDF: <strong>{preview.mesDetectado}</strong>
-              {preview.modo === 'rme_semanal' ? (
+              {preview.modo === 'rme_semanal' || preview.modo === 'rme_analitico' ? (
                 <>
                   {' '}
-                  · <strong>RME semanal</strong>
+                  · <strong>{preview.modo === 'rme_analitico' ? 'RME analítico' : 'RME semanal'}</strong>
                   {preview.semanaAplicada != null && (
                     <> → S{preview.semanaAplicada}</>
                   )}
@@ -159,7 +161,8 @@ export default function RegistroSemanalPdfImport({
             Prévia — <strong>{tituloSemana}</strong> ({periodoLabel}) ·{' '}
             {rowsSemana.length} requisitante(s) no PDF,{' '}
             <strong>{reconhecidosSemana} reconhecido(s)</strong>
-            {preview.modo === 'rme_semanal' && preview.rows.length > rowsSemana.length
+            {(preview.modo === 'rme_semanal' || preview.modo === 'rme_analitico') &&
+            preview.rows.length > rowsSemana.length
               ? ` (${preview.rows.length} no documento)`
               : ''}
             :

@@ -141,11 +141,16 @@ export interface NormalizeCoderpResult {
   notas: string[];
 }
 
+/** Nome canônico da unidade a partir do texto do requisitante Coderp */
+export function resolveCoderpUnidadeNome(requisitante: string): string | null {
+  if (isBancoAlimentosRequisitante(requisitante)) return null;
+  if (isWaraosRequisitante(requisitante)) return UNIDADE_WARAOS;
+  if (isSaicaRequisitanteDireto(requisitante)) return UNIDADE_SAICA;
+  return canonicalUnitNameFromCoderp(requisitante);
+}
+
 function resolveUnidadeFromRow(row: CoderpRequisitanteRow): string | null {
-  if (isBancoAlimentosRequisitante(row.requisitante)) return null;
-  if (isWaraosRequisitante(row.requisitante)) return UNIDADE_WARAOS;
-  if (isSaicaRequisitanteDireto(row.requisitante)) return UNIDADE_SAICA;
-  return row.canonicalNome ?? canonicalUnitNameFromCoderp(row.requisitante);
+  return row.canonicalNome ?? resolveCoderpUnidadeNome(row.requisitante);
 }
 
 function addAgg(
