@@ -50,7 +50,7 @@ export const TOTAL_MENSAL_EMERGENCIAL_PADRAO = 1150;
 /** Meses da carga incorreta (planilha operacional Mar–Set/2025) */
 export const MESES_CARGA_PLANILHA_REMOVER = { from: 202503, to: 202509 };
 
-function ensureServiceByUnitName(
+export function ensureServiceByUnitName(
   services: ServiceDef[],
   unidadeNome: string,
 ): { services: ServiceDef[]; id: string; nome: string; criado: boolean } {

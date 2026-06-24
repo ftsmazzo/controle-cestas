@@ -7,6 +7,8 @@ import {
   suggestEmpenhoMeses,
 } from './empenhoControle.js';
 import { MONITOR_CONTROLE_MES_INICIO } from './emergencyMonitoring.js';
+import { PLANO_JUN_CICLO1 } from './planoAprovadoCiclo1.js';
+import { ensureServiceByUnitName } from './requisicaoHistorico.js';
 import { repairServiceCatalog } from './serviceRepair.js';
 import { defaultEmergencialConfig, defaultRegularConfig } from './processTypes.js';
 import { sanitizeProcessPlans } from './processSanitize.js';
@@ -98,8 +100,15 @@ export function normalizeServicesPayload(
   regular.cestasContratoMensal = settings.contratoMensal;
   regular.totalContratoAnual = settings.contratoAnual;
 
+  let services = ensureFamiliaHierarchy(repaired.services.map(normalizeUnit));
+  for (const nome of Object.keys(PLANO_JUN_CICLO1)) {
+    const ensured = ensureServiceByUnitName(services, nome);
+    services = ensured.services;
+  }
+  services = ensureFamiliaHierarchy(services);
+
   return {
-    services: ensureFamiliaHierarchy(repaired.services.map(normalizeUnit)),
+    services,
     history,
     plans,
     emergencial,

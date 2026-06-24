@@ -5,8 +5,10 @@ import {
 } from './emergencyMonitoring.js';
 import {
   canonicalUnitNameFromCoderp,
+  isFamiliaLevel,
   matchServiceByCanonicalName,
   normalizeCanonicalUnitName,
+  slugServiceId,
 } from './serviceFamilies.js';
 import { formatMonthKeyPt, getYearMonth, parseMonthKey } from './monthUtils.js';
 import type { ServiceDef } from './serviceTypes.js';
@@ -105,6 +107,56 @@ export function canonicalUnitNameFromRegistro(raw: string): string | null {
   return null;
 }
 
+/** Resolve equipamento do PDF para o cadastro (CRAS 1…12, CREAS I…V) */
+export function resolveRegistroEquipamento(
+  services: ServiceDef[],
+  canonical: string,
+  servicoIdHint?: string | null,
+  servicoNomeHint?: string | null,
+): Pick<RegistroSemanalRow, 'servicoId' | 'servicoNome' | 'match'> {
+  const nomeCanon = normalizeCanonicalUnitName(canonical);
+  const found = matchServiceByCanonicalName(services, nomeCanon);
+  if (found && !isFamiliaLevel(found)) {
+    return { servicoId: found.id, servicoNome: found.nome, match: 'ok' };
+  }
+  const id = servicoIdHint ?? slugServiceId(nomeCanon);
+  const byId = services.find((s) => s.id === id && !isFamiliaLevel(s));
+  if (byId) {
+    return { servicoId: byId.id, servicoNome: byId.nome, match: 'ok' };
+  }
+  if (canonicalUnitNameFromRegistro(canonical) || canonicalUnitNameFromCoderp(`SETOR ${canonical}`)) {
+    return {
+      servicoId: id,
+      servicoNome: servicoNomeHint ?? nomeCanon,
+      match: 'ok',
+    };
+  }
+  return { servicoId: null, servicoNome: null, match: 'unmatched' };
+}
+
+function mapRowToRegistro(
+  services: ServiceDef[],
+  canonical: string,
+  servicoIdHint: string | null,
+  servicoNomeHint: string | null,
+  semana: number,
+  quantidade: number,
+): RegistroSemanalRow {
+  const resolved = resolveRegistroEquipamento(
+    services,
+    canonical,
+    servicoIdHint,
+    servicoNomeHint,
+  );
+  return {
+    unidade: canonical,
+    canonicalNome: canonical,
+    semana,
+    quantidade,
+    ...resolved,
+  };
+}
+
 function mesLabelFromNum(month: number, year: number): string {
   return formatMonthKeyPt(year * 100 + month);
 }
@@ -193,15 +245,16 @@ function parseRmeSemanalRegistro(
 
   const semanaFinal = semanaAplicada ?? 1;
 
-  const rows: RegistroSemanalRow[] = coderp.rows.map((r) => ({
-    unidade: r.canonicalNome ?? r.requisitante,
-    canonicalNome: r.canonicalNome ?? r.requisitante,
-    servicoId: r.servicoId,
-    servicoNome: r.servicoNome,
-    semana: semanaFinal,
-    quantidade: r.quantidade,
-    match: r.match === 'ok' ? 'ok' : 'unmatched',
-  }));
+  const rows: RegistroSemanalRow[] = coderp.rows.map((r) =>
+    mapRowToRegistro(
+      services,
+      r.canonicalNome ?? r.requisitante,
+      r.servicoId,
+      r.servicoNome,
+      semanaFinal,
+      r.quantidade,
+    ),
+  );
 
   if (period.label) {
     warnings.push(
@@ -394,13 +447,13 @@ function rowsFromSection(
   const semanaUnica = modo === 'semana_unica' ? resolveSemanaUnica(body, mes, opts, parsedLines) : null;
 
   for (const parsed of parsedLines) {
-    const found = matchServiceByCanonicalName(services, parsed.unit);
+    const resolved = resolveRegistroEquipamento(services, parsed.unit);
     const base = {
       unidade: parsed.unit,
       canonicalNome: parsed.unit,
-      servicoId: found?.id ?? null,
-      servicoNome: found?.nome ?? null,
-      match: found ? ('ok' as const) : ('unmatched' as const),
+      servicoId: resolved.servicoId,
+      servicoNome: resolved.servicoNome,
+      match: resolved.match,
     };
 
     if (modoColunas) {

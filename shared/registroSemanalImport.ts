@@ -4,6 +4,8 @@ import {
 } from './emergencyMonitoring.js';
 import { parseMonthKey } from './monthUtils.js';
 import type { RegistroSemanalParseResult } from './registroSemanalPdfParser.js';
+import { ensureFamiliaHierarchy } from './serviceFamilies.js';
+import { ensureServiceByUnitName } from './requisicaoHistorico.js';
 import type { ServicesPayload } from './serviceTypes.js';
 
 export interface ApplyRegistroSemanalResult {
@@ -11,6 +13,7 @@ export interface ApplyRegistroSemanalResult {
   linhasAplicadas: number;
   totalSemana: number;
   warnings: string[];
+  novosEquipamentos: string[];
 }
 
 /** Grava envios reais da semana a partir do PDF operacional (não altera metas/histórico). */
@@ -24,7 +27,13 @@ export function applyRegistroSemanalImport(
   const mesKey = parseMonthKey(mes);
   if (!mesKey) {
     warnings.push('Mês monitorado inválido.');
-    return { payload, linhasAplicadas: 0, totalSemana: 0, warnings };
+    return {
+      payload,
+      linhasAplicadas: 0,
+      totalSemana: 0,
+      warnings,
+      novosEquipamentos: [],
+    };
   }
 
   const rows = parsed.rows.filter((r) => r.semana === semana);
@@ -32,9 +41,17 @@ export function applyRegistroSemanalImport(
     warnings.push(
       `Nenhuma quantidade na semana ${semana} do PDF para ${mes}. Confira mês/semana ou o documento.`,
     );
-    return { payload, linhasAplicadas: 0, totalSemana: 0, warnings };
+    return {
+      payload,
+      linhasAplicadas: 0,
+      totalSemana: 0,
+      warnings,
+      novosEquipamentos: [],
+    };
   }
 
+  let services = payload.services;
+  const novosEquipamentos: string[] = [];
   let mon: EmergencialMonitoramento = {
     ...payload.emergencial.monitoramento,
     mesAtivo: mes,
@@ -44,10 +61,13 @@ export function applyRegistroSemanalImport(
 
   const porServico = new Map<string, number>();
   for (const row of rows) {
-    if (!row.servicoId || row.match !== 'ok') continue;
+    if (row.match !== 'ok' || row.quantidade <= 0) continue;
+    const ensured = ensureServiceByUnitName(services, row.canonicalNome);
+    services = ensured.services;
+    if (ensured.criado) novosEquipamentos.push(ensured.nome);
     porServico.set(
-      row.servicoId,
-      (porServico.get(row.servicoId) ?? 0) + row.quantidade,
+      ensured.id,
+      (porServico.get(ensured.id) ?? 0) + row.quantidade,
     );
   }
 
@@ -57,9 +77,16 @@ export function applyRegistroSemanalImport(
     totalSemana += quantidade;
   }
 
+  if (novosEquipamentos.length) {
+    warnings.push(
+      `Cadastro atualizado: ${novosEquipamentos.length} equipamento(s) criado(s) (${novosEquipamentos.slice(0, 4).join(', ')}${novosEquipamentos.length > 4 ? '…' : ''}).`,
+    );
+  }
+
   return {
     payload: {
       ...payload,
+      services: ensureFamiliaHierarchy(services),
       emergencial: {
         ...payload.emergencial,
         monitoramento: mon,
@@ -68,5 +95,6 @@ export function applyRegistroSemanalImport(
     linhasAplicadas,
     totalSemana,
     warnings,
+    novosEquipamentos,
   };
 }

@@ -44,6 +44,7 @@ export default function RegistroSemanalPdfImport({
 
   const rowsSemana =
     preview?.rows.filter((r) => r.semana === semana) ?? [];
+  const reconhecidosSemana = rowsSemana.filter((r) => r.match === 'ok').length;
 
   const onFile = async (file: File | null) => {
     if (!file) return;
@@ -59,9 +60,16 @@ export default function RegistroSemanalPdfImport({
       );
       setPreview(result);
       const n = result.rows.filter((r) => r.semana === semana).length;
+      const ok = result.rows.filter(
+        (r) => r.semana === semana && r.match === 'ok',
+      ).length;
       if (!n) {
         setMsg(
           `PDF lido, mas sem linhas para ${tituloSemana} (${periodoLabel}). Escolha outra semana operacional ou confira o PDF.`,
+        );
+      } else if (ok < n) {
+        setMsg(
+          `PDF: ${n} requisitante(s) na semana; ${ok} reconhecido(s) no cadastro. Revise a prévia antes de aplicar.`,
         );
       }
     } catch (e) {
@@ -149,7 +157,12 @@ export default function RegistroSemanalPdfImport({
           ))}
           <p className="hint">
             Prévia — <strong>{tituloSemana}</strong> ({periodoLabel}) ·{' '}
-            {rowsSemana.length} linha(s):
+            {rowsSemana.length} requisitante(s) no PDF,{' '}
+            <strong>{reconhecidosSemana} reconhecido(s)</strong>
+            {preview.modo === 'rme_semanal' && preview.rows.length > rowsSemana.length
+              ? ` (${preview.rows.length} no documento)`
+              : ''}
+            :
           </p>
           <PrintableTable
             title={`Prévia envio — ${tituloSemana}`}

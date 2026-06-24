@@ -52,7 +52,7 @@ export function parseCoderpPeriod(text: string): {
 function extractRequisitanteBlocks(text: string): { codigo: string; nome: string; body: string }[] {
   const blocks: { codigo: string; nome: string; body: string }[] = [];
   const re =
-    /(\d{5})\s*-\s*[\d.]+\s*-\s*(.+?)(?=Requisitante|\d{5}\s*-\s*[\d.]|Coderp Inform|$)/gis;
+    /(\d{4,5})\s*-\s*[\d.]+\s*-\s*(.+?)(?=Requisitante|\d{4,5}\s*-\s*[\d.]|Coderp Inform|$)/gis;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     const nome = m[2].replace(/\s+/g, ' ').trim();
@@ -64,9 +64,7 @@ function extractRequisitanteBlocks(text: string): { codigo: string; nome: string
 }
 
 function qtyFromBlock(block: string): number | null {
-  const item = block.match(
-    /000001\s+([\d.,]+)\s+[\d.,]+\s+[\d.,]+\s+[\d.,]+/,
-  );
+  const item = block.match(/000001\s+([\d.,]+)/);
   if (item) return parseBrNumber(item[1]);
   const total = block.match(
     /([\d.,]+)\s+[\d.,]+\s+[\d.,]+\s+[\d.,]+\s*Total\s+Requisitante/i,
